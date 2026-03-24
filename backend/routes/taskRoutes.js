@@ -8,6 +8,7 @@ import {
   getTasksController,
   getTeamPerformanceController,
   markNotificationReadController,
+  submitTaskToHrController,
   updateTaskStatusController
 } from "../controllers/taskController.js";
 import { authenticate, authorizeRoles } from "../middleware/authMiddleware.js";
@@ -19,6 +20,7 @@ router.use(authenticate);
 router.post("/", createTaskController);
 router.get("/", getTasksController);
 router.put("/:id", updateTaskStatusController);
+router.put("/:id/submit-hr", authorizeRoles("employee"), submitTaskToHrController);
 router.get("/summary/daily", authorizeRoles("employee"), getEmployeeSummaryController);
 router.get("/timeline", authorizeRoles("employee"), getEmployeeTimelineController);
 router.get("/performance/team", authorizeRoles("admin", "hr", "superadmin"), getTeamPerformanceController);

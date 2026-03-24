@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import Charts from "../components/Charts";
+import ReportPage from "./ReportPage";
 import TaskTable from "../components/TaskTable";
 import logo from "../assets/logo.jpeg";
 import { useAuth } from "../context/AuthContext";
@@ -17,8 +18,6 @@ const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState("Overview");
   const [loading, setLoading] = useState(false);
   const [filters, setFilters] = useState({ status: "all", date: "", employeeId: "all" });
-  const [reportFilterDate, setReportFilterDate] = useState("");
-  const [reportGenerateDate, setReportGenerateDate] = useState("");
   const [form, setForm] = useState({
     client: "",
     task: "",
@@ -73,23 +72,6 @@ const AdminDashboard = () => {
     });
   }, [tasks, filters]);
 
-  const filteredReports = useMemo(() => {
-    if (!reportFilterDate) {
-      return reports;
-    }
-    return reports.filter((item) => String(item.date).slice(0, 10) === reportFilterDate);
-  }, [reports, reportFilterDate]);
-
-  const reportSummary = useMemo(() => {
-    const total = filteredReports.length;
-    const completed = filteredReports.reduce(
-      (sum, item) => sum + Number(item.completed_tasks || 0),
-      0
-    );
-    const pending = filteredReports.reduce((sum, item) => sum + Number(item.pending_tasks || 0), 0);
-    return { total, completed, pending };
-  }, [filteredReports]);
-
   const unreadCount = useMemo(
     () => notifications.filter((item) => !item.is_read).length,
     [notifications]
@@ -119,11 +101,6 @@ const AdminDashboard = () => {
 
   const handleStatusChange = async (task, status, dependency = task.dependency) => {
     await taskApi.updateTask(task.id, { status, dependency });
-    await loadData();
-  };
-
-  const handleGenerateReports = async () => {
-    await reportApi.generateReports(reportGenerateDate || undefined);
     await loadData();
   };
 
@@ -222,26 +199,28 @@ const AdminDashboard = () => {
           </select>
         </div>
 
-        <section className="card-green">
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <div>
-              <p className="text-xs uppercase tracking-wide text-dsr-muted">Department</p>
-              <h3 className="text-3xl font-extrabold">{user?.team || "-"}</h3>
+        {activeTab === "Overview" && (
+          <section className="card-green">
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+              <div>
+                <p className="text-xs uppercase tracking-wide text-dsr-muted">Department</p>
+                <h3 className="text-3xl font-extrabold">{user?.team || "-"}</h3>
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-wide text-dsr-muted">Team Members</p>
+                <h3 className="text-3xl font-extrabold">{employees.length}</h3>
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-wide text-dsr-muted">Tasks</p>
+                <h3 className="text-3xl font-extrabold">{tasks.length}</h3>
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-wide text-dsr-muted">Reports</p>
+                <h3 className="text-3xl font-extrabold text-dsr-brand">{reports.length}</h3>
+              </div>
             </div>
-            <div>
-              <p className="text-xs uppercase tracking-wide text-dsr-muted">Team Members</p>
-              <h3 className="text-3xl font-extrabold">{employees.length}</h3>
-            </div>
-            <div>
-              <p className="text-xs uppercase tracking-wide text-dsr-muted">Tasks</p>
-              <h3 className="text-3xl font-extrabold">{tasks.length}</h3>
-            </div>
-            <div>
-              <p className="text-xs uppercase tracking-wide text-dsr-muted">Reports</p>
-              <h3 className="text-3xl font-extrabold text-dsr-brand">{reports.length}</h3>
-            </div>
-          </div>
-        </section>
+          </section>
+        )}
 
         {activeTab === "Tasks" && (
           <form className="card grid gap-3 md:grid-cols-2 xl:grid-cols-3" onSubmit={handleAssign}>
@@ -362,7 +341,35 @@ const AdminDashboard = () => {
           </section>
         )}
 
-        {(activeTab === "Overview" || activeTab === "Tasks") && (
+        {activeTab === "Overview" && (
+          <>
+            <div className="grid gap-4 lg:grid-cols-2">
+              <Charts
+                type="bar"
+                title="Team Performance (%)"
+                labels={performance.map((item) => item.name)}
+                values={performance.map((item) => Number(item.completion_rate || 0))}
+                color="rgba(42, 122, 70, 0.8)"
+              />
+              <Charts
+                type="bar"
+                title="Completed Tasks by Employee"
+                labels={reports.map((item) => item.employee_name)}
+                values={reports.map((item) => Number(item.completed_tasks || 0))}
+                color="rgba(95, 157, 114, 0.85)"
+              />
+            </div>
+            <TaskTable
+              tasks={filteredTasks}
+              onStatusChange={handleStatusChange}
+              editableStatus
+              showAssignee
+              showAssigner
+            />
+          </>
+        )}
+
+        {activeTab === "Tasks" && (
           <TaskTable
             tasks={filteredTasks}
             onStatusChange={handleStatusChange}
@@ -370,25 +377,6 @@ const AdminDashboard = () => {
             showAssignee
             showAssigner
           />
-        )}
-
-        {activeTab === "Overview" && (
-          <div className="grid gap-4 lg:grid-cols-2">
-            <Charts
-              type="bar"
-              title="Team Performance (%)"
-              labels={performance.map((item) => item.name)}
-              values={performance.map((item) => Number(item.completion_rate || 0))}
-              color="rgba(42, 122, 70, 0.8)"
-            />
-            <Charts
-              type="bar"
-              title="Completed Tasks by Employee"
-              labels={filteredReports.map((item) => item.employee_name)}
-              values={filteredReports.map((item) => Number(item.completed_tasks || 0))}
-              color="rgba(95, 157, 114, 0.85)"
-            />
-          </div>
         )}
 
         {activeTab === "Users" && (
@@ -425,71 +413,8 @@ const AdminDashboard = () => {
         )}
 
         {activeTab === "Reports" && (
-          <section className="card overflow-x-auto">
-            <div className="mb-4 grid gap-3 md:grid-cols-3">
-              <input
-                className="input"
-                type="date"
-                value={reportFilterDate}
-                onChange={(event) => setReportFilterDate(event.target.value)}
-              />
-              <input
-                className="input"
-                type="date"
-                value={reportGenerateDate}
-                onChange={(event) => setReportGenerateDate(event.target.value)}
-              />
-              <button className="btn-primary" type="button" onClick={handleGenerateReports}>
-                Generate Department Reports
-              </button>
-            </div>
-
-            <div className="mb-3 grid gap-3 md:grid-cols-3">
-              <div className="rounded-xl bg-dsr-soft p-3">
-                <p className="text-xs uppercase tracking-wide text-dsr-muted">Total Reports</p>
-                <p className="text-2xl font-bold">{reportSummary.total}</p>
-              </div>
-              <div className="rounded-xl bg-dsr-soft p-3">
-                <p className="text-xs uppercase tracking-wide text-dsr-muted">Completed Tasks</p>
-                <p className="text-2xl font-bold text-emerald-700">{reportSummary.completed}</p>
-              </div>
-              <div className="rounded-xl bg-dsr-soft p-3">
-                <p className="text-xs uppercase tracking-wide text-dsr-muted">Pending Tasks</p>
-                <p className="text-2xl font-bold text-amber-700">{reportSummary.pending}</p>
-              </div>
-            </div>
-
-            <table className="min-w-full text-sm">
-              <thead>
-                <tr className="border-b bg-dsr-soft text-left">
-                  <th className="p-3">Employee</th>
-                  <th className="p-3">Date</th>
-                  <th className="p-3">Total</th>
-                  <th className="p-3">Completed</th>
-                  <th className="p-3">Pending</th>
-                  <th className="p-3">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredReports.map((entry) => (
-                  <tr key={entry.id} className="border-b border-dsr-border/70">
-                    <td className="p-3 font-semibold">{entry.employee_name}</td>
-                    <td className="p-3">{String(entry.date).slice(0, 10)}</td>
-                    <td className="p-3">{entry.total_tasks}</td>
-                    <td className="p-3 text-emerald-700">{entry.completed_tasks}</td>
-                    <td className="p-3 text-amber-700">{entry.pending_tasks}</td>
-                    <td className="p-3 capitalize">{entry.status}</td>
-                  </tr>
-                ))}
-                {filteredReports.length === 0 && (
-                  <tr>
-                    <td colSpan={6} className="p-4 text-center text-dsr-muted">
-                      No reports found for selected date
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+          <section className="space-y-4">
+            <ReportPage role="admin" />
           </section>
         )}
 
