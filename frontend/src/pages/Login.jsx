@@ -12,7 +12,7 @@ const rolePath = {
 const Login = () => {
   const navigate = useNavigate();
   const { login } = useAuth();
-  const [form, setForm] = useState({ email: "", password: "" });
+  const [form, setForm] = useState({ username: "", password: "" });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -22,9 +22,10 @@ const Login = () => {
     setError("");
 
     try {
-      const user = await login(form.email, form.password);
+      const user = await login(form.username, form.password);
       navigate(rolePath[user.role] || "/login");
     } catch (apiError) {
+      console.error("Login request failed", apiError?.response?.data || apiError);
       setError(apiError.response?.data?.message || "Login failed");
     } finally {
       setLoading(false);
@@ -38,12 +39,12 @@ const Login = () => {
         <p className="mb-6 text-sm text-slate-500">Login to continue</p>
 
         <div className="mb-4">
-          <label className="mb-1 block text-sm font-medium">Email</label>
+          <label className="mb-1 block text-sm font-medium">Username</label>
           <input
             className="input"
-            type="email"
-            value={form.email}
-            onChange={(event) => setForm((prev) => ({ ...prev, email: event.target.value }))}
+            type="text"
+            value={form.username}
+            onChange={(event) => setForm((prev) => ({ ...prev, username: event.target.value }))}
             required
           />
         </div>

@@ -15,12 +15,21 @@ export const findUserByEmail = async (email) => {
   return rows[0] || null;
 };
 
+export const findUserByUsername = async (username) => {
+  const rows = await query("SELECT * FROM users WHERE LOWER(name) = LOWER(?) LIMIT 1", [username]);
+  return rows[0] || null;
+};
+
 export const findUserById = async (id) => {
   const rows = await query(
     "SELECT id, name, email, role, team, created_at FROM users WHERE id = ? LIMIT 1",
     [id]
   );
   return rows[0] || null;
+};
+
+export const updateUserPasswordById = async (id, hashedPassword) => {
+  await query("UPDATE users SET password = ? WHERE id = ?", [hashedPassword, id]);
 };
 
 export const listUsers = async () => {
