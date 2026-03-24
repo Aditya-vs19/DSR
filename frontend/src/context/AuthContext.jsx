@@ -16,8 +16,8 @@ export const AuthProvider = ({ children }) => {
     setLoading(false);
   }, [token]);
 
-  const login = async (email, password) => {
-    const { data } = await authApi.login({ email, password });
+  const login = async (username, password) => {
+    const { data } = await authApi.login({ username, password });
     localStorage.setItem("dsr_token", data.token);
     localStorage.setItem("dsr_user", JSON.stringify(data.user));
     setToken(data.token);
