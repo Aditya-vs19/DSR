@@ -94,8 +94,8 @@ const EmployeeDashboard = () => {
     }
   };
 
-  const handleStatusChange = async (task, status) => {
-    await taskApi.updateTask(task.id, { status, dependency: task.dependency });
+  const handleStatusChange = async (task, status, dependency = task.dependency) => {
+    await taskApi.updateTask(task.id, { status, dependency });
     await loadData();
   };
 
