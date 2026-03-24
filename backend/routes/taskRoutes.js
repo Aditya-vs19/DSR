@@ -1,6 +1,7 @@
 import express from "express";
 import {
   createTaskController,
+  getDepartmentAdminPerformanceController,
   getEmployeeSummaryController,
   getEmployeeTimelineController,
   getNotificationsController,
@@ -21,6 +22,7 @@ router.put("/:id", updateTaskStatusController);
 router.get("/summary/daily", authorizeRoles("employee"), getEmployeeSummaryController);
 router.get("/timeline", authorizeRoles("employee"), getEmployeeTimelineController);
 router.get("/performance/team", authorizeRoles("admin", "hr", "superadmin"), getTeamPerformanceController);
+router.get("/performance/admins", authorizeRoles("admin", "superadmin"), getDepartmentAdminPerformanceController);
 router.get("/notifications/me", getNotificationsController);
 router.put("/notifications/:id/read", markNotificationReadController);
 

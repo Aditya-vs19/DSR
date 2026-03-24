@@ -1,6 +1,6 @@
 const statusClass = {
   Pending: "bg-yellow-100 text-yellow-800",
-  "In Progress": "bg-blue-100 text-blue-800",
+  "In Progress": "bg-yellow-100 text-yellow-800",
   Completed: "bg-green-100 text-green-800"
 };
 
@@ -39,12 +39,11 @@ const TaskTable = ({
                 <td className="p-3">
                   {editableStatus ? (
                     <select
-                      className={`rounded-md px-2 py-1 text-xs font-semibold ${statusClass[item.status]}`}
+                      className={`rounded-md px-2 py-1 text-xs font-semibold ${statusClass[item.status] || "bg-slate-100 text-slate-700"}`}
                       value={item.status}
                       onChange={(event) => onStatusChange(item, event.target.value)}
                     >
                       <option value="Pending">Pending</option>
-                      <option value="In Progress">In Progress</option>
                       <option value="Completed">Completed</option>
                     </select>
                   ) : (

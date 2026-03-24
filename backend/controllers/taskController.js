@@ -1,6 +1,7 @@
 import {
   createNotification,
   createTask,
+  getDepartmentAdminPerformance,
   getEmployeeDailySummary,
   getEmployeeTimeline,
   getTaskUpdateNotificationRecipients,
@@ -12,7 +13,7 @@ import {
   updateTaskStatus
 } from "../models/taskModel.js";
 
-const validStatuses = ["Pending", "In Progress", "Completed"];
+const validStatuses = ["Pending", "Completed"];
 
 export const createTaskController = async (req, res) => {
   try {
@@ -31,11 +32,13 @@ export const createTaskController = async (req, res) => {
       return res.status(403).json({ message: "Employees can create only self tasks" });
     }
 
+    const normalizedStatus = status === "Completed" ? "Completed" : "Pending";
+
     const taskId = await createTask({
       client,
       task,
       action,
-      status: status || "Pending",
+      status: normalizedStatus,
       dependency,
       assignedTo,
       assignedBy,
@@ -150,6 +153,15 @@ export const getTeamPerformanceController = async (req, res) => {
     return res.status(200).json(data);
   } catch (error) {
     return res.status(500).json({ message: "Failed to fetch performance", error: error.message });
+  }
+};
+
+export const getDepartmentAdminPerformanceController = async (req, res) => {
+  try {
+    const data = await getDepartmentAdminPerformance(req.query.team || null);
+    return res.status(200).json(data);
+  } catch (error) {
+    return res.status(500).json({ message: "Failed to fetch admin performance", error: error.message });
   }
 };
 

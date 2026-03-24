@@ -41,7 +41,7 @@ export const getTasksByRole = async ({ role, userId, team }) => {
       t.client,
       t.task,
       t.action,
-      t.status,
+      CASE WHEN t.status = 'In Progress' THEN 'Pending' ELSE t.status END AS status,
       t.dependency,
       t.assigned_to,
       t.assigned_by,
@@ -127,20 +127,46 @@ export const getTeamPerformance = async (team) => {
     SELECT
       u.id,
       u.name,
+      u.role,
       COUNT(t.id) AS total_tasks,
       SUM(CASE WHEN t.status = 'Completed' THEN 1 ELSE 0 END) AS completed_tasks,
+      SUM(CASE WHEN t.status <> 'Completed' THEN 1 ELSE 0 END) AS pending_tasks,
       ROUND(
         (SUM(CASE WHEN t.status = 'Completed' THEN 1 ELSE 0 END) / NULLIF(COUNT(t.id), 0)) * 100,
         2
       ) AS completion_rate
     FROM users u
     LEFT JOIN tasks t ON t.assigned_to = u.id
-    WHERE u.team = ? AND u.role = 'employee'
-    GROUP BY u.id, u.name
+    WHERE u.team = ? AND u.role IN ('employee', 'admin')
+    GROUP BY u.id, u.name, u.role
     ORDER BY completion_rate DESC
   `;
 
   return query(sql, [team]);
+};
+
+export const getDepartmentAdminPerformance = async (team = null) => {
+  const sql = `
+    SELECT
+      u.id,
+      u.name,
+      u.team,
+      COUNT(t.id) AS total_tasks,
+      SUM(CASE WHEN t.status = 'Completed' THEN 1 ELSE 0 END) AS completed_tasks,
+      SUM(CASE WHEN t.status <> 'Completed' THEN 1 ELSE 0 END) AS pending_tasks,
+      ROUND(
+        (SUM(CASE WHEN t.status = 'Completed' THEN 1 ELSE 0 END) / NULLIF(COUNT(t.id), 0)) * 100,
+        2
+      ) AS completion_rate
+    FROM users u
+    LEFT JOIN tasks t ON t.assigned_to = u.id
+    WHERE u.role = 'admin'
+      AND (? IS NULL OR u.team = ?)
+    GROUP BY u.id, u.name, u.team
+    ORDER BY completion_rate DESC
+  `;
+
+  return query(sql, [team, team]);
 };
 
 export const createNotification = async ({ userId, message, type = "task_assigned", refId = null }) => {

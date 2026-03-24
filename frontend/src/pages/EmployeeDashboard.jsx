@@ -2,9 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import Charts from "../components/Charts";
 import TaskTable from "../components/TaskTable";
 import { useAuth } from "../context/AuthContext";
-import { taskApi } from "../services/api";
+import { authApi, taskApi } from "../services/api";
 
-const TABS = ["Overview", "Assigned Tasks", "My Tasks", "Notifications"];
+const TABS = ["Overview", "Assigned Tasks", "My Tasks", "Notifications", "Profile"];
 
 const EmployeeDashboard = () => {
   const { user, logout } = useAuth();
@@ -23,6 +23,13 @@ const EmployeeDashboard = () => {
     deadline: ""
   });
   const [error, setError] = useState("");
+  const [passwordForm, setPasswordForm] = useState({
+    currentPassword: "",
+    newPassword: "",
+    confirmPassword: ""
+  });
+  const [passwordMessage, setPasswordMessage] = useState("");
+  const [passwordError, setPasswordError] = useState("");
 
   const loadData = async () => {
     setLoading(true);
@@ -106,6 +113,28 @@ const EmployeeDashboard = () => {
   const handleMarkRead = async (id) => {
     await taskApi.markNotificationRead(id);
     await loadData();
+  };
+
+  const handlePasswordChange = async (event) => {
+    event.preventDefault();
+    setPasswordError("");
+    setPasswordMessage("");
+
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      setPasswordError("New password and confirmation do not match");
+      return;
+    }
+
+    try {
+      await authApi.changePassword({
+        currentPassword: passwordForm.currentPassword,
+        newPassword: passwordForm.newPassword
+      });
+      setPasswordMessage("Password changed successfully");
+      setPasswordForm({ currentPassword: "", newPassword: "", confirmPassword: "" });
+    } catch (apiError) {
+      setPasswordError(apiError.response?.data?.message || "Failed to change password");
+    }
   };
 
   return (
@@ -194,7 +223,6 @@ const EmployeeDashboard = () => {
                 >
                   <option value="all">All</option>
                   <option value="Pending">Pending</option>
-                  <option value="In Progress">In Progress</option>
                   <option value="Completed">Completed</option>
                 </select>
               </div>
@@ -328,6 +356,63 @@ const EmployeeDashboard = () => {
               ))}
               {notifications.length === 0 && <p className="text-sm text-dsr-muted">No notifications</p>}
             </div>
+          </section>
+        )}
+
+        {activeTab === "Profile" && (
+          <section className="grid gap-4 lg:grid-cols-2">
+            <div className="card-green">
+              <h2 className="mb-3 text-xl font-bold">Profile</h2>
+              <div className="space-y-2 text-sm">
+                <p><span className="font-semibold">Name:</span> {user?.name}</p>
+                <p><span className="font-semibold">Role:</span> {String(user?.role || "").toUpperCase()}</p>
+                <p><span className="font-semibold">Email:</span> {user?.email}</p>
+                <p><span className="font-semibold">Department:</span> {user?.team || "-"}</p>
+              </div>
+            </div>
+
+            <form className="card" onSubmit={handlePasswordChange}>
+              <h2 className="mb-3 text-xl font-bold">Settings - Change Password</h2>
+              <div className="space-y-3">
+                <input
+                  className="input"
+                  type="password"
+                  placeholder="Current password"
+                  value={passwordForm.currentPassword}
+                  onChange={(event) =>
+                    setPasswordForm((prev) => ({ ...prev, currentPassword: event.target.value }))
+                  }
+                  required
+                />
+                <input
+                  className="input"
+                  type="password"
+                  placeholder="New password"
+                  value={passwordForm.newPassword}
+                  onChange={(event) =>
+                    setPasswordForm((prev) => ({ ...prev, newPassword: event.target.value }))
+                  }
+                  required
+                />
+                <input
+                  className="input"
+                  type="password"
+                  placeholder="Confirm new password"
+                  value={passwordForm.confirmPassword}
+                  onChange={(event) =>
+                    setPasswordForm((prev) => ({ ...prev, confirmPassword: event.target.value }))
+                  }
+                  required
+                />
+
+                {passwordError && <p className="text-sm text-rose-600">{passwordError}</p>}
+                {passwordMessage && <p className="text-sm text-emerald-700">{passwordMessage}</p>}
+
+                <button className="btn-primary" type="submit">
+                  Update Password
+                </button>
+              </div>
+            </form>
           </section>
         )}
 
