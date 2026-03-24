@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import Charts from "../components/Charts";
 import TaskTable from "../components/TaskTable";
+import logo from "../assets/logo.jpeg";
 import { useAuth } from "../context/AuthContext";
 import { authApi, taskApi } from "../services/api";
 
-const TABS = ["Overview", "Assigned Tasks", "My Tasks", "Notifications", "Profile"];
+const TABS = ["Overview", "Tasks", "Profile"];
 
 const EmployeeDashboard = () => {
   const { user, logout } = useAuth();
@@ -56,25 +57,13 @@ const EmployeeDashboard = () => {
     return () => clearInterval(timer);
   }, []);
 
-  const assignedTasks = useMemo(() => tasks.filter((item) => item.type === "assigned"), [tasks]);
-
-  const selfTasks = useMemo(() => tasks.filter((item) => item.type === "self"), [tasks]);
-
-  const filteredAssignedTasks = useMemo(() => {
-    return assignedTasks.filter((item) => {
+  const filteredTasks = useMemo(() => {
+    return tasks.filter((item) => {
       const statusMatch = filters.status === "all" || item.status === filters.status;
       const dateMatch = !filters.date || (item.created_at || "").slice(0, 10) === filters.date;
       return statusMatch && dateMatch;
     });
-  }, [assignedTasks, filters]);
-
-  const filteredSelfTasks = useMemo(() => {
-    return selfTasks.filter((item) => {
-      const statusMatch = filters.status === "all" || item.status === filters.status;
-      const dateMatch = !filters.date || (item.created_at || "").slice(0, 10) === filters.date;
-      return statusMatch && dateMatch;
-    });
-  }, [selfTasks, filters]);
+  }, [tasks, filters]);
 
   const unreadCount = useMemo(
     () => notifications.filter((item) => !item.is_read).length,
@@ -99,7 +88,7 @@ const EmployeeDashboard = () => {
 
       setForm({ client: "", task: "", action: "", dependency: "", deadline: "" });
       await loadData();
-      setActiveTab("My Tasks");
+      setActiveTab("Tasks");
     } catch (apiError) {
       setError(apiError.response?.data?.message || "Failed to create task");
     }
@@ -139,17 +128,17 @@ const EmployeeDashboard = () => {
 
   return (
     <div className="min-h-screen bg-dsr-page text-dsr-ink">
-      <header className="sticky top-0 z-30 border-b border-dsr-border bg-white/90 backdrop-blur">
-        <div className="mx-auto flex max-w-[1400px] items-center justify-between gap-4 px-4 py-3 lg:px-8">
-          <div className="flex items-center gap-4">
-            <div className="rounded-xl bg-dsr-brand px-3 py-2 text-lg font-bold text-white">DSR</div>
-            <div>
-              <h1 className="text-xl font-extrabold">Employee Dashboard</h1>
-              <p className="text-xs text-dsr-muted">Action your assigned tasks and update status live</p>
-            </div>
+      <header className="sticky top-0 z-30 border-b border-dsr-border bg-[#f3f3f3]">
+        <div className="mx-auto flex max-w-[1400px] items-center justify-between gap-6 px-4 py-4 lg:px-8">
+          <div className="flex items-center gap-5">
+            <img
+              src={logo}
+              alt="DSR Management Logo"
+              className="h-16 w-[220px] shrink-0 object-cover object-left"
+            />
           </div>
 
-          <nav className="hidden items-center gap-2 rounded-full border border-dsr-border bg-dsr-soft px-2 py-1 lg:flex">
+          <nav className="hidden items-center gap-2 rounded-full border border-dsr-border bg-dsr-soft px-3 py-2 lg:flex">
             {TABS.map((tab) => (
               <button
                 key={tab}
@@ -162,7 +151,6 @@ const EmployeeDashboard = () => {
                 }`}
               >
                 {tab}
-                {tab === "Notifications" && unreadCount > 0 ? ` (${unreadCount})` : ""}
               </button>
             ))}
           </nav>
@@ -172,6 +160,18 @@ const EmployeeDashboard = () => {
               <p className="text-sm font-bold capitalize">{user?.name}</p>
               <p className="text-xs uppercase tracking-wide text-dsr-muted">{user?.team || "Employee"}</p>
             </div>
+            <button
+              type="button"
+              onClick={() => setActiveTab("Notifications")}
+              className="relative inline-flex h-10 w-10 items-center justify-center rounded-xl border border-dsr-border bg-dsr-soft text-dsr-ink hover:bg-white"
+              aria-label="Open notifications"
+            >
+              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M15 17h5l-1.4-1.4a2 2 0 0 1-.6-1.4V11a6 6 0 1 0-12 0v3.2a2 2 0 0 1-.6 1.4L4 17h5" />
+                <path d="M10 17a2 2 0 0 0 4 0" />
+              </svg>
+              {unreadCount > 0 && <span className="absolute right-2 top-2 h-2.5 w-2.5 rounded-full bg-rose-500" />}
+            </button>
             <button className="btn-secondary" type="button" onClick={logout}>
               Logout
             </button>
@@ -181,7 +181,11 @@ const EmployeeDashboard = () => {
 
       <main className="mx-auto max-w-[1400px] space-y-6 px-4 py-6 lg:px-8">
         <div className="grid gap-3 lg:hidden">
-          <select className="input" value={activeTab} onChange={(event) => setActiveTab(event.target.value)}>
+          <select
+            className="input"
+            value={TABS.includes(activeTab) ? activeTab : "Overview"}
+            onChange={(event) => setActiveTab(event.target.value)}
+          >
             {TABS.map((tab) => (
               <option key={tab} value={tab}>
                 {tab}
@@ -193,12 +197,12 @@ const EmployeeDashboard = () => {
         <section className="card-green">
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             <div>
-              <p className="text-xs uppercase tracking-wide text-dsr-muted">Assigned Tasks</p>
-              <h3 className="text-3xl font-extrabold">{assignedTasks.length}</h3>
+              <p className="text-xs uppercase tracking-wide text-dsr-muted">Total Tasks</p>
+              <h3 className="text-3xl font-extrabold">{tasks.length}</h3>
             </div>
             <div>
-              <p className="text-xs uppercase tracking-wide text-dsr-muted">Self Tasks</p>
-              <h3 className="text-3xl font-extrabold">{selfTasks.length}</h3>
+              <p className="text-xs uppercase tracking-wide text-dsr-muted">Completed Tasks</p>
+              <h3 className="text-3xl font-extrabold text-emerald-700">{tasks.filter((item) => item.status === "Completed").length}</h3>
             </div>
             <div>
               <p className="text-xs uppercase tracking-wide text-dsr-muted">Completed Today</p>
@@ -211,7 +215,7 @@ const EmployeeDashboard = () => {
           </div>
         </section>
 
-        {(activeTab === "Overview" || activeTab === "Assigned Tasks" || activeTab === "My Tasks") && (
+        {(activeTab === "Overview" || activeTab === "Tasks") && (
           <section className="card">
             <div className="grid gap-3 md:grid-cols-3">
               <div>
@@ -242,11 +246,11 @@ const EmployeeDashboard = () => {
           </section>
         )}
 
-        {(activeTab === "Overview" || activeTab === "Assigned Tasks") && (
+        {(activeTab === "Overview" || activeTab === "Tasks") && (
           <section>
-            <h2 className="mb-2 text-lg font-semibold">Assigned Task List</h2>
+            <h2 className="mb-2 text-lg font-semibold">Task List</h2>
             <TaskTable
-              tasks={filteredAssignedTasks}
+              tasks={filteredTasks}
               onStatusChange={handleStatusChange}
               editableStatus
               showAssigner
@@ -254,9 +258,9 @@ const EmployeeDashboard = () => {
           </section>
         )}
 
-        {(activeTab === "Overview" || activeTab === "My Tasks") && (
+        {activeTab === "Tasks" && (
           <form className="card grid gap-3 md:grid-cols-2" onSubmit={handleCreateTask}>
-            <h2 className="md:col-span-2 text-lg font-semibold">Create Self Task</h2>
+            <h2 className="md:col-span-2 text-lg font-semibold">Create Task</h2>
             <input
               className="input"
               placeholder="Client"
@@ -291,17 +295,10 @@ const EmployeeDashboard = () => {
               onChange={(event) => setForm((prev) => ({ ...prev, deadline: event.target.value }))}
             />
             <button className="btn-primary md:col-span-2" type="submit">
-              Add Self Task
+              Add Task
             </button>
             {error && <p className="md:col-span-2 text-sm text-rose-600">{error}</p>}
           </form>
-        )}
-
-        {(activeTab === "Overview" || activeTab === "My Tasks") && (
-          <section>
-            <h2 className="mb-2 text-lg font-semibold">My Self Tasks</h2>
-            <TaskTable tasks={filteredSelfTasks} onStatusChange={handleStatusChange} editableStatus />
-          </section>
         )}
 
         {activeTab === "Overview" && (
