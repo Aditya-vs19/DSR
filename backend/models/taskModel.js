@@ -169,3 +169,17 @@ export const getUserNotifications = async (userId) => {
 export const markNotificationAsRead = async (id, userId) => {
   await query("UPDATE notifications SET is_read = 1 WHERE id = ? AND user_id = ?", [id, userId]);
 };
+
+export const getTaskUpdateNotificationRecipients = async ({ assignedBy, actorId }) => {
+  const rows = await query(
+    `
+      SELECT DISTINCT id
+      FROM users
+      WHERE (id = ? OR role IN ('superadmin', 'hr'))
+        AND id <> ?
+    `,
+    [assignedBy, actorId]
+  );
+
+  return rows.map((row) => row.id);
+};

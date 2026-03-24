@@ -2,26 +2,89 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --dsr-page: #f4f7f4;
+  --dsr-soft: #edf4ee;
+  --dsr-card: #ffffff;
+  --dsr-border: #d6e1d8;
+  --dsr-brand: #2f7f4f;
+  --dsr-brand-dark: #21633c;
+  --dsr-ink: #1f2a22;
+  --dsr-muted: #63756a;
+}
+
 body {
-  @apply bg-slate-100 text-slate-800;
+  @apply text-slate-800;
+  background: radial-gradient(circle at top right, #f8fbf8, var(--dsr-page));
 }
 
 .card {
-  @apply bg-white rounded-xl shadow-sm border border-slate-200 p-4;
+  @apply rounded-2xl p-4 shadow-sm;
+  background: var(--dsr-card);
+  border: 1px solid var(--dsr-border);
+}
+
+.card-green {
+  @apply rounded-2xl p-4 shadow-sm;
+  background: linear-gradient(140deg, #f6faf6, #edf4ee);
+  border: 1px solid var(--dsr-border);
 }
 
 .input {
-  @apply w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500;
+  @apply w-full rounded-xl border px-3 py-2 text-sm focus:outline-none focus:ring-2;
+  border-color: var(--dsr-border);
+  background: #fff;
+  --tw-ring-color: color-mix(in srgb, var(--dsr-brand) 45%, white);
 }
 
 .btn {
-  @apply rounded-lg px-4 py-2 text-sm font-medium transition;
+  @apply rounded-xl px-4 py-2 text-sm font-semibold transition;
 }
 
 .btn-primary {
-  @apply btn bg-indigo-600 text-white hover:bg-indigo-700;
+  @apply btn text-white;
+  background: var(--dsr-brand);
+}
+
+.btn-primary:hover {
+  background: var(--dsr-brand-dark);
 }
 
 .btn-secondary {
-  @apply btn bg-slate-200 text-slate-700 hover:bg-slate-300;
+  @apply btn;
+  background: var(--dsr-soft);
+  color: var(--dsr-ink);
+  border: 1px solid var(--dsr-border);
+}
+
+.btn-secondary:hover {
+  background: #e4eee6;
+}
+
+.bg-dsr-page {
+  background-color: var(--dsr-page);
+}
+
+.bg-dsr-soft {
+  background-color: var(--dsr-soft);
+}
+
+.bg-dsr-brand {
+  background-color: var(--dsr-brand);
+}
+
+.text-dsr-brand {
+  color: var(--dsr-brand);
+}
+
+.text-dsr-ink {
+  color: var(--dsr-ink);
+}
+
+.text-dsr-muted {
+  color: var(--dsr-muted);
+}
+
+.border-dsr-border {
+  border-color: var(--dsr-border);
 }

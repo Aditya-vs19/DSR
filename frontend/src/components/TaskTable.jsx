@@ -4,7 +4,13 @@ const statusClass = {
   Completed: "bg-green-100 text-green-800"
 };
 
-const TaskTable = ({ tasks = [], onStatusChange, editableStatus = false }) => {
+const TaskTable = ({
+  tasks = [],
+  onStatusChange,
+  editableStatus = false,
+  showAssignee = false,
+  showAssigner = false
+}) => {
   return (
     <div className="card overflow-x-auto">
       <table className="min-w-full border-collapse text-sm">
@@ -16,6 +22,8 @@ const TaskTable = ({ tasks = [], onStatusChange, editableStatus = false }) => {
             <th className="p-3">Action</th>
             <th className="p-3">Status</th>
             <th className="p-3">Dependency</th>
+            {showAssignee && <th className="p-3">Assigned To</th>}
+            {showAssigner && <th className="p-3">Assigned By</th>}
           </tr>
         </thead>
         <tbody>
@@ -51,12 +59,14 @@ const TaskTable = ({ tasks = [], onStatusChange, editableStatus = false }) => {
                   )}
                 </td>
                 <td className="p-3">{item.dependency || "-"}</td>
+                {showAssignee && <td className="p-3">{item.assigned_to_name || "-"}</td>}
+                {showAssigner && <td className="p-3">{item.assigned_by_name || "-"}</td>}
               </tr>
             );
           })}
           {tasks.length === 0 && (
             <tr>
-              <td colSpan={6} className="p-4 text-center text-slate-500">
+              <td colSpan={6 + (showAssignee ? 1 : 0) + (showAssigner ? 1 : 0)} className="p-4 text-center text-slate-500">
                 No tasks available
               </td>
             </tr>

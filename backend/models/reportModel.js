@@ -63,26 +63,46 @@ export const validateReport = async ({ reportId, status, validatedBy }) => {
   await query(sql, [status, validatedBy, reportId]);
 };
 
-export const getSuperAdminAnalytics = async () => {
+export const getSuperAdminAnalytics = async ({ team = "all", date = "" } = {}) => {
+  const taskFilters = [];
+  const taskParams = [];
+
+  if (team && team !== "all") {
+    taskFilters.push("u.team = ?");
+    taskParams.push(team);
+  }
+
+  if (date) {
+    taskFilters.push("DATE(t.created_at) = ?");
+    taskParams.push(date);
+  }
+
+  const whereClause = taskFilters.length ? `WHERE ${taskFilters.join(" AND ")}` : "";
+
   const [tasksPerTeam, completionRate, topPerformers] = await Promise.all([
     query(
       `
       SELECT u.team, COUNT(t.id) AS total_tasks
       FROM tasks t
       JOIN users u ON u.id = t.assigned_to
+      ${whereClause}
       GROUP BY u.team
       ORDER BY total_tasks DESC
-    `
+    `,
+      taskParams
     ),
     query(
       `
       SELECT
         ROUND(
-          (SUM(CASE WHEN status = 'Completed' THEN 1 ELSE 0 END) / NULLIF(COUNT(*), 0)) * 100,
+          (SUM(CASE WHEN t.status = 'Completed' THEN 1 ELSE 0 END) / NULLIF(COUNT(t.id), 0)) * 100,
           2
         ) AS completion_rate
-      FROM tasks
-    `
+      FROM tasks t
+      JOIN users u ON u.id = t.assigned_to
+      ${whereClause}
+    `,
+      taskParams
     ),
     query(
       `
@@ -99,10 +119,16 @@ export const getSuperAdminAnalytics = async () => {
       FROM users u
       LEFT JOIN tasks t ON t.assigned_to = u.id
       WHERE u.role = 'employee'
+        ${team && team !== "all" ? "AND u.team = ?" : ""}
+        ${date ? "AND DATE(t.created_at) = ?" : ""}
       GROUP BY u.id, u.name, u.team
       ORDER BY productivity_score DESC
       LIMIT 10
-    `
+    `,
+      [
+        ...(team && team !== "all" ? [team] : []),
+        ...(date ? [date] : [])
+      ]
     )
   ]);
 
