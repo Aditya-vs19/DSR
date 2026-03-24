@@ -21,6 +21,8 @@ CREATE TABLE tasks (
   assigned_to INT NOT NULL,
   assigned_by INT NOT NULL,
   type ENUM('self', 'assigned') NOT NULL,
+  submitted_to_hr TINYINT(1) NOT NULL DEFAULT 0,
+  submitted_to_hr_at TIMESTAMP NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   completed_at TIMESTAMP NULL,
   deadline DATETIME NULL,
@@ -43,6 +45,17 @@ CREATE TABLE reports (
   UNIQUE KEY uk_employee_date (employee_id, date),
   FOREIGN KEY (employee_id) REFERENCES users(id) ON DELETE CASCADE,
   FOREIGN KEY (validated_by) REFERENCES users(id) ON DELETE SET NULL
+);
+
+CREATE TABLE daily_employee_reports (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  report_date DATE NOT NULL,
+  user_id INT NOT NULL,
+  status ENUM('Received', 'Not Received', 'Leave') NOT NULL DEFAULT 'Not Received',
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uk_daily_report_user_date (report_date, user_id),
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
 
