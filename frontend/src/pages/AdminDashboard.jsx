@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Charts from "../components/Charts";
 import TaskTable from "../components/TaskTable";
+import logo from "../assets/logo.jpeg";
 import { useAuth } from "../context/AuthContext";
 import { authApi, reportApi, taskApi } from "../services/api";
 
@@ -158,11 +159,11 @@ const AdminDashboard = () => {
 
   return (
     <div className="min-h-screen bg-dsr-page text-dsr-ink">
-      <header className="sticky top-0 z-30 border-b border-dsr-border bg-white/90 backdrop-blur">
+      <header className="sticky top-0 z-30 border-b border-dsr-border bg-[#f7f7f7] backdrop-blur">
         <div className="mx-auto flex max-w-[1400px] items-center justify-between gap-4 px-4 py-3 lg:px-8">
-          <div className="flex items-center gap-4">
-            <div className="rounded-xl bg-dsr-brand px-3 py-2 text-lg font-bold text-white">DSR</div>
-            <div>
+          <div className="flex items-center gap-5">
+            <img src={logo} alt="DSR Management Logo" className="h-12 w-auto -ml-6 object-contain lg:-ml-10" />
+            <div className="ml-4 lg:ml-8">
               <h1 className="text-xl font-extrabold">Department Admin Dashboard</h1>
               <p className="text-xs text-dsr-muted">{user?.team || "Team"} administration workspace</p>
             </div>
