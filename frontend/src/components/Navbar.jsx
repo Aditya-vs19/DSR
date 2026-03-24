@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import logo from "../assets/logo.jpeg";
 import { useAuth } from "../context/AuthContext";
 
-const Navbar = ({ title, notifications = [], onToggleSidebar }) => {
+const Navbar = ({ notifications = [], onToggleSidebar }) => {
   const { user, logout } = useAuth();
 
   const unreadCount = useMemo(
@@ -11,9 +11,9 @@ const Navbar = ({ title, notifications = [], onToggleSidebar }) => {
   );
 
   return (
-    <header className="sticky top-0 z-30 border-b border-slate-200 bg-[#f7f7f7]">
-      <div className="flex items-center justify-between gap-4 px-4 py-3">
-        <div className="flex items-center gap-4">
+    <header className="sticky top-0 z-30 border-b border-slate-200 bg-[#f3f3f3]">
+      <div className="flex items-center justify-between gap-6 px-4 py-4">
+        <div className="flex items-center gap-5">
           <button
             className="rounded-lg border border-slate-200 px-2 py-1 text-sm md:hidden"
             onClick={onToggleSidebar}
@@ -21,26 +21,29 @@ const Navbar = ({ title, notifications = [], onToggleSidebar }) => {
           >
             Menu
           </button>
-          <img src={logo} alt="DSR Management Logo" className="h-11 w-auto object-contain" />
-          <div>
-            <h1 className="text-lg font-extrabold text-slate-800">{title}</h1>
-            <p className="text-xs text-slate-500">{user?.team || user?.role || "Workspace"} workspace</p>
-          </div>
+          <img
+            src={logo}
+            alt="DSR Management Logo"
+            className="h-16 w-[220px] shrink-0 object-cover object-left"
+          />
         </div>
 
         <div className="flex items-center gap-4">
-          <div className="relative">
-            <span className="text-sm font-medium text-slate-600">Notifications</span>
-            {unreadCount > 0 && (
-              <span className="absolute -right-4 -top-2 rounded-full bg-rose-500 px-2 text-xs text-white">
-                {unreadCount}
-              </span>
-            )}
-          </div>
           <div className="text-right">
             <p className="text-sm font-semibold capitalize">{user?.name}</p>
             <p className="text-xs text-slate-500 uppercase">{user?.role}</p>
           </div>
+          <button
+            type="button"
+            className="relative inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+            aria-label="Open notifications"
+          >
+            <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M15 17h5l-1.4-1.4a2 2 0 0 1-.6-1.4V11a6 6 0 1 0-12 0v3.2a2 2 0 0 1-.6 1.4L4 17h5" />
+              <path d="M10 17a2 2 0 0 0 4 0" />
+            </svg>
+            {unreadCount > 0 && <span className="absolute right-2 top-2 h-2.5 w-2.5 rounded-full bg-rose-500" />}
+          </button>
           <button className="btn-secondary" onClick={logout} type="button">
             Logout
           </button>

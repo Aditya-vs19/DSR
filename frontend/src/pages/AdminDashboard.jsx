@@ -5,14 +5,13 @@ import logo from "../assets/logo.jpeg";
 import { useAuth } from "../context/AuthContext";
 import { authApi, reportApi, taskApi } from "../services/api";
 
-const TABS = ["Overview", "Tasks", "Users", "Reports", "Notifications", "Profile"];
+const TABS = ["Overview", "Tasks", "Users", "Reports", "Profile"];
 
 const AdminDashboard = () => {
   const { user, logout } = useAuth();
   const [tasks, setTasks] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [performance, setPerformance] = useState([]);
-  const [adminPerformance, setAdminPerformance] = useState([]);
   const [reports, setReports] = useState([]);
   const [notifications, setNotifications] = useState([]);
   const [activeTab, setActiveTab] = useState("Overview");
@@ -41,11 +40,10 @@ const AdminDashboard = () => {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [tasksRes, employeesRes, perfRes, adminPerfRes, reportsRes, notificationRes] = await Promise.all([
+      const [tasksRes, employeesRes, perfRes, reportsRes, notificationRes] = await Promise.all([
         taskApi.getTasks(),
         authApi.getTeamEmployees(),
         taskApi.getTeamPerformance(),
-        taskApi.getAdminPerformance(),
         reportApi.getReports(),
         taskApi.getNotifications()
       ]);
@@ -53,7 +51,6 @@ const AdminDashboard = () => {
       setTasks(tasksRes.data || []);
       setEmployees(employeesRes.data || []);
       setPerformance(perfRes.data || []);
-      setAdminPerformance(adminPerfRes.data || []);
       setReports(reportsRes.data || []);
       setNotifications(notificationRes.data || []);
     } finally {
@@ -159,17 +156,17 @@ const AdminDashboard = () => {
 
   return (
     <div className="min-h-screen bg-dsr-page text-dsr-ink">
-      <header className="sticky top-0 z-30 border-b border-dsr-border bg-[#f7f7f7] backdrop-blur">
-        <div className="mx-auto flex max-w-[1400px] items-center justify-between gap-4 px-4 py-3 lg:px-8">
+      <header className="sticky top-0 z-30 border-b border-dsr-border bg-[#f3f3f3]">
+        <div className="mx-auto flex max-w-[1400px] items-center justify-between gap-6 px-4 py-4 lg:px-8">
           <div className="flex items-center gap-5">
-            <img src={logo} alt="DSR Management Logo" className="h-12 w-auto -ml-6 object-contain lg:-ml-10" />
-            <div className="ml-4 lg:ml-8">
-              <h1 className="text-xl font-extrabold">Department Admin Dashboard</h1>
-              <p className="text-xs text-dsr-muted">{user?.team || "Team"} administration workspace</p>
-            </div>
+            <img
+              src={logo}
+              alt="DSR Management Logo"
+              className="h-16 w-[220px] shrink-0 object-cover object-left"
+            />
           </div>
 
-          <nav className="hidden items-center gap-2 rounded-full border border-dsr-border bg-dsr-soft px-2 py-1 lg:flex">
+          <nav className="hidden items-center gap-2 rounded-full border border-dsr-border bg-dsr-soft px-3 py-2 lg:flex">
             {TABS.map((tab) => (
               <button
                 key={tab}
@@ -182,7 +179,6 @@ const AdminDashboard = () => {
                 }`}
               >
                 {tab}
-                {tab === "Notifications" && unreadCount > 0 ? ` (${unreadCount})` : ""}
               </button>
             ))}
           </nav>
@@ -192,6 +188,18 @@ const AdminDashboard = () => {
               <p className="text-sm font-bold capitalize">{user?.name}</p>
               <p className="text-xs uppercase tracking-wide text-dsr-muted">{user?.team} Admin</p>
             </div>
+            <button
+              type="button"
+              onClick={() => setActiveTab("Notifications")}
+              className="relative inline-flex h-10 w-10 items-center justify-center rounded-xl border border-dsr-border bg-dsr-soft text-dsr-ink hover:bg-white"
+              aria-label="Open notifications"
+            >
+              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M15 17h5l-1.4-1.4a2 2 0 0 1-.6-1.4V11a6 6 0 1 0-12 0v3.2a2 2 0 0 1-.6 1.4L4 17h5" />
+                <path d="M10 17a2 2 0 0 0 4 0" />
+              </svg>
+              {unreadCount > 0 && <span className="absolute right-2 top-2 h-2.5 w-2.5 rounded-full bg-rose-500" />}
+            </button>
             <button className="btn-secondary" type="button" onClick={logout}>
               Logout
             </button>
@@ -201,7 +209,11 @@ const AdminDashboard = () => {
 
       <main className="mx-auto max-w-[1400px] space-y-6 px-4 py-6 lg:px-8">
         <div className="grid gap-3 lg:hidden">
-          <select className="input" value={activeTab} onChange={(event) => setActiveTab(event.target.value)}>
+          <select
+            className="input"
+            value={TABS.includes(activeTab) ? activeTab : "Overview"}
+            onChange={(event) => setActiveTab(event.target.value)}
+          >
             {TABS.map((tab) => (
               <option key={tab} value={tab}>
                 {tab}
@@ -231,7 +243,7 @@ const AdminDashboard = () => {
           </div>
         </section>
 
-        {(activeTab === "Overview" || activeTab === "Tasks") && (
+        {activeTab === "Tasks" && (
           <form className="card grid gap-3 md:grid-cols-2 xl:grid-cols-3" onSubmit={handleAssign}>
             <h2 className="md:col-span-2 xl:col-span-3 text-lg font-semibold">Create and Assign Task</h2>
             <input
@@ -375,13 +387,6 @@ const AdminDashboard = () => {
               labels={filteredReports.map((item) => item.employee_name)}
               values={filteredReports.map((item) => Number(item.completed_tasks || 0))}
               color="rgba(95, 157, 114, 0.85)"
-            />
-            <Charts
-              type="bar"
-              title="Department Admin Performance (%)"
-              labels={adminPerformance.map((item) => item.name)}
-              values={adminPerformance.map((item) => Number(item.completion_rate || 0))}
-              color="rgba(31, 84, 50, 0.85)"
             />
           </div>
         )}
