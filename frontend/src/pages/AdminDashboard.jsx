@@ -4,13 +4,14 @@ import TaskTable from "../components/TaskTable";
 import { useAuth } from "../context/AuthContext";
 import { authApi, reportApi, taskApi } from "../services/api";
 
-const TABS = ["Overview", "Tasks", "Users", "Reports", "Notifications"];
+const TABS = ["Overview", "Tasks", "Users", "Reports", "Notifications", "Profile"];
 
 const AdminDashboard = () => {
   const { user, logout } = useAuth();
   const [tasks, setTasks] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [performance, setPerformance] = useState([]);
+  const [adminPerformance, setAdminPerformance] = useState([]);
   const [reports, setReports] = useState([]);
   const [notifications, setNotifications] = useState([]);
   const [activeTab, setActiveTab] = useState("Overview");
@@ -26,15 +27,24 @@ const AdminDashboard = () => {
     assignedTo: "",
     deadline: ""
   });
+  const [selfAssign, setSelfAssign] = useState(false);
   const [error, setError] = useState("");
+  const [passwordForm, setPasswordForm] = useState({
+    currentPassword: "",
+    newPassword: "",
+    confirmPassword: ""
+  });
+  const [passwordMessage, setPasswordMessage] = useState("");
+  const [passwordError, setPasswordError] = useState("");
 
   const loadData = async () => {
     setLoading(true);
     try {
-      const [tasksRes, employeesRes, perfRes, reportsRes, notificationRes] = await Promise.all([
+      const [tasksRes, employeesRes, perfRes, adminPerfRes, reportsRes, notificationRes] = await Promise.all([
         taskApi.getTasks(),
         authApi.getTeamEmployees(),
         taskApi.getTeamPerformance(),
+        taskApi.getAdminPerformance(),
         reportApi.getReports(),
         taskApi.getNotifications()
       ]);
@@ -42,6 +52,7 @@ const AdminDashboard = () => {
       setTasks(tasksRes.data || []);
       setEmployees(employeesRes.data || []);
       setPerformance(perfRes.data || []);
+      setAdminPerformance(adminPerfRes.data || []);
       setReports(reportsRes.data || []);
       setNotifications(notificationRes.data || []);
     } finally {
@@ -91,13 +102,16 @@ const AdminDashboard = () => {
     setError("");
 
     try {
+      const assignedToId = selfAssign ? Number(user.id) : Number(form.assignedTo);
+
       await taskApi.createTask({
         ...form,
-        assignedTo: Number(form.assignedTo),
-        type: "assigned"
+        assignedTo: assignedToId,
+        type: selfAssign ? "self" : "assigned"
       });
 
       setForm({ client: "", task: "", action: "", dependency: "", assignedTo: "", deadline: "" });
+      setSelfAssign(false);
       await loadData();
       setActiveTab("Tasks");
     } catch (apiError) {
@@ -118,6 +132,28 @@ const AdminDashboard = () => {
   const handleMarkRead = async (id) => {
     await taskApi.markNotificationRead(id);
     await loadData();
+  };
+
+  const handlePasswordChange = async (event) => {
+    event.preventDefault();
+    setPasswordError("");
+    setPasswordMessage("");
+
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      setPasswordError("New password and confirmation do not match");
+      return;
+    }
+
+    try {
+      await authApi.changePassword({
+        currentPassword: passwordForm.currentPassword,
+        newPassword: passwordForm.newPassword
+      });
+      setPasswordMessage("Password changed successfully");
+      setPasswordForm({ currentPassword: "", newPassword: "", confirmPassword: "" });
+    } catch (apiError) {
+      setPasswordError(apiError.response?.data?.message || "Failed to change password");
+    }
   };
 
   return (
@@ -215,6 +251,7 @@ const AdminDashboard = () => {
               className="input"
               value={form.assignedTo}
               onChange={(event) => setForm((prev) => ({ ...prev, assignedTo: event.target.value }))}
+              disabled={selfAssign}
               required
             >
               <option value="">Assign to team employee</option>
@@ -224,6 +261,22 @@ const AdminDashboard = () => {
                 </option>
               ))}
             </select>
+            <label className="flex items-center gap-2 text-sm text-dsr-muted">
+              <input
+                type="checkbox"
+                checked={selfAssign}
+                onChange={(event) => {
+                  const checked = event.target.checked;
+                  setSelfAssign(checked);
+                  if (checked) {
+                    setForm((prev) => ({ ...prev, assignedTo: String(user?.id || "") }));
+                  } else {
+                    setForm((prev) => ({ ...prev, assignedTo: "" }));
+                  }
+                }}
+              />
+              Self assign (assign to me)
+            </label>
             <textarea
               className="input md:col-span-2 xl:col-span-3"
               placeholder="Action"
@@ -264,7 +317,6 @@ const AdminDashboard = () => {
                 >
                   <option value="all">All</option>
                   <option value="Pending">Pending</option>
-                  <option value="In Progress">In Progress</option>
                   <option value="Completed">Completed</option>
                 </select>
               </div>
@@ -281,6 +333,7 @@ const AdminDashboard = () => {
                       {employee.name}
                     </option>
                   ))}
+                  <option value={String(user?.id || "")}>Self ({user?.name})</option>
                 </select>
               </div>
               <div>
@@ -321,6 +374,13 @@ const AdminDashboard = () => {
               labels={filteredReports.map((item) => item.employee_name)}
               values={filteredReports.map((item) => Number(item.completed_tasks || 0))}
               color="rgba(95, 157, 114, 0.85)"
+            />
+            <Charts
+              type="bar"
+              title="Department Admin Performance (%)"
+              labels={adminPerformance.map((item) => item.name)}
+              values={adminPerformance.map((item) => Number(item.completion_rate || 0))}
+              color="rgba(31, 84, 50, 0.85)"
             />
           </div>
         )}
@@ -451,6 +511,63 @@ const AdminDashboard = () => {
               ))}
               {notifications.length === 0 && <p className="text-sm text-dsr-muted">No notifications yet</p>}
             </div>
+          </section>
+        )}
+
+        {activeTab === "Profile" && (
+          <section className="grid gap-4 lg:grid-cols-2">
+            <div className="card-green">
+              <h2 className="mb-3 text-xl font-bold">Profile</h2>
+              <div className="space-y-2 text-sm">
+                <p><span className="font-semibold">Name:</span> {user?.name}</p>
+                <p><span className="font-semibold">Role:</span> {String(user?.role || "").toUpperCase()}</p>
+                <p><span className="font-semibold">Email:</span> {user?.email}</p>
+                <p><span className="font-semibold">Department:</span> {user?.team || "-"}</p>
+              </div>
+            </div>
+
+            <form className="card" onSubmit={handlePasswordChange}>
+              <h2 className="mb-3 text-xl font-bold">Settings - Change Password</h2>
+              <div className="space-y-3">
+                <input
+                  className="input"
+                  type="password"
+                  placeholder="Current password"
+                  value={passwordForm.currentPassword}
+                  onChange={(event) =>
+                    setPasswordForm((prev) => ({ ...prev, currentPassword: event.target.value }))
+                  }
+                  required
+                />
+                <input
+                  className="input"
+                  type="password"
+                  placeholder="New password"
+                  value={passwordForm.newPassword}
+                  onChange={(event) =>
+                    setPasswordForm((prev) => ({ ...prev, newPassword: event.target.value }))
+                  }
+                  required
+                />
+                <input
+                  className="input"
+                  type="password"
+                  placeholder="Confirm new password"
+                  value={passwordForm.confirmPassword}
+                  onChange={(event) =>
+                    setPasswordForm((prev) => ({ ...prev, confirmPassword: event.target.value }))
+                  }
+                  required
+                />
+
+                {passwordError && <p className="text-sm text-rose-600">{passwordError}</p>}
+                {passwordMessage && <p className="text-sm text-emerald-700">{passwordMessage}</p>}
+
+                <button className="btn-primary" type="submit">
+                  Update Password
+                </button>
+              </div>
+            </form>
           </section>
         )}
 
