@@ -14,6 +14,7 @@ api.interceptors.request.use((config) => {
 
 export const authApi = {
   login: (payload) => api.post("/auth/login", payload),
+  changePassword: (payload) => api.post("/auth/change-password", payload),
   register: (payload) => api.post("/auth/register", payload),
   getUsers: () => api.get("/auth/users"),
   getTeamEmployees: (team) => api.get("/auth/users/team", { params: { team } })
@@ -34,7 +35,7 @@ export const reportApi = {
   getReports: () => api.get("/reports"),
   generateReports: (date) => api.post("/reports/generate", { date }),
   validateReport: (id, status) => api.put(`/reports/${id}/validate`, { status }),
-  getAnalytics: () => api.get("/reports/analytics/superadmin")
+  getAnalytics: (params = {}) => api.get("/reports/analytics/superadmin", { params })
 };
 
 export default api;

@@ -1,10 +1,17 @@
 import express from "express";
-import { getTeamEmployees, getUsers, login, register } from "../controllers/authController.js";
+import {
+  changePassword,
+  getTeamEmployees,
+  getUsers,
+  login,
+  register
+} from "../controllers/authController.js";
 import { authenticate, authorizeRoles } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
 router.post("/login", login);
+router.post("/change-password", authenticate, changePassword);
 router.post("/register", authenticateOptional, registerProtected, register);
 router.get("/users", authenticate, authorizeRoles("superadmin", "hr"), getUsers);
 router.get("/users/team", authenticate, authorizeRoles("admin", "hr", "superadmin"), getTeamEmployees);
