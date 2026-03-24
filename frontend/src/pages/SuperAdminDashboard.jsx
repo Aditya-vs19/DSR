@@ -87,14 +87,15 @@ const SuperAdminDashboard = () => {
   const filteredUsers = useMemo(() => {
     return users.filter((entry) => {
       const roleMatch = usersFilter.role === "all" || entry.role === usersFilter.role;
-      const teamMatch = usersFilter.team === "all" || entry.team === usersFilter.team;
+      const effectiveTeamFilter = usersFilter.team !== "all" ? usersFilter.team : filters.team;
+      const teamMatch = effectiveTeamFilter === "all" || entry.team === effectiveTeamFilter;
       const searchMatch =
         !usersFilter.search ||
         entry.name.toLowerCase().includes(usersFilter.search.toLowerCase()) ||
         entry.email.toLowerCase().includes(usersFilter.search.toLowerCase());
       return roleMatch && teamMatch && searchMatch;
     });
-  }, [users, usersFilter]);
+  }, [users, usersFilter, filters.team]);
 
   const dailyReportByEmployee = useMemo(() => {
     const selectedDate = reportDate || new Date().toISOString().slice(0, 10);
@@ -115,57 +116,74 @@ const SuperAdminDashboard = () => {
   );
 
   const completedTasksPieData = useMemo(() => {
-    const reportDateFilter = filters.date;
-    const filteredReportsByDate = reports.filter((entry) => {
-      if (!reportDateFilter) {
+    const filteredCompletedTasks = tasks.filter((item) => {
+      if (item.status !== "Completed") {
+        return false;
+      }
+
+      if (!filters.date) {
         return true;
       }
-      return String(entry.date || "").slice(0, 10) === reportDateFilter;
+
+      const completedDate = (item.completed_at || item.created_at || "").slice(0, 10);
+      return completedDate === filters.date;
     });
 
     if (filters.team && filters.team !== "all") {
       const employeeTotals = new Map();
 
-      filteredReportsByDate.forEach((entry) => {
-        const completed = Number(entry.completed_tasks || 0);
-        if (completed <= 0) {
+      users
+        .filter((item) => item.role === "employee" && item.team === filters.team)
+        .forEach((item) => {
+          employeeTotals.set(item.name, 0);
+        });
+
+      filteredCompletedTasks.forEach((task) => {
+        const employee = users.find((item) => Number(item.id) === Number(task.assigned_to));
+        if (!employee || employee.team !== filters.team || employee.role !== "employee") {
           return;
         }
 
-        const reportTeam = entry.team || users.find((item) => item.name === entry.employee_name)?.team;
-        if (reportTeam !== filters.team) {
-          return;
-        }
-
-        const employeeName = entry.employee_name || "Unknown";
-        employeeTotals.set(employeeName, (employeeTotals.get(employeeName) || 0) + completed);
+        employeeTotals.set(employee.name, (employeeTotals.get(employee.name) || 0) + 1);
       });
 
       return {
         title: `Completed Tasks by Employee (${filters.team})`,
         labels: Array.from(employeeTotals.keys()),
-        values: Array.from(employeeTotals.values())
+        values: Array.from(employeeTotals.values()),
+        chartValues: Array.from(employeeTotals.values()).map((value) => (value === 0 ? 0.05 : value))
       };
     }
 
     const teamTotals = new Map();
 
-    filteredReportsByDate.forEach((entry) => {
-      const completed = Number(entry.completed_tasks || 0);
-      if (completed <= 0) {
+    filteredCompletedTasks.forEach((task) => {
+      const employee = users.find((item) => Number(item.id) === Number(task.assigned_to));
+      if (!employee || employee.role !== "employee") {
         return;
       }
 
-      const teamName = entry.team || users.find((item) => item.name === entry.employee_name)?.team || "Unknown";
-      teamTotals.set(teamName, (teamTotals.get(teamName) || 0) + completed);
+      const teamName = employee.team || "Unknown";
+      teamTotals.set(teamName, (teamTotals.get(teamName) || 0) + 1);
     });
 
     return {
       title: "Completed Tasks by Department",
       labels: Array.from(teamTotals.keys()),
-      values: Array.from(teamTotals.values())
+      values: Array.from(teamTotals.values()),
+      chartValues: Array.from(teamTotals.values())
     };
-  }, [filters.date, filters.team, reports, users]);
+  }, [filters.date, filters.team, tasks, users]);
+
+  const filteredTopPerformers = useMemo(() => {
+    const performers = analytics.topPerformers || [];
+
+    if (filters.team === "all") {
+      return performers;
+    }
+
+    return performers.filter((item) => item.team === filters.team);
+  }, [analytics.topPerformers, filters.team]);
 
   const handleGenerateReports = async () => {
     await reportApi.generateReports(reportDate || undefined);
@@ -310,7 +328,11 @@ const SuperAdminDashboard = () => {
                 <select
                   className="input"
                   value={filters.team}
-                  onChange={(event) => setFilters((prev) => ({ ...prev, team: event.target.value }))}
+                  onChange={(event) => {
+                    const team = event.target.value;
+                    setFilters((prev) => ({ ...prev, team }));
+                    setUsersFilter((prev) => ({ ...prev, team }));
+                  }}
                 >
                   <option value="all">All Departments</option>
                   {teams.map((team) => (
@@ -359,10 +381,11 @@ const SuperAdminDashboard = () => {
         {activeTab === "Overview" && (
           <div className="grid gap-4 lg:grid-cols-2">
             <Charts
-              type="pie"
+              type="donut"
               title={completedTasksPieData.title}
               labels={completedTasksPieData.labels}
               values={completedTasksPieData.values}
+              chartValues={completedTasksPieData.chartValues}
               color={[
                 "rgba(42, 122, 70, 0.85)",
                 "rgba(95, 157, 114, 0.85)",
@@ -374,18 +397,24 @@ const SuperAdminDashboard = () => {
             />
             <Charts
               type="bar"
-              title="Top Performers (Productivity Score)"
-              labels={analytics.topPerformers?.map((item) => item.name) || []}
-              values={analytics.topPerformers?.map((item) => Number(item.productivity_score || 0)) || []}
+              title={
+                filters.team === "all"
+                  ? "Top Performers (Productivity Score)"
+                  : `Top Performers (${filters.team})`
+              }
+              labels={filteredTopPerformers.map((item) => item.name)}
+              values={filteredTopPerformers.map((item) => Number(item.productivity_score || 0))}
               color="rgba(95, 157, 114, 0.85)"
             />
-            <Charts
-              type="bar"
-              title="Department Admin Performance (%)"
-              labels={adminPerformance.map((item) => item.name)}
-              values={adminPerformance.map((item) => Number(item.completion_rate || 0))}
-              color="rgba(31, 84, 50, 0.85)"
-            />
+            {filters.team === "all" && (
+              <Charts
+                type="bar"
+                title="Department Admin Performance (%)"
+                labels={adminPerformance.map((item) => item.name)}
+                values={adminPerformance.map((item) => Number(item.completion_rate || 0))}
+                color="rgba(31, 84, 50, 0.85)"
+              />
+            )}
           </div>
         )}
 
