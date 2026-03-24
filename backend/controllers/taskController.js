@@ -7,9 +7,11 @@ import {
   getTaskUpdateNotificationRecipients,
   getTaskById,
   getTasksByRole,
+  getHrUserIds,
   getTeamPerformance,
   getUserNotifications,
   markNotificationAsRead,
+  submitTaskToHr,
   updateTaskStatus
 } from "../models/taskModel.js";
 
@@ -180,5 +182,47 @@ export const markNotificationReadController = async (req, res) => {
     return res.status(200).json({ message: "Notification marked as read" });
   } catch (error) {
     return res.status(500).json({ message: "Failed to update notification", error: error.message });
+  }
+};
+
+export const submitTaskToHrController = async (req, res) => {
+  try {
+    if (req.user.role !== "employee") {
+      return res.status(403).json({ message: "Only employees can submit tasks to HR" });
+    }
+
+    const { id } = req.params;
+    const result = await submitTaskToHr({ id, employeeId: req.user.id });
+
+    if (!result.task) {
+      return res.status(404).json({ message: "Task not found" });
+    }
+
+    if (result.forbidden) {
+      return res.status(403).json({ message: "You can submit only your own tasks" });
+    }
+
+    if (!result.changed) {
+      return res.status(200).json({ message: "Task already submitted to HR" });
+    }
+
+    const hrIds = await getHrUserIds();
+
+    if (hrIds.length > 0) {
+      await Promise.all(
+        hrIds.map((hrId) =>
+          createNotification({
+            userId: hrId,
+            message: `${req.user.name} submitted task "${result.task.task}" to HR`,
+            type: "task_submitted_to_hr",
+            refId: Number(id)
+          })
+        )
+      );
+    }
+
+    return res.status(200).json({ message: "Task submitted to HR" });
+  } catch (error) {
+    return res.status(500).json({ message: "Failed to submit task to HR", error: error.message });
   }
 };
