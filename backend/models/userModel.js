@@ -28,6 +28,11 @@ export const findUserById = async (id) => {
   return rows[0] || null;
 };
 
+export const findUserAuthById = async (id) => {
+  const rows = await query("SELECT id, name, email, password FROM users WHERE id = ? LIMIT 1", [id]);
+  return rows[0] || null;
+};
+
 export const updateUserPasswordById = async (id, hashedPassword) => {
   await query("UPDATE users SET password = ? WHERE id = ?", [hashedPassword, id]);
 };

@@ -48,7 +48,10 @@ export const validateReportController = async (req, res) => {
 
 export const getAnalyticsController = async (req, res) => {
   try {
-    const analytics = await getSuperAdminAnalytics();
+    const analytics = await getSuperAdminAnalytics({
+      team: req.query.team || "all",
+      date: req.query.date || ""
+    });
     return res.status(200).json(analytics);
   } catch (error) {
     return res.status(500).json({ message: "Failed to fetch analytics", error: error.message });

@@ -3,6 +3,7 @@ import {
   createTask,
   getEmployeeDailySummary,
   getEmployeeTimeline,
+  getTaskUpdateNotificationRecipients,
   getTaskById,
   getTasksByRole,
   getTeamPerformance,
@@ -92,6 +93,25 @@ export const updateTaskStatusController = async (req, res) => {
     }
 
     await updateTaskStatus({ id, status, dependency });
+
+    const recipientIds = await getTaskUpdateNotificationRecipients({
+      assignedBy: task.assigned_by,
+      actorId: req.user.id
+    });
+
+    if (recipientIds.length > 0) {
+      await Promise.all(
+        recipientIds.map((recipientId) =>
+          createNotification({
+            userId: recipientId,
+            message: `${req.user.name} updated task "${task.task}" to ${status}`,
+            type: "task_status_updated",
+            refId: task.id
+          })
+        )
+      );
+    }
+
     return res.status(200).json({ message: "Task updated" });
   } catch (error) {
     return res.status(500).json({ message: "Failed to update task", error: error.message });

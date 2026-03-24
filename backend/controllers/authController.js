@@ -2,6 +2,7 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import {
   createUser,
+  findUserAuthById,
   findUserByEmail,
   findUserByUsername,
   listTeamEmployees,
@@ -124,5 +125,36 @@ export const getTeamEmployees = async (req, res) => {
     return res.status(200).json(employees);
   } catch (error) {
     return res.status(500).json({ message: "Failed to fetch employees", error: error.message });
+  }
+};
+
+export const changePassword = async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ message: "currentPassword and newPassword are required" });
+    }
+
+    if (String(newPassword).length < 3) {
+      return res.status(400).json({ message: "New password must be at least 3 characters" });
+    }
+
+    const user = await findUserAuthById(req.user.id);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const matches = await bcrypt.compare(currentPassword, user.password);
+    if (!matches) {
+      return res.status(401).json({ message: "Current password is incorrect" });
+    }
+
+    const nextHash = await bcrypt.hash(newPassword, 10);
+    await updateUserPasswordById(req.user.id, nextHash);
+
+    return res.status(200).json({ message: "Password changed successfully" });
+  } catch (error) {
+    return res.status(500).json({ message: "Failed to change password", error: error.message });
   }
 };
