@@ -27,6 +27,7 @@ export const taskApi = {
   getDailySummary: (date) => api.get("/tasks/summary/daily", { params: { date } }),
   getTimeline: (days = 7) => api.get("/tasks/timeline", { params: { days } }),
   getTeamPerformance: (team) => api.get("/tasks/performance/team", { params: { team } }),
+  getAdminPerformance: (team) => api.get("/tasks/performance/admins", { params: { team } }),
   getNotifications: () => api.get("/tasks/notifications/me"),
   markNotificationRead: (id) => api.put(`/tasks/notifications/${id}/read`)
 };

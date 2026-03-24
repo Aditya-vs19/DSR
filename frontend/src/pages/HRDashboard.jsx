@@ -3,13 +3,20 @@ import Charts from "../components/Charts";
 import Navbar from "../components/Navbar";
 import Sidebar from "../components/Sidebar";
 import { useAuth } from "../context/AuthContext";
-import { reportApi, taskApi } from "../services/api";
+import { authApi, reportApi, taskApi } from "../services/api";
 
 const HRDashboard = () => {
   const { user } = useAuth();
   const [reports, setReports] = useState([]);
   const [notifications, setNotifications] = useState([]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [passwordForm, setPasswordForm] = useState({
+    currentPassword: "",
+    newPassword: "",
+    confirmPassword: ""
+  });
+  const [passwordMessage, setPasswordMessage] = useState("");
+  const [passwordError, setPasswordError] = useState("");
 
   const loadData = async () => {
     const [reportsRes, notificationRes] = await Promise.all([reportApi.getReports(), taskApi.getNotifications()]);
@@ -32,6 +39,28 @@ const HRDashboard = () => {
   const validate = async (id, status) => {
     await reportApi.validateReport(id, status);
     await loadData();
+  };
+
+  const handlePasswordChange = async (event) => {
+    event.preventDefault();
+    setPasswordError("");
+    setPasswordMessage("");
+
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      setPasswordError("New password and confirmation do not match");
+      return;
+    }
+
+    try {
+      await authApi.changePassword({
+        currentPassword: passwordForm.currentPassword,
+        newPassword: passwordForm.newPassword
+      });
+      setPasswordMessage("Password changed successfully");
+      setPasswordForm({ currentPassword: "", newPassword: "", confirmPassword: "" });
+    } catch (apiError) {
+      setPasswordError(apiError.response?.data?.message || "Failed to change password");
+    }
   };
 
   const employeeMap = reports.reduce((acc, report) => {
@@ -109,6 +138,61 @@ const HRDashboard = () => {
             values={Object.values(employeeMap)}
             color="rgba(16, 185, 129, 0.8)"
           />
+
+          <section className="grid gap-4 lg:grid-cols-2">
+            <div className="card-green">
+              <h2 className="mb-3 text-xl font-bold">Profile</h2>
+              <div className="space-y-2 text-sm">
+                <p><span className="font-semibold">Name:</span> {user?.name}</p>
+                <p><span className="font-semibold">Role:</span> {String(user?.role || "").toUpperCase()}</p>
+                <p><span className="font-semibold">Email:</span> {user?.email}</p>
+                <p><span className="font-semibold">Department:</span> {user?.team || "-"}</p>
+              </div>
+            </div>
+
+            <form className="card" onSubmit={handlePasswordChange}>
+              <h2 className="mb-3 text-xl font-bold">Settings - Change Password</h2>
+              <div className="space-y-3">
+                <input
+                  className="input"
+                  type="password"
+                  placeholder="Current password"
+                  value={passwordForm.currentPassword}
+                  onChange={(event) =>
+                    setPasswordForm((prev) => ({ ...prev, currentPassword: event.target.value }))
+                  }
+                  required
+                />
+                <input
+                  className="input"
+                  type="password"
+                  placeholder="New password"
+                  value={passwordForm.newPassword}
+                  onChange={(event) =>
+                    setPasswordForm((prev) => ({ ...prev, newPassword: event.target.value }))
+                  }
+                  required
+                />
+                <input
+                  className="input"
+                  type="password"
+                  placeholder="Confirm new password"
+                  value={passwordForm.confirmPassword}
+                  onChange={(event) =>
+                    setPasswordForm((prev) => ({ ...prev, confirmPassword: event.target.value }))
+                  }
+                  required
+                />
+
+                {passwordError && <p className="text-sm text-rose-600">{passwordError}</p>}
+                {passwordMessage && <p className="text-sm text-emerald-700">{passwordMessage}</p>}
+
+                <button className="btn-primary" type="submit">
+                  Update Password
+                </button>
+              </div>
+            </form>
+          </section>
         </main>
       </div>
     </div>

@@ -14,6 +14,7 @@ const SuperAdminDashboard = () => {
   const [tasks, setTasks] = useState([]);
   const [reports, setReports] = useState([]);
   const [analytics, setAnalytics] = useState(defaultAnalytics);
+  const [adminPerformance, setAdminPerformance] = useState([]);
   const [notifications, setNotifications] = useState([]);
   const [activeTab, setActiveTab] = useState("Overview");
   const [busy, setBusy] = useState(false);
@@ -31,16 +32,18 @@ const SuperAdminDashboard = () => {
   const loadData = async () => {
     setBusy(true);
     try {
-      const [usersRes, tasksRes, reportsRes, notificationRes] = await Promise.all([
+      const [usersRes, tasksRes, reportsRes, adminPerfRes, notificationRes] = await Promise.all([
         authApi.getUsers(),
         taskApi.getTasks(),
         reportApi.getReports(),
+        taskApi.getAdminPerformance(),
         taskApi.getNotifications()
       ]);
 
       setUsers(usersRes.data || []);
       setTasks(tasksRes.data || []);
       setReports(reportsRes.data || []);
+      setAdminPerformance(adminPerfRes.data || []);
       setNotifications(notificationRes.data || []);
     } finally {
       setBusy(false);
@@ -234,7 +237,6 @@ const SuperAdminDashboard = () => {
                 >
                   <option value="all">All</option>
                   <option value="Pending">Pending</option>
-                  <option value="In Progress">In Progress</option>
                   <option value="Completed">Completed</option>
                 </select>
               </div>
@@ -304,6 +306,13 @@ const SuperAdminDashboard = () => {
               labels={analytics.topPerformers?.map((item) => item.name) || []}
               values={analytics.topPerformers?.map((item) => Number(item.productivity_score || 0)) || []}
               color="rgba(95, 157, 114, 0.85)"
+            />
+            <Charts
+              type="bar"
+              title="Department Admin Performance (%)"
+              labels={adminPerformance.map((item) => item.name)}
+              values={adminPerformance.map((item) => Number(item.completion_rate || 0))}
+              color="rgba(31, 84, 50, 0.85)"
             />
           </div>
         )}
