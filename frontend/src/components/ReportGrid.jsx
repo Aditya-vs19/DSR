@@ -53,7 +53,7 @@ function ReportGrid({ rows = [], employees = [], onCellChange, loadingCellId = n
                     <div className="text-xs text-slate-500">{row.date}</div>
                     {row.holidayTitle ? (
                       <div className="mt-1 inline-flex rounded-full bg-pink-100 px-2 py-0.5 text-[11px] font-semibold text-pink-700">
-                        Holiday: {row.holidayTitle}
+                        {row.holidayTitle}
                       </div>
                     ) : null}
                   </td>
