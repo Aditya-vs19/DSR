@@ -20,7 +20,8 @@ const Charts = ({
   labels = [],
   values = [],
   chartValues = null,
-  color = "rgba(79, 70, 229, 0.8)"
+  color = "rgba(79, 70, 229, 0.8)",
+  barWidth = 50
 }) => {
   const isCircular = type === "pie" || type === "donut";
   const renderedValues = chartValues || values;
@@ -33,7 +34,14 @@ const Charts = ({
         backgroundColor: color,
         borderColor: isCircular ? "#ffffff" : color,
         borderWidth: isCircular ? 2 : 1,
-        tension: 0.35
+        tension: 2,
+        ...(type === "bar"
+          ? {
+              barThickness: barWidth,
+              categoryPercentage: 0.72,
+              barPercentage: 0.78
+            }
+          : {})
       }
     ]
   };
@@ -54,7 +62,19 @@ const Charts = ({
       title: { display: true, text: title }
     },
     ...(type === "donut" ? { cutout: "65%" } : {}),
-    ...(isCircular ? {} : { scales: { y: { beginAtZero: true } } })
+    ...(isCircular
+      ? {}
+      : {
+          scales: {
+            y: {
+              beginAtZero: true,
+              ticks: {
+                stepSize: 1,
+                precision: 0
+              }
+            }
+          }
+        })
   };
 
   return (
