@@ -1,10 +1,13 @@
 import express from "express";
 import {
+  deleteHolidayController,
   generateReportsController,
   getAnalyticsController,
+  getHolidaysController,
   getReportDetailsController,
   getReportsController,
   submitReportToHrController,
+  upsertHolidayController,
   updateDailyReportCellController,
   validateReportController
 } from "../controllers/reportController.js";
@@ -15,6 +18,9 @@ const router = express.Router();
 router.use(authenticate);
 
 router.get("/", getReportsController);
+router.get("/holidays", authorizeRoles("superadmin"), getHolidaysController);
+router.post("/holidays", authorizeRoles("superadmin"), upsertHolidayController);
+router.delete("/holidays/:id", authorizeRoles("superadmin"), deleteHolidayController);
 router.post("/submit", authorizeRoles("employee"), submitReportToHrController);
 router.post("/generate", authorizeRoles("admin", "hr", "superadmin"), generateReportsController);
 router.get("/:id/details", authorizeRoles("admin", "hr", "superadmin"), getReportDetailsController);
