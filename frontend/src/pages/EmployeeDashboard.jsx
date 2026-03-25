@@ -3,19 +3,29 @@ import Charts from "../components/Charts";
 import TaskTable from "../components/TaskTable";
 import logo from "../assets/logo.jpeg";
 import { useAuth } from "../context/AuthContext";
-import { authApi, taskApi } from "../services/api";
+import { authApi, reportApi, taskApi } from "../services/api";
 
 const TABS = ["Overview", "Tasks", "Profile"];
 
+const getLocalDateText = (date = new Date()) => {
+  const copy = new Date(date);
+  copy.setMinutes(copy.getMinutes() - copy.getTimezoneOffset());
+  return copy.toISOString().slice(0, 10);
+};
+
 const EmployeeDashboard = () => {
   const { user, logout } = useAuth();
+  const todayText = getLocalDateText();
   const [tasks, setTasks] = useState([]);
+  const [reports, setReports] = useState([]);
   const [summary, setSummary] = useState({ total_tasks: 0, completed_tasks: 0, pending_tasks: 0 });
   const [timeline, setTimeline] = useState([]);
   const [notifications, setNotifications] = useState([]);
   const [activeTab, setActiveTab] = useState("Overview");
   const [loading, setLoading] = useState(false);
-  const [filters, setFilters] = useState({ status: "all", date: "" });
+  const [filters, setFilters] = useState({ status: "all", period: "today", date: todayText });
+  const [submittingReport, setSubmittingReport] = useState(false);
+  const [submitMessage, setSubmitMessage] = useState("");
   const [form, setForm] = useState({
     client: "",
     task: "",
@@ -35,14 +45,16 @@ const EmployeeDashboard = () => {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [tasksRes, summaryRes, timelineRes, notificationRes] = await Promise.all([
+      const [tasksRes, reportsRes, summaryRes, timelineRes, notificationRes] = await Promise.all([
         taskApi.getTasks(),
+        reportApi.getReports(),
         taskApi.getDailySummary(),
         taskApi.getTimeline(14),
         taskApi.getNotifications()
       ]);
 
       setTasks(tasksRes.data || []);
+      setReports(reportsRes?.data || []);
       setSummary(summaryRes.data || {});
       setTimeline(timelineRes.data || []);
       setNotifications(notificationRes.data || []);
@@ -58,12 +70,36 @@ const EmployeeDashboard = () => {
   }, []);
 
   const filteredTasks = useMemo(() => {
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayText = getLocalDateText(yesterday);
+
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setHours(0, 0, 0, 0);
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
+
     return tasks.filter((item) => {
       const statusMatch = filters.status === "all" || item.status === filters.status;
-      const dateMatch = !filters.date || (item.created_at || "").slice(0, 10) === filters.date;
+
+      const taskDateText = (item.created_at || "").slice(0, 10);
+      const taskDate = item.created_at ? new Date(item.created_at) : null;
+
+      let dateMatch = true;
+      if (filters.period === "today") {
+        dateMatch = taskDateText === todayText;
+      } else if (filters.period === "all") {
+        dateMatch = true;
+      } else if (filters.period === "yesterday") {
+        dateMatch = taskDateText === yesterdayText;
+      } else if (filters.period === "last7") {
+        dateMatch = taskDate ? taskDate >= sevenDaysAgo : false;
+      } else if (filters.period === "custom") {
+        dateMatch = !filters.date || taskDateText === filters.date;
+      }
+
       return statusMatch && dateMatch;
     });
-  }, [tasks, filters]);
+  }, [tasks, filters, todayText]);
 
   const unreadCount = useMemo(
     () => notifications.filter((item) => !item.is_read).length,
@@ -102,6 +138,59 @@ const EmployeeDashboard = () => {
   const handleMarkRead = async (id) => {
     await taskApi.markNotificationRead(id);
     await loadData();
+  };
+
+  const selectedReportDate = useMemo(() => {
+    if (filters.period === "today") {
+      return todayText;
+    }
+
+    if (filters.period === "all") {
+      return "";
+    }
+
+    if (filters.period === "yesterday") {
+      return getLocalDateText(new Date(Date.now() - 24 * 60 * 60 * 1000));
+    }
+
+    if (filters.period === "custom") {
+      return filters.date || "";
+    }
+
+    return "";
+  }, [filters.period, filters.date, todayText]);
+
+  const canSubmitReport = Boolean(selectedReportDate) && filters.period !== "last7";
+
+  const alreadySubmittedForDate = useMemo(() => {
+    if (!selectedReportDate) {
+      return false;
+    }
+
+    return reports.some(
+      (entry) =>
+        String(entry.date).slice(0, 10) === selectedReportDate &&
+        entry.received_status === "Received"
+    );
+  }, [reports, selectedReportDate]);
+
+  const handleSubmitReport = async () => {
+    if (!canSubmitReport) {
+      setSubmitMessage("Select a single day (Today, Yesterday, or Custom Date) to submit report.");
+      return;
+    }
+
+    setSubmittingReport(true);
+    setSubmitMessage("");
+    try {
+      const response = await reportApi.submitReportToHr(selectedReportDate);
+      setSubmitMessage(response.data?.message || "Report submitted to HR.");
+      await loadData();
+    } catch (apiError) {
+      setSubmitMessage(apiError.response?.data?.message || "Failed to submit report to HR");
+    } finally {
+      setSubmittingReport(false);
+    }
   };
 
   const handlePasswordChange = async (event) => {
@@ -217,7 +306,7 @@ const EmployeeDashboard = () => {
 
         {(activeTab === "Overview" || activeTab === "Tasks") && (
           <section className="card">
-            <div className="grid gap-3 md:grid-cols-3">
+            <div className="grid gap-3 md:grid-cols-4">
               <div>
                 <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-dsr-muted">Status</label>
                 <select
@@ -231,10 +320,37 @@ const EmployeeDashboard = () => {
                 </select>
               </div>
               <div>
-                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-dsr-muted">Date</label>
+                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-dsr-muted">Task Period</label>
+                <select
+                  className="input"
+                  value={filters.period}
+                  onChange={(event) => {
+                    const period = event.target.value;
+                    setFilters((prev) => ({
+                      ...prev,
+                      period,
+                      date:
+                        period === "today"
+                          ? todayText
+                          : period === "yesterday"
+                            ? getLocalDateText(new Date(Date.now() - 24 * 60 * 60 * 1000))
+                            : prev.date
+                    }));
+                  }}
+                >
+                  <option value="all">All Time</option>
+                  <option value="today">Today (Default)</option>
+                  <option value="yesterday">Yesterday</option>
+                  <option value="last7">Last 7 Days</option>
+                  <option value="custom">Custom Date</option>
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-dsr-muted">Custom Date</label>
                 <input
                   className="input"
                   type="date"
+                  disabled={filters.period !== "custom"}
                   value={filters.date}
                   onChange={(event) => setFilters((prev) => ({ ...prev, date: event.target.value }))}
                 />
@@ -255,6 +371,32 @@ const EmployeeDashboard = () => {
               editableStatus
               showAssigner
             />
+            {tasks.length > 0 && filteredTasks.length === 0 && filters.period !== "all" && (
+              <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                No tasks in current day filter. 
+                <button
+                  type="button"
+                  className="ml-1 font-semibold underline"
+                  onClick={() => setFilters((prev) => ({ ...prev, period: "all" }))}
+                >
+                  Show all tasks
+                </button>
+              </div>
+            )}
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-dsr-border bg-dsr-soft p-3">
+              <p className="text-sm text-dsr-muted">
+                Submit report for: <span className="font-semibold text-dsr-ink">{selectedReportDate || "Select a single day"}</span>
+              </p>
+              <button
+                type="button"
+                className="btn-primary"
+                disabled={!canSubmitReport || submittingReport || alreadySubmittedForDate}
+                onClick={handleSubmitReport}
+              >
+                {alreadySubmittedForDate ? "Submitted" : submittingReport ? "Submitting..." : "Submit Report"}
+              </button>
+            </div>
+            {submitMessage && <p className="mt-2 text-sm text-dsr-brand">{submitMessage}</p>}
           </section>
         )}
 

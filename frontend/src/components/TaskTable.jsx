@@ -9,7 +9,10 @@ const TaskTable = ({
   onStatusChange,
   editableStatus = false,
   showAssignee = false,
-  showAssigner = false
+  showAssigner = false,
+  showSubmitToHr = false,
+  onSubmitToHr,
+  submittingTaskId = null
 }) => {
   return (
     <div className="card overflow-x-auto">
@@ -24,6 +27,7 @@ const TaskTable = ({
             <th className="p-3">Dependency</th>
             {showAssignee && <th className="p-3">Assigned To</th>}
             {showAssigner && <th className="p-3">Assigned By</th>}
+            {showSubmitToHr && <th className="p-3">HR Submit</th>}
           </tr>
         </thead>
         <tbody>
@@ -60,12 +64,33 @@ const TaskTable = ({
                 <td className="p-3">{item.dependency || "-"}</td>
                 {showAssignee && <td className="p-3">{item.assigned_to_name || "-"}</td>}
                 {showAssigner && <td className="p-3">{item.assigned_by_name || "-"}</td>}
+                {showSubmitToHr && (
+                  <td className="p-3">
+                    {Number(item.submitted_to_hr) === 1 ? (
+                      <span className="rounded-md bg-emerald-100 px-2 py-1 text-xs font-semibold text-emerald-800">
+                        Submitted
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        className="btn-primary"
+                        disabled={!onSubmitToHr || submittingTaskId === item.id}
+                        onClick={() => onSubmitToHr?.(item)}
+                      >
+                        {submittingTaskId === item.id ? "Submitting..." : "Submit to HR"}
+                      </button>
+                    )}
+                  </td>
+                )}
               </tr>
             );
           })}
           {tasks.length === 0 && (
             <tr>
-              <td colSpan={6 + (showAssignee ? 1 : 0) + (showAssigner ? 1 : 0)} className="p-4 text-center text-slate-500">
+              <td
+                colSpan={6 + (showAssignee ? 1 : 0) + (showAssigner ? 1 : 0) + (showSubmitToHr ? 1 : 0)}
+                className="p-4 text-center text-slate-500"
+              >
                 No tasks available
               </td>
             </tr>

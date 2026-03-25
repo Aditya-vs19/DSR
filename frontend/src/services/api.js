@@ -41,6 +41,7 @@ export const taskApi = {
   createTask: (payload) => api.post("/tasks", payload),
   getTasks: () => api.get("/tasks"),
   updateTask: (id, payload) => api.put(`/tasks/${id}`, payload),
+  submitTaskToHr: (id) => api.put(`/tasks/${id}/submit-hr`),
   getDailySummary: (date) => api.get("/tasks/summary/daily", { params: { date } }),
   getTimeline: (days = 7) => api.get("/tasks/timeline", { params: { days } }),
   getTeamPerformance: (team) => api.get("/tasks/performance/team", { params: { team } }),
@@ -50,7 +51,11 @@ export const taskApi = {
 };
 
 export const reportApi = {
-  getReports: () => api.get("/reports"),
+  getReports: (params = {}) => api.get("/reports", { params }),
+  getDailyReportGrid: (params = {}) => api.get("/reports", { params }),
+  submitReportToHr: (date) => api.post("/reports/submit", { date }),
+  getReportDetails: (id) => api.get(`/reports/${id}/details`),
+  updateDailyReportCell: (id, status) => api.put(`/reports/${id}`, { status }),
   generateReports: (date) => api.post("/reports/generate", { date }),
   validateReport: (id, status) => api.put(`/reports/${id}/validate`, { status }),
   getAnalytics: (params = {}) => api.get("/reports/analytics/superadmin", { params })

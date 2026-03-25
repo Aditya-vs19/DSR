@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import Charts from "../components/Charts";
+import ReportPage from "./ReportPage";
 import TaskTable from "../components/TaskTable";
 import logo from "../assets/logo.jpeg";
 import { useAuth } from "../context/AuthContext";
 import { authApi, reportApi, taskApi } from "../services/api";
 
-const TABS = ["Overview", "Tasks", "Users", "Profile"];
+const TABS = ["Overview", "Tasks", "Users", "Reports", "Profile"];
 
 const defaultAnalytics = { tasksPerTeam: [], completionRate: 0, topPerformers: [] };
 
@@ -185,12 +186,6 @@ const SuperAdminDashboard = () => {
     return performers.filter((item) => item.team === filters.team);
   }, [analytics.topPerformers, filters.team]);
 
-  const handleGenerateReports = async () => {
-    await reportApi.generateReports(reportDate || undefined);
-    await loadData();
-    await loadAnalytics();
-  };
-
   const handleMarkRead = async (id) => {
     await taskApi.markNotificationRead(id);
     await loadData();
@@ -287,30 +282,32 @@ const SuperAdminDashboard = () => {
           </select>
         </div>
 
-        <section className="card-green">
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <div>
-              <p className="text-xs uppercase tracking-wide text-dsr-muted">Users</p>
-              <h3 className="text-3xl font-extrabold">{users.length}</h3>
+        {activeTab === "Overview" && (
+          <section className="card-green">
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+              <div>
+                <p className="text-xs uppercase tracking-wide text-dsr-muted">Users</p>
+                <h3 className="text-3xl font-extrabold">{users.length}</h3>
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-wide text-dsr-muted">Tasks</p>
+                <h3 className="text-3xl font-extrabold">{tasks.length}</h3>
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-wide text-dsr-muted">Reports</p>
+                <h3 className="text-3xl font-extrabold">{reports.length}</h3>
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-wide text-dsr-muted">Completion Rate</p>
+                <h3 className="text-3xl font-extrabold text-dsr-brand">{analytics.completionRate || 0}%</h3>
+              </div>
             </div>
-            <div>
-              <p className="text-xs uppercase tracking-wide text-dsr-muted">Tasks</p>
-              <h3 className="text-3xl font-extrabold">{tasks.length}</h3>
-            </div>
-            <div>
-              <p className="text-xs uppercase tracking-wide text-dsr-muted">Reports</p>
-              <h3 className="text-3xl font-extrabold">{reports.length}</h3>
-            </div>
-            <div>
-              <p className="text-xs uppercase tracking-wide text-dsr-muted">Completion Rate</p>
-              <h3 className="text-3xl font-extrabold text-dsr-brand">{analytics.completionRate || 0}%</h3>
-            </div>
-          </div>
-        </section>
+          </section>
+        )}
 
         {(activeTab === "Overview" || activeTab === "Tasks") && (
           <section className="card">
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               <div>
                 <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-dsr-muted">Status</label>
                 <select
@@ -351,71 +348,65 @@ const SuperAdminDashboard = () => {
                   onChange={(event) => setFilters((prev) => ({ ...prev, date: event.target.value }))}
                 />
               </div>
-              <div>
-                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-dsr-muted">Report Date</label>
-                <input
-                  className="input"
-                  type="date"
-                  value={reportDate}
-                  onChange={(event) => setReportDate(event.target.value)}
-                />
-              </div>
-              <div className="flex items-end">
-                <button className="btn-primary w-full" onClick={handleGenerateReports} type="button">
-                  Generate Reports
-                </button>
-              </div>
             </div>
           </section>
         )}
 
-        {(activeTab === "Overview" || activeTab === "Tasks") && (
+        {activeTab === "Overview" && (
+          <>
+            <div className="grid gap-4 lg:grid-cols-2">
+              <Charts
+                type="donut"
+                title={completedTasksPieData.title}
+                labels={completedTasksPieData.labels}
+                values={completedTasksPieData.values}
+                chartValues={completedTasksPieData.chartValues}
+                color={[
+                  "rgba(42, 122, 70, 0.85)",
+                  "rgba(95, 157, 114, 0.85)",
+                  "rgba(31, 84, 50, 0.85)",
+                  "rgba(57, 136, 89, 0.85)",
+                  "rgba(122, 174, 137, 0.85)",
+                  "rgba(22, 101, 52, 0.85)"
+                ]}
+              />
+              <Charts
+                type="bar"
+                title={
+                  filters.team === "all"
+                    ? "Top Performers (Productivity Score)"
+                    : `Top Performers (${filters.team})`
+                }
+                labels={filteredTopPerformers.map((item) => item.name)}
+                values={filteredTopPerformers.map((item) => Number(item.productivity_score || 0))}
+                color="rgba(95, 157, 114, 0.85)"
+              />
+              {filters.team === "all" && (
+                <Charts
+                  type="bar"
+                  title="Department Admin Performance (%)"
+                  labels={adminPerformance.map((item) => item.name)}
+                  values={adminPerformance.map((item) => Number(item.completion_rate || 0))}
+                  color="rgba(31, 84, 50, 0.85)"
+                />
+              )}
+            </div>
+            <TaskTable
+              tasks={filteredTasks}
+              editableStatus={false}
+              showAssignee
+              showAssigner
+            />
+          </>
+        )}
+
+        {activeTab === "Tasks" && (
           <TaskTable
             tasks={filteredTasks}
             editableStatus={false}
             showAssignee
             showAssigner
           />
-        )}
-
-        {activeTab === "Overview" && (
-          <div className="grid gap-4 lg:grid-cols-2">
-            <Charts
-              type="donut"
-              title={completedTasksPieData.title}
-              labels={completedTasksPieData.labels}
-              values={completedTasksPieData.values}
-              chartValues={completedTasksPieData.chartValues}
-              color={[
-                "rgba(42, 122, 70, 0.85)",
-                "rgba(95, 157, 114, 0.85)",
-                "rgba(31, 84, 50, 0.85)",
-                "rgba(57, 136, 89, 0.85)",
-                "rgba(122, 174, 137, 0.85)",
-                "rgba(22, 101, 52, 0.85)"
-              ]}
-            />
-            <Charts
-              type="bar"
-              title={
-                filters.team === "all"
-                  ? "Top Performers (Productivity Score)"
-                  : `Top Performers (${filters.team})`
-              }
-              labels={filteredTopPerformers.map((item) => item.name)}
-              values={filteredTopPerformers.map((item) => Number(item.productivity_score || 0))}
-              color="rgba(95, 157, 114, 0.85)"
-            />
-            {filters.team === "all" && (
-              <Charts
-                type="bar"
-                title="Department Admin Performance (%)"
-                labels={adminPerformance.map((item) => item.name)}
-                values={adminPerformance.map((item) => Number(item.completion_rate || 0))}
-                color="rgba(31, 84, 50, 0.85)"
-              />
-            )}
-          </div>
         )}
 
         {activeTab === "Users" && (
@@ -496,6 +487,16 @@ const SuperAdminDashboard = () => {
                 )}
               </tbody>
             </table>
+          </section>
+        )}
+
+        {activeTab === "Reports" && (
+          <section className="space-y-4">
+            <ReportPage
+              role="superadmin"
+              initialTeam={filters.team}
+              initialDate={reportDate}
+            />
           </section>
         )}
 

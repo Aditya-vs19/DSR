@@ -1,5 +1,53 @@
 import { query } from "../config/db.js";
 
+let taskSubmissionColumnsEnsured = false;
+let dailyReportTableEnsured = false;
+
+const ensureTaskSubmissionColumns = async () => {
+  if (taskSubmissionColumnsEnsured) return;
+
+  const existingColumns = await query(
+    `
+      SELECT COLUMN_NAME
+      FROM information_schema.COLUMNS
+      WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = 'tasks'
+        AND COLUMN_NAME IN ('submitted_to_hr', 'submitted_to_hr_at')
+    `
+  );
+
+  const columnSet = new Set(existingColumns.map((entry) => entry.COLUMN_NAME));
+
+  if (!columnSet.has("submitted_to_hr")) {
+    await query("ALTER TABLE tasks ADD COLUMN submitted_to_hr TINYINT(1) NOT NULL DEFAULT 0");
+  }
+
+  if (!columnSet.has("submitted_to_hr_at")) {
+    await query("ALTER TABLE tasks ADD COLUMN submitted_to_hr_at TIMESTAMP NULL");
+  }
+
+  taskSubmissionColumnsEnsured = true;
+};
+
+const ensureDailyReportTable = async () => {
+  if (dailyReportTableEnsured) return;
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS daily_employee_reports (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      report_date DATE NOT NULL,
+      user_id INT NOT NULL,
+      status ENUM('Received', 'Not Received', 'Leave') NOT NULL DEFAULT 'Not Received',
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE KEY uk_daily_report_user_date (report_date, user_id),
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )
+  `);
+
+  dailyReportTableEnsured = true;
+};
+
 export const createTask = async ({
   client,
   task,
@@ -11,6 +59,8 @@ export const createTask = async ({
   type,
   deadline
 }) => {
+  await ensureTaskSubmissionColumns();
+
   const sql = `
     INSERT INTO tasks (
       client, task, action, status, dependency,
@@ -35,6 +85,8 @@ export const createTask = async ({
 };
 
 export const getTasksByRole = async ({ role, userId, team }) => {
+  await ensureTaskSubmissionColumns();
+
   const baseSql = `
     SELECT
       t.id,
@@ -46,6 +98,8 @@ export const getTasksByRole = async ({ role, userId, team }) => {
       t.assigned_to,
       t.assigned_by,
       t.type,
+      t.submitted_to_hr,
+      t.submitted_to_hr_at,
       t.created_at,
       t.completed_at,
       t.deadline,
@@ -71,11 +125,15 @@ export const getTasksByRole = async ({ role, userId, team }) => {
 };
 
 export const getTaskById = async (id) => {
+  await ensureTaskSubmissionColumns();
+
   const rows = await query("SELECT * FROM tasks WHERE id = ? LIMIT 1", [id]);
   return rows[0] || null;
 };
 
 export const updateTaskStatus = async ({ id, status, dependency }) => {
+  await ensureTaskSubmissionColumns();
+
   const completedAt = status === "Completed" ? new Date() : null;
 
   const sql = `
@@ -93,6 +151,8 @@ export const updateTaskStatus = async ({ id, status, dependency }) => {
 };
 
 export const getEmployeeDailySummary = async (employeeId, date) => {
+  await ensureTaskSubmissionColumns();
+
   const sql = `
     SELECT
       COUNT(*) AS total_tasks,
@@ -107,6 +167,8 @@ export const getEmployeeDailySummary = async (employeeId, date) => {
 };
 
 export const getEmployeeTimeline = async (employeeId, days = 7) => {
+  await ensureTaskSubmissionColumns();
+
   const sql = `
     SELECT
       DATE(completed_at) AS day,
@@ -123,6 +185,8 @@ export const getEmployeeTimeline = async (employeeId, days = 7) => {
 };
 
 export const getTeamPerformance = async (team) => {
+  await ensureTaskSubmissionColumns();
+
   const sql = `
     SELECT
       u.id,
@@ -146,6 +210,8 @@ export const getTeamPerformance = async (team) => {
 };
 
 export const getDepartmentAdminPerformance = async (team = null) => {
+  await ensureTaskSubmissionColumns();
+
   const sql = `
     SELECT
       u.id,
@@ -208,4 +274,73 @@ export const getTaskUpdateNotificationRecipients = async ({ assignedBy, actorId 
   );
 
   return rows.map((row) => row.id);
+};
+
+export const getHrUserIds = async () => {
+  const rows = await query("SELECT id FROM users WHERE role = 'hr'");
+  return rows.map((row) => row.id);
+};
+
+export const submitTaskToHr = async ({ id, employeeId }) => {
+  await ensureTaskSubmissionColumns();
+  await ensureDailyReportTable();
+
+  const taskRows = await query(
+    `
+      SELECT id, task, assigned_to, submitted_to_hr, DATE(created_at) AS task_date
+      FROM tasks
+      WHERE id = ?
+      LIMIT 1
+    `,
+    [id]
+  );
+
+  const task = taskRows[0] || null;
+  if (!task) {
+    return { task: null, changed: false };
+  }
+
+  if (Number(task.assigned_to) !== Number(employeeId)) {
+    return { task, changed: false, forbidden: true };
+  }
+
+  if (Number(task.submitted_to_hr) === 1) {
+    return { task, changed: false };
+  }
+
+  await query(
+    "UPDATE tasks SET submitted_to_hr = 1, submitted_to_hr_at = CURRENT_TIMESTAMP WHERE id = ?",
+    [id]
+  );
+
+  await query(
+    `
+      INSERT INTO daily_employee_reports (report_date, user_id, status)
+      VALUES (?, ?, 'Received')
+      ON DUPLICATE KEY UPDATE status = 'Received', updated_at = CURRENT_TIMESTAMP
+    `,
+    [task.task_date, employeeId]
+  );
+
+  await query(
+    `
+      INSERT INTO reports (employee_id, date, total_tasks, completed_tasks, pending_tasks, status)
+      SELECT
+        ?,
+        ?,
+        COUNT(*) AS total_tasks,
+        SUM(CASE WHEN status = 'Completed' THEN 1 ELSE 0 END) AS completed_tasks,
+        SUM(CASE WHEN status <> 'Completed' THEN 1 ELSE 0 END) AS pending_tasks,
+        'pending'
+      FROM tasks
+      WHERE assigned_to = ? AND DATE(created_at) = ?
+      ON DUPLICATE KEY UPDATE
+        total_tasks = VALUES(total_tasks),
+        completed_tasks = VALUES(completed_tasks),
+        pending_tasks = VALUES(pending_tasks)
+    `,
+    [employeeId, task.task_date, employeeId, task.task_date]
+  );
+
+  return { task, changed: true };
 };
