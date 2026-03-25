@@ -153,6 +153,8 @@ const HRDashboard = () => {
             <form className="card" onSubmit={handlePasswordChange}>
               <h2 className="mb-3 text-xl font-bold">Settings - Change Password</h2>
               <div className="space-y-3">
+                  
+                  
                 <input
                   className="input"
                   type="password"
