@@ -20,7 +20,7 @@ const SuperAdminDashboard = () => {
   const [notifications, setNotifications] = useState([]);
   const [activeTab, setActiveTab] = useState("Overview");
   const [busy, setBusy] = useState(false);
-  const [filters, setFilters] = useState({ status: "all", team: "all", date: "" });
+  const [filters, setFilters] = useState({ status: "all", team: "all", employeeId: "all", date: "" });
   const [usersFilter, setUsersFilter] = useState({ team: "all", role: "all", search: "" });
   const [reportDate, setReportDate] = useState("");
   const [passwordForm, setPasswordForm] = useState({
@@ -30,6 +30,7 @@ const SuperAdminDashboard = () => {
   });
   const [passwordMessage, setPasswordMessage] = useState("");
   const [passwordError, setPasswordError] = useState("");
+  const [focusedTaskId, setFocusedTaskId] = useState(null);
 
   const loadData = async () => {
     setBusy(true);
@@ -78,10 +79,42 @@ const SuperAdminDashboard = () => {
       const statusMatch = filters.status === "all" || item.status === filters.status;
       const userTeam = users.find((entry) => entry.id === item.assigned_to)?.team;
       const teamMatch = filters.team === "all" || userTeam === filters.team;
+      const employeeMatch =
+        filters.employeeId === "all" || String(item.assigned_to) === String(filters.employeeId);
       const dateMatch = !filters.date || (item.created_at || "").slice(0, 10) === filters.date;
-      return statusMatch && teamMatch && dateMatch;
+      return statusMatch && teamMatch && employeeMatch && dateMatch;
     });
   }, [tasks, filters, users]);
+
+  const taskEmployeeOptions = useMemo(() => {
+    const scopedUsers = users.filter((entry) => {
+      if (entry.role !== "employee") {
+        return false;
+      }
+
+      if (filters.team === "all") {
+        return true;
+      }
+
+      return entry.team === filters.team;
+    });
+
+    return scopedUsers.sort((a, b) => a.name.localeCompare(b.name));
+  }, [filters.team, users]);
+
+  useEffect(() => {
+    if (filters.employeeId === "all") {
+      return;
+    }
+
+    const isValidEmployee = taskEmployeeOptions.some(
+      (entry) => String(entry.id) === String(filters.employeeId)
+    );
+
+    if (!isValidEmployee) {
+      setFilters((prev) => ({ ...prev, employeeId: "all" }));
+    }
+  }, [filters.employeeId, taskEmployeeOptions]);
 
   const teams = useMemo(() => [...new Set(users.map((item) => item.team).filter(Boolean))], [users]);
 
@@ -188,6 +221,27 @@ const SuperAdminDashboard = () => {
 
   const handleMarkRead = async (id) => {
     await taskApi.markNotificationRead(id);
+    await loadData();
+  };
+
+  const handleMarkAllRead = async () => {
+    await taskApi.markAllNotificationsRead();
+    await loadData();
+  };
+
+  const handleOpenTaskFromNotification = async (notification) => {
+    if (!notification?.reference_id) {
+      return;
+    }
+
+    if (!notification.type?.startsWith("task_")) {
+      return;
+    }
+
+    await taskApi.markNotificationRead(notification.id);
+    setActiveTab("Tasks");
+    setFilters((prev) => ({ ...prev, status: "all", team: "all", employeeId: "all", date: "" }));
+    setFocusedTaskId(Number(notification.reference_id));
     await loadData();
   };
 
@@ -307,7 +361,7 @@ const SuperAdminDashboard = () => {
 
         {(activeTab === "Overview" || activeTab === "Tasks") && (
           <section className="card">
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
               <div>
                 <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-dsr-muted">Status</label>
                 <select
@@ -327,7 +381,7 @@ const SuperAdminDashboard = () => {
                   value={filters.team}
                   onChange={(event) => {
                     const team = event.target.value;
-                    setFilters((prev) => ({ ...prev, team }));
+                    setFilters((prev) => ({ ...prev, team, employeeId: "all" }));
                     setUsersFilter((prev) => ({ ...prev, team }));
                   }}
                 >
@@ -335,6 +389,21 @@ const SuperAdminDashboard = () => {
                   {teams.map((team) => (
                     <option key={team} value={team}>
                       {team}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-dsr-muted">Employee</label>
+                <select
+                  className="input"
+                  value={filters.employeeId}
+                  onChange={(event) => setFilters((prev) => ({ ...prev, employeeId: event.target.value }))}
+                >
+                  <option value="all">All Employees</option>
+                  {taskEmployeeOptions.map((employee) => (
+                    <option key={employee.id} value={String(employee.id)}>
+                      {employee.name}
                     </option>
                   ))}
                 </select>
@@ -396,6 +465,7 @@ const SuperAdminDashboard = () => {
               editableStatus={false}
               showAssignee
               showAssigner
+              focusedTaskId={focusedTaskId}
             />
           </>
         )}
@@ -406,6 +476,7 @@ const SuperAdminDashboard = () => {
             editableStatus={false}
             showAssignee
             showAssigner
+            focusedTaskId={focusedTaskId}
           />
         )}
 
@@ -502,7 +573,14 @@ const SuperAdminDashboard = () => {
 
         {activeTab === "Notifications" && (
           <section className="card">
-            <h2 className="mb-4 text-xl font-bold">Task Status Notifications</h2>
+            <div className="mb-4 flex items-center justify-between gap-2">
+              <h2 className="text-xl font-bold">Task Status Notifications</h2>
+              {unreadCount > 0 && (
+                <button className="btn-secondary" type="button" onClick={handleMarkAllRead}>
+                  Mark all as read
+                </button>
+              )}
+            </div>
             <div className="space-y-3">
               {notifications.map((item) => (
                 <div
@@ -515,6 +593,15 @@ const SuperAdminDashboard = () => {
                       <span className="rounded-full bg-white px-2 py-1 text-xs uppercase text-dsr-muted">
                         {item.type || "update"}
                       </span>
+                      {item.type?.startsWith("task_") && item.reference_id && (
+                        <button
+                          className="btn-primary"
+                          type="button"
+                          onClick={() => handleOpenTaskFromNotification(item)}
+                        >
+                          Open Task
+                        </button>
+                      )}
                       {!item.is_read && (
                         <button className="btn-secondary" type="button" onClick={() => handleMarkRead(item.id)}>
                           Mark Read
@@ -533,10 +620,10 @@ const SuperAdminDashboard = () => {
         )}
 
         {activeTab === "Profile" && (
-          <section className="grid gap-4 lg:grid-cols-2">
+          <section className="space-y-4">
             <div className="card-green">
-              <h2 className="mb-3 text-xl font-bold">Profile</h2>
-              <div className="space-y-2 text-sm">
+              <h2 className="mb-4 text-2xl font-bold">Profile</h2>
+              <div className="grid gap-3 rounded-xl border border-dsr-border/70 bg-white/60 p-4 text-sm md:grid-cols-2">
                 <p><span className="font-semibold">Name:</span> {user?.name}</p>
                 <p><span className="font-semibold">Role:</span> {String(user?.role || "").toUpperCase()}</p>
                 <p><span className="font-semibold">Email:</span> {user?.email}</p>
@@ -545,10 +632,10 @@ const SuperAdminDashboard = () => {
             </div>
 
             <form className="card" onSubmit={handlePasswordChange}>
-              <h2 className="mb-3 text-xl font-bold">Settings - Change Password</h2>
-              <div className="space-y-3">
+              <h2 className="mb-4 text-2xl font-bold">Settings - Change Password</h2>
+              <div className="grid gap-3 md:grid-cols-2">
                 <input
-                  className="input"
+                  className="input md:col-span-2"
                   type="password"
                   placeholder="Current password"
                   value={passwordForm.currentPassword}
@@ -578,10 +665,10 @@ const SuperAdminDashboard = () => {
                   required
                 />
 
-                {passwordError && <p className="text-sm text-rose-600">{passwordError}</p>}
-                {passwordMessage && <p className="text-sm text-emerald-700">{passwordMessage}</p>}
+                {passwordError && <p className="md:col-span-2 text-sm text-rose-600">{passwordError}</p>}
+                {passwordMessage && <p className="md:col-span-2 text-sm text-emerald-700">{passwordMessage}</p>}
 
-                <button className="btn-primary" type="submit">
+                <button className="btn-primary md:col-span-2 w-fit" type="submit">
                   Update Password
                 </button>
               </div>

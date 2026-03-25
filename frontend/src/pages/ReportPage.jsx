@@ -1,9 +1,63 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import html2canvas from "html2canvas";
-import { jsPDF } from "jspdf";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import ExcelJS from "exceljs/dist/exceljs.min.js";
 import ReportHeader from "../components/ReportHeader";
 import ReportGrid from "../components/ReportGrid";
 import { authApi, reportApi, taskApi } from "../services/api";
+
+const COLOR = {
+  white: "FFFFFFFF",
+  headerGray: "FFE5E7EB",
+  weekYellow: "FFFDE047",
+  sectionBeige: "FFF3E6B3",
+  todayGreen: "FF7CB342",
+  receivedGreen: "FF6AA84F",
+  leaveBlue: "FF4FC3F7",
+  notReceivedRed: "FFFF0000",
+  holidayPink: "FFE88CE8"
+};
+
+const applyCellStyle = (cell, {
+  fillColor = null,
+  bold = false,
+  align = "center"
+} = {}) => {
+  cell.font = { name: "Calibri", size: 11, bold };
+  cell.alignment = { horizontal: align, vertical: "middle", wrapText: true };
+  cell.border = {
+    top: { style: "thin", color: { argb: "FFBDBDBD" } },
+    left: { style: "thin", color: { argb: "FFBDBDBD" } },
+    bottom: { style: "thin", color: { argb: "FFBDBDBD" } },
+    right: { style: "thin", color: { argb: "FFBDBDBD" } }
+  };
+
+  if (fillColor) {
+    cell.fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: fillColor }
+    };
+  }
+};
+
+const normalizeStatus = (status) => {
+  if (status === "Received") return "Received";
+  if (status === "Leave") return "No / On Leave";
+  if (status === "Holiday") return "Holiday";
+  return "Not Received";
+};
+
+const formatDateForSheet = (dateText) => {
+  const dateValue = new Date(dateText);
+  if (Number.isNaN(dateValue.getTime())) {
+    return dateText;
+  }
+
+  return dateValue.toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "2-digit"
+  });
+};
 
 function ReportPage({
   role = "admin",
@@ -23,7 +77,6 @@ function ReportPage({
   const [loadingCellId, setLoadingCellId] = useState(null);
   const [totalTasks, setTotalTasks] = useState(0);
   const [message, setMessage] = useState("");
-  const gridRef = useRef(null);
 
   const employeeOptions = useMemo(() => {
     const scoped =
@@ -146,28 +199,150 @@ function ReportPage({
     []
   );
 
-  const handleExportPdf = useCallback(async () => {
-    if (!gridRef.current || !gridData.rows.length) {
+  const handleExportXlsx = useCallback(() => {
+    if (!gridData.rows.length || !gridData.employees.length) {
       setMessage("Generate report data before exporting.");
       return;
     }
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet("Daily Report");
+    const employeeCount = gridData.employees.length;
+    const lastColumn = 2 + employeeCount;
+    const todayText = new Date().toISOString().slice(0, 10);
+    let rowCursor = 1;
 
-    const canvas = await html2canvas(gridRef.current, {
-      scale: 2,
-      backgroundColor: "#ffffff"
+    sheet.columns = [
+      { width: 14 },
+      { width: 14 },
+      ...gridData.employees.map(() => ({ width: 18 }))
+    ];
+
+    sheet.getCell(rowCursor, 1).value = "Today";
+    applyCellStyle(sheet.getCell(rowCursor, 1), { fillColor: COLOR.todayGreen, bold: true });
+    sheet.getCell(rowCursor, 2).value = "Weekly report received";
+    applyCellStyle(sheet.getCell(rowCursor, 2), { fillColor: COLOR.holidayPink, bold: true });
+
+    rowCursor += 1;
+    sheet.getCell(rowCursor, 1).value = "No / On Leave";
+    applyCellStyle(sheet.getCell(rowCursor, 1), { fillColor: COLOR.leaveBlue, bold: true });
+    sheet.getCell(rowCursor, 2).value = "Holiday";
+    applyCellStyle(sheet.getCell(rowCursor, 2), { fillColor: COLOR.holidayPink, bold: true });
+
+    rowCursor += 1;
+    sheet.getCell(rowCursor, 1).value = "Not Received";
+    applyCellStyle(sheet.getCell(rowCursor, 1), { fillColor: COLOR.notReceivedRed, bold: true });
+
+    sheet.mergeCells(rowCursor - 2, 4, rowCursor - 1, lastColumn);
+    sheet.getCell(rowCursor - 2, 4).value = "Daily Employee Report Tracker";
+    applyCellStyle(sheet.getCell(rowCursor - 2, 4), { fillColor: COLOR.headerGray, bold: true });
+    sheet.getCell(rowCursor - 2, 4).font = { name: "Calibri", size: 16, bold: true };
+
+    rowCursor += 2;
+
+    const weekMap = new Map();
+    gridData.rows.forEach((row) => {
+      const weekKey = row.weekLabel || "Week 1";
+      if (!weekMap.has(weekKey)) {
+        weekMap.set(weekKey, []);
+      }
+      weekMap.get(weekKey).push(row);
     });
 
-    const imgData = canvas.toDataURL("image/png");
-    const pdf = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
-    const pageWidth = pdf.internal.pageSize.getWidth();
-    const pageHeight = pdf.internal.pageSize.getHeight();
-    const ratio = Math.min(pageWidth / canvas.width, pageHeight / canvas.height);
-    const imgWidth = canvas.width * ratio;
-    const imgHeight = canvas.height * ratio;
+    const weeks = Array.from(weekMap.entries());
 
-    pdf.addImage(imgData, "PNG", 5, 5, imgWidth - 10, imgHeight - 10);
-    pdf.save(`daily-report-${gridData.startDate || date}.pdf`);
-  }, [date, gridData.rows.length, gridData.startDate]);
+    weeks.forEach(([weekLabel, weekRows], weekIndex) => {
+      sheet.mergeCells(rowCursor, 1, rowCursor, 2);
+      sheet.getCell(rowCursor, 1).value = weekLabel || `Week ${weekIndex + 1}`;
+      applyCellStyle(sheet.getCell(rowCursor, 1), { fillColor: COLOR.weekYellow, bold: true });
+
+      sheet.mergeCells(rowCursor, 3, rowCursor, lastColumn);
+      sheet.getCell(rowCursor, 3).value = "Employees Name";
+      applyCellStyle(sheet.getCell(rowCursor, 3), { fillColor: COLOR.sectionBeige, bold: true });
+
+      rowCursor += 1;
+
+      sheet.getCell(rowCursor, 1).value = "Date";
+      sheet.getCell(rowCursor, 2).value = "Day";
+      applyCellStyle(sheet.getCell(rowCursor, 1), { fillColor: COLOR.headerGray, bold: true });
+      applyCellStyle(sheet.getCell(rowCursor, 2), { fillColor: COLOR.headerGray, bold: true });
+
+      gridData.employees.forEach((employee, employeeIndex) => {
+        const cell = sheet.getCell(rowCursor, employeeIndex + 3);
+        cell.value = employee.name;
+        applyCellStyle(cell, { fillColor: COLOR.headerGray, bold: true });
+      });
+
+      rowCursor += 1;
+
+      weekRows.forEach((reportRow) => {
+        const dateCell = sheet.getCell(rowCursor, 1);
+        const dayCell = sheet.getCell(rowCursor, 2);
+        dateCell.value = formatDateForSheet(reportRow.date);
+        dayCell.value = reportRow.day;
+
+        const rowIsToday = String(reportRow.date).slice(0, 10) === todayText;
+        applyCellStyle(dateCell, { fillColor: rowIsToday ? COLOR.todayGreen : COLOR.white, align: "left" });
+        applyCellStyle(dayCell, { fillColor: rowIsToday ? COLOR.todayGreen : COLOR.white, align: "left" });
+
+        const statusByUser = new Map(
+          (reportRow.employees || []).map((entry) => [String(entry.userId), normalizeStatus(entry.status)])
+        );
+
+        gridData.employees.forEach((employee, employeeIndex) => {
+          const statusValue = statusByUser.get(String(employee.id)) || "Not Received";
+          const cell = sheet.getCell(rowCursor, employeeIndex + 3);
+          cell.value = statusValue;
+
+          let fillColor = COLOR.white;
+          if (statusValue === "Received") fillColor = COLOR.receivedGreen;
+          if (statusValue === "No / On Leave") fillColor = COLOR.leaveBlue;
+          if (statusValue === "Not Received") fillColor = COLOR.notReceivedRed;
+          if (statusValue === "Holiday") fillColor = COLOR.holidayPink;
+
+          applyCellStyle(cell, { fillColor });
+        });
+
+        rowCursor += 1;
+      });
+
+      rowCursor += 1;
+    });
+
+    sheet.getCell(rowCursor, 1).value = "Summary";
+    sheet.getCell(rowCursor, 2).value = "Count";
+    applyCellStyle(sheet.getCell(rowCursor, 1), { fillColor: COLOR.headerGray, bold: true });
+    applyCellStyle(sheet.getCell(rowCursor, 2), { fillColor: COLOR.headerGray, bold: true });
+
+    rowCursor += 1;
+    const summaryItems = [
+      ["Received", gridData.summary?.received ?? 0, COLOR.receivedGreen],
+      ["Not Received", gridData.summary?.notReceived ?? 0, COLOR.notReceivedRed],
+      ["No / On Leave", gridData.summary?.leave ?? 0, COLOR.leaveBlue],
+      ["Tasks Tracked", totalTasks, COLOR.headerGray]
+    ];
+
+    summaryItems.forEach(([label, value, color]) => {
+      sheet.getCell(rowCursor, 1).value = label;
+      sheet.getCell(rowCursor, 2).value = value;
+      applyCellStyle(sheet.getCell(rowCursor, 1), { fillColor: color, align: "left" });
+      applyCellStyle(sheet.getCell(rowCursor, 2), { fillColor: color });
+      rowCursor += 1;
+    });
+
+    workbook.xlsx.writeBuffer().then((buffer) => {
+      const blob = new Blob([
+        buffer
+      ], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `daily-report-${gridData.startDate || date}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    });
+  }, [date, gridData.employees, gridData.rows, gridData.startDate, gridData.summary, totalTasks]);
 
   useEffect(() => {
     setDateRange(initialDateRange || "week");
@@ -207,7 +382,7 @@ function ReportPage({
         onEmployeeChange={setEmployeeId}
         employeeOptions={employeeOptions}
         onGenerate={handleGenerate}
-        onExportPdf={handleExportPdf}
+        onExportXlsx={handleExportXlsx}
         loading={loading}
         summary={gridData.summary || { received: 0, notReceived: 0, leave: 0 }}
         totalTasks={totalTasks}
@@ -215,7 +390,7 @@ function ReportPage({
 
       {message ? <div className="rounded-lg bg-slate-100 px-3 py-2 text-sm text-slate-700">{message}</div> : null}
 
-      <div ref={gridRef} className="bg-white">
+      <div className="bg-white">
         <ReportGrid
           rows={gridData.rows}
           employees={gridData.employees}

@@ -278,6 +278,10 @@ export const markNotificationAsRead = async (id, userId) => {
   await query("UPDATE notifications SET is_read = 1 WHERE id = ? AND user_id = ?", [id, userId]);
 };
 
+export const markAllNotificationsAsRead = async (userId) => {
+  await query("UPDATE notifications SET is_read = 1 WHERE user_id = ?", [userId]);
+};
+
 export const getTaskUpdateNotificationRecipients = async ({ assignedBy, actorId }) => {
   const rows = await query(
     `

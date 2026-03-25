@@ -12,7 +12,7 @@ function ReportHeader({
   onEmployeeChange,
   employeeOptions,
   onGenerate,
-  onExportPdf,
+  onExportXlsx,
   loading,
   summary,
   totalTasks
@@ -86,10 +86,10 @@ function ReportHeader({
           </button>
           <button
             type="button"
-            onClick={onExportPdf}
+            onClick={onExportXlsx}
             className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
           >
-            Download PDF
+            Download XLSX
           </button>
         </div>
       </div>

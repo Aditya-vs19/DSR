@@ -49,7 +49,12 @@ const ensureDailyReportTable = async () => {
   dailyReportTableEnsured = true;
 };
 
-const formatDate = (date) => date.toISOString().slice(0, 10);
+const formatDate = (date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
 
 const normalizeSqlDate = (value) => {
   if (!value) return "";
@@ -84,7 +89,7 @@ const getDateBounds = (dateRange = "week", baseDate = new Date()) => {
   const start = new Date(current);
   start.setDate(current.getDate() - diffToMonday);
   const end = new Date(start);
-  end.setDate(start.getDate() + 6);
+  end.setDate(start.getDate() + 5);
   return { startDate: start, endDate: end };
 };
 
@@ -92,7 +97,9 @@ const getDatesInRange = (startDate, endDate) => {
   const dates = [];
   const cursor = new Date(startDate);
   while (cursor <= endDate) {
-    dates.push(new Date(cursor));
+    if (cursor.getDay() !== 0) {
+      dates.push(new Date(cursor));
+    }
     cursor.setDate(cursor.getDate() + 1);
   }
   return dates;
@@ -339,10 +346,16 @@ export const getDailyReportGridByRole = async ({
     ])
   );
 
-  const rows = dates.map((day) => {
+  let weekNumber = 1;
+
+  const rows = dates.map((day, index) => {
+    if (index > 0 && day.getDay() === 1) {
+      weekNumber += 1;
+    }
+
     const dateText = formatDate(day);
     const dayName = day.toLocaleDateString("en-US", { weekday: "long" });
-    const isWeekend = day.getDay() === 0 || day.getDay() === 6;
+    const isWeekend = day.getDay() === 6;
 
     const employees = users.map((employee) => {
       const cell = cellMap.get(`${dateText}-${employee.id}`);
@@ -358,6 +371,7 @@ export const getDailyReportGridByRole = async ({
     return {
       date: dateText,
       day: dayName,
+      weekLabel: `Week ${weekNumber}`,
       isWeekend,
       employees
     };

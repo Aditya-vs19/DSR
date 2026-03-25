@@ -5,6 +5,7 @@ import {
   getEmployeeSummaryController,
   getEmployeeTimelineController,
   getNotificationsController,
+  markAllNotificationsReadController,
   reassignTaskController,
   getTasksController,
   getTeamPerformanceController,
@@ -29,5 +30,6 @@ router.get("/performance/team", authorizeRoles("admin", "hr", "superadmin"), get
 router.get("/performance/admins", authorizeRoles("admin", "superadmin"), getDepartmentAdminPerformanceController);
 router.get("/notifications/me", getNotificationsController);
 router.put("/notifications/:id/read", markNotificationReadController);
+router.put("/notifications/read-all", markAllNotificationsReadController);
 
 export default router;

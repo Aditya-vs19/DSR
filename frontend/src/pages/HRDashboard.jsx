@@ -303,10 +303,10 @@ const HRDashboard = () => {
             color="rgba(16, 185, 129, 0.8)"
           />
 
-          <section className="grid gap-4 lg:grid-cols-2">
+          <section className="space-y-4">
             <div className="card-green">
-              <h2 className="mb-3 text-xl font-bold">Profile</h2>
-              <div className="space-y-2 text-sm">
+              <h2 className="mb-4 text-2xl font-bold">Profile</h2>
+              <div className="grid gap-3 rounded-xl border border-slate-200 bg-white/60 p-4 text-sm md:grid-cols-2">
                 <p><span className="font-semibold">Name:</span> {user?.name}</p>
                 <p><span className="font-semibold">Role:</span> {String(user?.role || "").toUpperCase()}</p>
                 <p><span className="font-semibold">Email:</span> {user?.email}</p>
@@ -315,12 +315,10 @@ const HRDashboard = () => {
             </div>
 
             <form className="card" onSubmit={handlePasswordChange}>
-              <h2 className="mb-3 text-xl font-bold">Settings - Change Password</h2>
-              <div className="space-y-3">
-                  
-                  
+              <h2 className="mb-4 text-2xl font-bold">Settings - Change Password</h2>
+              <div className="grid gap-3 md:grid-cols-2">
                 <input
-                  className="input"
+                  className="input md:col-span-2"
                   type="password"
                   placeholder="Current password"
                   value={passwordForm.currentPassword}
@@ -350,10 +348,10 @@ const HRDashboard = () => {
                   required
                 />
 
-                {passwordError && <p className="text-sm text-rose-600">{passwordError}</p>}
-                {passwordMessage && <p className="text-sm text-emerald-700">{passwordMessage}</p>}
+                {passwordError && <p className="md:col-span-2 text-sm text-rose-600">{passwordError}</p>}
+                {passwordMessage && <p className="md:col-span-2 text-sm text-emerald-700">{passwordMessage}</p>}
 
-                <button className="btn-primary" type="submit">
+                <button className="btn-primary md:col-span-2 w-fit" type="submit">
                   Update Password
                 </button>
               </div>
