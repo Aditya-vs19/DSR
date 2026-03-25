@@ -11,6 +11,7 @@ import {
   reassignTask,
   getTeamPerformance,
   getUserNotifications,
+  markAllNotificationsAsRead,
   markNotificationAsRead,
   submitTaskToHr,
   updateTaskStatus
@@ -268,6 +269,15 @@ export const markNotificationReadController = async (req, res) => {
     return res.status(200).json({ message: "Notification marked as read" });
   } catch (error) {
     return res.status(500).json({ message: "Failed to update notification", error: error.message });
+  }
+};
+
+export const markAllNotificationsReadController = async (req, res) => {
+  try {
+    await markAllNotificationsAsRead(req.user.id);
+    return res.status(200).json({ message: "All notifications marked as read" });
+  } catch (error) {
+    return res.status(500).json({ message: "Failed to update notifications", error: error.message });
   }
 };
 

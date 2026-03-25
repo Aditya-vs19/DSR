@@ -36,6 +36,7 @@ const AdminDashboard = () => {
   const [passwordMessage, setPasswordMessage] = useState("");
   const [passwordError, setPasswordError] = useState("");
   const [reassigningTaskId, setReassigningTaskId] = useState(null);
+  const [focusedTaskId, setFocusedTaskId] = useState(null);
 
   const loadData = async () => {
     setLoading(true);
@@ -72,6 +73,24 @@ const AdminDashboard = () => {
       return statusMatch && dateMatch && employeeMatch;
     });
   }, [tasks, filters]);
+
+  const completedTasksByEmployee = useMemo(() => {
+    const completionMap = new Map();
+
+    filteredTasks.forEach((task) => {
+      if (task.status !== "Completed") {
+        return;
+      }
+
+      const employeeName = task.assigned_to_name || "Unassigned";
+      completionMap.set(employeeName, (completionMap.get(employeeName) || 0) + 1);
+    });
+
+    return {
+      labels: Array.from(completionMap.keys()),
+      values: Array.from(completionMap.values())
+    };
+  }, [filteredTasks]);
 
   const unreadCount = useMemo(
     () => notifications.filter((item) => !item.is_read).length,
@@ -127,6 +146,27 @@ const AdminDashboard = () => {
 
   const handleMarkRead = async (id) => {
     await taskApi.markNotificationRead(id);
+    await loadData();
+  };
+
+  const handleMarkAllRead = async () => {
+    await taskApi.markAllNotificationsRead();
+    await loadData();
+  };
+
+  const handleOpenTaskFromNotification = async (notification) => {
+    if (!notification?.reference_id) {
+      return;
+    }
+
+    if (!notification.type?.startsWith("task_")) {
+      return;
+    }
+
+    await taskApi.markNotificationRead(notification.id);
+    setActiveTab("Tasks");
+    setFilters((prev) => ({ ...prev, status: "all", date: "", employeeId: "all" }));
+    setFocusedTaskId(Number(notification.reference_id));
     await loadData();
   };
 
@@ -376,8 +416,8 @@ const AdminDashboard = () => {
               <Charts
                 type="bar"
                 title="Completed Tasks by Employee"
-                labels={reports.map((item) => item.employee_name)}
-                values={reports.map((item) => Number(item.completed_tasks || 0))}
+                labels={completedTasksByEmployee.labels}
+                values={completedTasksByEmployee.values}
                 color="rgba(95, 157, 114, 0.85)"
               />
             </div>
@@ -391,6 +431,7 @@ const AdminDashboard = () => {
               reassignOptions={employees}
               onReassign={handleReassign}
               reassigningTaskId={reassigningTaskId}
+              focusedTaskId={focusedTaskId}
             />
           </>
         )}
@@ -406,6 +447,7 @@ const AdminDashboard = () => {
             reassignOptions={employees}
             onReassign={handleReassign}
             reassigningTaskId={reassigningTaskId}
+            focusedTaskId={focusedTaskId}
           />
         )}
 
@@ -450,7 +492,14 @@ const AdminDashboard = () => {
 
         {activeTab === "Notifications" && (
           <section className="card">
-            <h2 className="mb-3 text-lg font-semibold">Team Notifications</h2>
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <h2 className="text-lg font-semibold">Team Notifications</h2>
+              {unreadCount > 0 && (
+                <button className="btn-secondary" type="button" onClick={handleMarkAllRead}>
+                  Mark all as read
+                </button>
+              )}
+            </div>
             <div className="space-y-3">
               {notifications.map((item) => (
                 <div
@@ -459,11 +508,22 @@ const AdminDashboard = () => {
                 >
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <p className="font-medium">{item.message}</p>
-                    {!item.is_read && (
-                      <button className="btn-secondary" type="button" onClick={() => handleMarkRead(item.id)}>
-                        Mark Read
-                      </button>
-                    )}
+                    <div className="flex items-center gap-2">
+                      {item.type?.startsWith("task_") && item.reference_id && (
+                        <button
+                          className="btn-primary"
+                          type="button"
+                          onClick={() => handleOpenTaskFromNotification(item)}
+                        >
+                          Open Task
+                        </button>
+                      )}
+                      {!item.is_read && (
+                        <button className="btn-secondary" type="button" onClick={() => handleMarkRead(item.id)}>
+                          Mark Read
+                        </button>
+                      )}
+                    </div>
                   </div>
                   <p className="mt-1 text-xs text-dsr-muted">
                     {item.created_at ? new Date(item.created_at).toLocaleString() : ""}
@@ -476,10 +536,10 @@ const AdminDashboard = () => {
         )}
 
         {activeTab === "Profile" && (
-          <section className="grid gap-4 lg:grid-cols-2">
+          <section className="space-y-4">
             <div className="card-green">
-              <h2 className="mb-3 text-xl font-bold">Profile</h2>
-              <div className="space-y-2 text-sm">
+              <h2 className="mb-4 text-2xl font-bold">Profile</h2>
+              <div className="grid gap-3 rounded-xl border border-dsr-border/70 bg-white/60 p-4 text-sm md:grid-cols-2">
                 <p><span className="font-semibold">Name:</span> {user?.name}</p>
                 <p><span className="font-semibold">Role:</span> {String(user?.role || "").toUpperCase()}</p>
                 <p><span className="font-semibold">Email:</span> {user?.email}</p>
@@ -488,10 +548,10 @@ const AdminDashboard = () => {
             </div>
 
             <form className="card" onSubmit={handlePasswordChange}>
-              <h2 className="mb-3 text-xl font-bold">Settings - Change Password</h2>
-              <div className="space-y-3">
+              <h2 className="mb-4 text-2xl font-bold">Settings - Change Password</h2>
+              <div className="grid gap-3 md:grid-cols-2">
                 <input
-                  className="input"
+                  className="input md:col-span-2"
                   type="password"
                   placeholder="Current password"
                   value={passwordForm.currentPassword}
@@ -521,10 +581,10 @@ const AdminDashboard = () => {
                   required
                 />
 
-                {passwordError && <p className="text-sm text-rose-600">{passwordError}</p>}
-                {passwordMessage && <p className="text-sm text-emerald-700">{passwordMessage}</p>}
+                {passwordError && <p className="md:col-span-2 text-sm text-rose-600">{passwordError}</p>}
+                {passwordMessage && <p className="md:col-span-2 text-sm text-emerald-700">{passwordMessage}</p>}
 
-                <button className="btn-primary" type="submit">
+                <button className="btn-primary md:col-span-2 w-fit" type="submit">
                   Update Password
                 </button>
               </div>

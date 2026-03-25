@@ -48,7 +48,8 @@ export const taskApi = {
   getTeamPerformance: (team) => api.get("/tasks/performance/team", { params: { team } }),
   getAdminPerformance: (team) => api.get("/tasks/performance/admins", { params: { team } }),
   getNotifications: () => api.get("/tasks/notifications/me"),
-  markNotificationRead: (id) => api.put(`/tasks/notifications/${id}/read`)
+  markNotificationRead: (id) => api.put(`/tasks/notifications/${id}/read`),
+  markAllNotificationsRead: () => api.put("/tasks/notifications/read-all")
 };
 
 export const reportApi = {

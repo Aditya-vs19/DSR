@@ -31,23 +31,40 @@ function ReportGrid({ rows = [], employees = [], onCellChange, loadingCellId = n
           </tr>
         </thead>
         <tbody>
-          {rows.map((row) => (
-            <tr key={row.date} className={row.isWeekend ? "bg-sky-50/70" : "bg-white"}>
-              <td className="sticky left-0 z-10 border-r border-t border-slate-200 bg-inherit px-3 py-2 align-top">
-                <div className="font-semibold text-slate-700">{row.day}</div>
-                <div className="text-xs text-slate-500">{row.date}</div>
-              </td>
-              {row.employees.map((entry) => (
-                <td key={`${row.date}-${entry.userId}`} className="border-t border-slate-200 px-2 py-2">
-                  <ReportCell
-                    value={entry.status}
-                    disabled={!entry.reportId || loadingCellId === entry.reportId}
-                    onChange={(status) => onCellChange(entry.reportId, status)}
-                  />
-                </td>
-              ))}
-            </tr>
-          ))}
+          {rows.map((row, index) => {
+            const showWeekHeader = index === 0 || rows[index - 1].weekLabel !== row.weekLabel;
+
+            return (
+              <React.Fragment key={row.date}>
+                {showWeekHeader && (
+                  <tr className="bg-amber-100">
+                    <td
+                      colSpan={employees.length + 1}
+                      className="border-t border-b border-slate-300 px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-700"
+                    >
+                      {row.weekLabel}
+                    </td>
+                  </tr>
+                )}
+
+                <tr className={row.isWeekend ? "bg-sky-50/70" : "bg-white"}>
+                  <td className="sticky left-0 z-10 border-r border-t border-slate-200 bg-inherit px-3 py-2 align-top">
+                    <div className="font-semibold text-slate-700">{row.day}</div>
+                    <div className="text-xs text-slate-500">{row.date}</div>
+                  </td>
+                  {row.employees.map((entry) => (
+                    <td key={`${row.date}-${entry.userId}`} className="border-t border-slate-200 px-2 py-2">
+                      <ReportCell
+                        value={entry.status}
+                        disabled={!entry.reportId || loadingCellId === entry.reportId}
+                        onChange={(status) => onCellChange(entry.reportId, status)}
+                      />
+                    </td>
+                  ))}
+                </tr>
+              </React.Fragment>
+            );
+          })}
         </tbody>
       </table>
     </div>

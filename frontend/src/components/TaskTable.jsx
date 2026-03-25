@@ -18,7 +18,8 @@ const TaskTable = ({
   showReassign = false,
   reassignOptions = [],
   onReassign,
-  reassigningTaskId = null
+  reassigningTaskId = null,
+  focusedTaskId = null
 }) => {
   const [dependencyDrafts, setDependencyDrafts] = useState({});
   const [reassignSelections, setReassignSelections] = useState({});
@@ -42,6 +43,17 @@ const TaskTable = ({
       return next;
     });
   }, [tasks]);
+
+  useEffect(() => {
+    if (!focusedTaskId) {
+      return;
+    }
+
+    const rowElement = document.querySelector(`[data-task-id='${focusedTaskId}']`);
+    if (rowElement) {
+      rowElement.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }, [focusedTaskId, tasks]);
 
   const getDependencyValue = (item) => dependencyDrafts[item.id] ?? item.dependency ?? "";
 
@@ -83,7 +95,17 @@ const TaskTable = ({
               Boolean(onReassign);
 
             return (
-              <tr key={item.id} className={`border-b border-slate-100 ${overdue ? "bg-rose-50" : ""}`}>
+              <tr
+                key={item.id}
+                data-task-id={item.id}
+                className={`border-b border-slate-100 ${
+                  Number(focusedTaskId) === Number(item.id)
+                    ? "bg-emerald-50"
+                    : overdue
+                      ? "bg-rose-50"
+                      : ""
+                }`}
+              >
                 <td className="p-3">{index + 1}</td>
                 <td className="p-3 font-medium">{item.client}</td>
                 <td className="p-3">{item.task}</td>

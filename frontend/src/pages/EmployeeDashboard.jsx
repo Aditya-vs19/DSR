@@ -13,6 +13,30 @@ const getLocalDateText = (date = new Date()) => {
   return copy.toISOString().slice(0, 10);
 };
 
+const formatChartDateLabel = (date) => {
+  const day = String(date.getDate()).padStart(2, "0");
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const year = date.getFullYear();
+  return `${day}-${month}-${year}`;
+};
+
+const normalizeTimelineDate = (value) => {
+  if (!value) {
+    return "";
+  }
+
+  if (typeof value === "string") {
+    return value.slice(0, 10);
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return "";
+  }
+
+  return getLocalDateText(parsed);
+};
+
 const EmployeeDashboard = () => {
   const { user, logout } = useAuth();
   const todayText = getLocalDateText();
@@ -41,6 +65,7 @@ const EmployeeDashboard = () => {
   });
   const [passwordMessage, setPasswordMessage] = useState("");
   const [passwordError, setPasswordError] = useState("");
+  const [focusedTaskId, setFocusedTaskId] = useState(null);
 
   const loadData = async () => {
     setLoading(true);
@@ -111,6 +136,34 @@ const EmployeeDashboard = () => {
     [notifications]
   );
 
+  const weeklyCompletionChart = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const dayOfWeek = today.getDay();
+    const diffToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+    const monday = new Date(today);
+    monday.setDate(today.getDate() - diffToMonday);
+
+    const dateKeys = [];
+    const labels = [];
+
+    for (let index = 0; index < 6; index += 1) {
+      const day = new Date(monday);
+      day.setDate(monday.getDate() + index);
+      dateKeys.push(getLocalDateText(day));
+      labels.push(formatChartDateLabel(day));
+    }
+
+    const completionMap = new Map(
+      timeline.map((point) => [normalizeTimelineDate(point.day), Number(point.completed_count || 0)])
+    );
+
+    const values = dateKeys.map((key) => completionMap.get(key) || 0);
+
+    return { labels, values };
+  }, [timeline]);
+
   const handleCreateTask = async (event) => {
     event.preventDefault();
     setError("");
@@ -137,6 +190,27 @@ const EmployeeDashboard = () => {
 
   const handleMarkRead = async (id) => {
     await taskApi.markNotificationRead(id);
+    await loadData();
+  };
+
+  const handleMarkAllRead = async () => {
+    await taskApi.markAllNotificationsRead();
+    await loadData();
+  };
+
+  const handleOpenTaskFromNotification = async (notification) => {
+    if (!notification?.reference_id) {
+      return;
+    }
+
+    if (!notification.type?.startsWith("task_")) {
+      return;
+    }
+
+    await taskApi.markNotificationRead(notification.id);
+    setActiveTab("Tasks");
+    setFilters((prev) => ({ ...prev, status: "all", period: "all", date: todayText }));
+    setFocusedTaskId(Number(notification.reference_id));
     await loadData();
   };
 
@@ -283,26 +357,28 @@ const EmployeeDashboard = () => {
           </select>
         </div>
 
-        <section className="card-green">
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <div>
-              <p className="text-xs uppercase tracking-wide text-dsr-muted">Total Tasks</p>
-              <h3 className="text-3xl font-extrabold">{tasks.length}</h3>
+        {activeTab === "Overview" && (
+          <section className="card-green">
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+              <div>
+                <p className="text-xs uppercase tracking-wide text-dsr-muted">Total Tasks</p>
+                <h3 className="text-3xl font-extrabold">{tasks.length}</h3>
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-wide text-dsr-muted">Completed Tasks</p>
+                <h3 className="text-3xl font-extrabold text-emerald-700">{tasks.filter((item) => item.status === "Completed").length}</h3>
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-wide text-dsr-muted">Completed Today</p>
+                <h3 className="text-3xl font-extrabold text-emerald-700">{summary.completed_tasks || 0}</h3>
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-wide text-dsr-muted">Pending Today</p>
+                <h3 className="text-3xl font-extrabold text-amber-700">{summary.pending_tasks || 0}</h3>
+              </div>
             </div>
-            <div>
-              <p className="text-xs uppercase tracking-wide text-dsr-muted">Completed Tasks</p>
-              <h3 className="text-3xl font-extrabold text-emerald-700">{tasks.filter((item) => item.status === "Completed").length}</h3>
-            </div>
-            <div>
-              <p className="text-xs uppercase tracking-wide text-dsr-muted">Completed Today</p>
-              <h3 className="text-3xl font-extrabold text-emerald-700">{summary.completed_tasks || 0}</h3>
-            </div>
-            <div>
-              <p className="text-xs uppercase tracking-wide text-dsr-muted">Pending Today</p>
-              <h3 className="text-3xl font-extrabold text-amber-700">{summary.pending_tasks || 0}</h3>
-            </div>
-          </div>
-        </section>
+          </section>
+        )}
 
         {(activeTab === "Overview" || activeTab === "Tasks") && (
           <section className="card">
@@ -362,44 +438,6 @@ const EmployeeDashboard = () => {
           </section>
         )}
 
-        {(activeTab === "Overview" || activeTab === "Tasks") && (
-          <section>
-            <h2 className="mb-2 text-lg font-semibold">Task List</h2>
-            <TaskTable
-              tasks={filteredTasks}
-              onStatusChange={handleStatusChange}
-              editableStatus
-              showAssigner
-            />
-            {tasks.length > 0 && filteredTasks.length === 0 && filters.period !== "all" && (
-              <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-                No tasks in current day filter. 
-                <button
-                  type="button"
-                  className="ml-1 font-semibold underline"
-                  onClick={() => setFilters((prev) => ({ ...prev, period: "all" }))}
-                >
-                  Show all tasks
-                </button>
-              </div>
-            )}
-            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-dsr-border bg-dsr-soft p-3">
-              <p className="text-sm text-dsr-muted">
-                Submit report for: <span className="font-semibold text-dsr-ink">{selectedReportDate || "Select a single day"}</span>
-              </p>
-              <button
-                type="button"
-                className="btn-primary"
-                disabled={!canSubmitReport || submittingReport || alreadySubmittedForDate}
-                onClick={handleSubmitReport}
-              >
-                {alreadySubmittedForDate ? "Submitted" : submittingReport ? "Submitting..." : "Submit Report"}
-              </button>
-            </div>
-            {submitMessage && <p className="mt-2 text-sm text-dsr-brand">{submitMessage}</p>}
-          </section>
-        )}
-
         {activeTab === "Tasks" && (
           <form className="card grid gap-3 md:grid-cols-2" onSubmit={handleCreateTask}>
             <h2 className="md:col-span-2 text-lg font-semibold">Create Task</h2>
@@ -443,13 +481,52 @@ const EmployeeDashboard = () => {
           </form>
         )}
 
+        {(activeTab === "Overview" || activeTab === "Tasks") && (
+          <section>
+            <h2 className="mb-2 text-lg font-semibold">Task List</h2>
+            <TaskTable
+              tasks={filteredTasks}
+              onStatusChange={handleStatusChange}
+              editableStatus
+              showAssigner
+              focusedTaskId={focusedTaskId}
+            />
+            {tasks.length > 0 && filteredTasks.length === 0 && filters.period !== "all" && (
+              <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                No tasks in current day filter. 
+                <button
+                  type="button"
+                  className="ml-1 font-semibold underline"
+                  onClick={() => setFilters((prev) => ({ ...prev, period: "all" }))}
+                >
+                  Show all tasks
+                </button>
+              </div>
+            )}
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-dsr-border bg-dsr-soft p-3">
+              <p className="text-sm text-dsr-muted">
+                Submit report for: <span className="font-semibold text-dsr-ink">{selectedReportDate || "Select a single day"}</span>
+              </p>
+              <button
+                type="button"
+                className="btn-primary"
+                disabled={!canSubmitReport || submittingReport || alreadySubmittedForDate}
+                onClick={handleSubmitReport}
+              >
+                {alreadySubmittedForDate ? "Submitted" : submittingReport ? "Submitting..." : "Submit Report"}
+              </button>
+            </div>
+            {submitMessage && <p className="mt-2 text-sm text-dsr-brand">{submitMessage}</p>}
+          </section>
+        )}
+
         {activeTab === "Overview" && (
           <div className="grid gap-2 lg:grid-cols-2">
             <Charts
               type="bar"
-              title="Tasks Completed Per Day"
-              labels={timeline.map((point) => point.day)}
-              values={timeline.map((point) => point.completed_count)}
+              title="Tasks Completed"
+              labels={weeklyCompletionChart.labels}
+              values={weeklyCompletionChart.values}
               color="rgba(42, 122, 70, 0.8)"
             />
             <div className="card">
@@ -473,7 +550,14 @@ const EmployeeDashboard = () => {
 
         {activeTab === "Notifications" && (
           <section className="card">
-            <h2 className="mb-3 text-lg font-semibold">Notifications</h2>
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <h2 className="text-lg font-semibold">Notifications</h2>
+              {unreadCount > 0 && (
+                <button className="btn-secondary" onClick={handleMarkAllRead} type="button">
+                  Mark all as read
+                </button>
+              )}
+            </div>
             <div className="space-y-3">
               {notifications.map((item) => (
                 <div
@@ -482,11 +566,22 @@ const EmployeeDashboard = () => {
                 >
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <p className="text-sm font-medium">{item.message}</p>
-                    {!item.is_read && (
-                      <button className="btn-secondary" onClick={() => handleMarkRead(item.id)} type="button">
-                        Mark Read
-                      </button>
-                    )}
+                    <div className="flex items-center gap-2">
+                      {item.type?.startsWith("task_") && item.reference_id && (
+                        <button
+                          className="btn-primary"
+                          onClick={() => handleOpenTaskFromNotification(item)}
+                          type="button"
+                        >
+                          Open Task
+                        </button>
+                      )}
+                      {!item.is_read && (
+                        <button className="btn-secondary" onClick={() => handleMarkRead(item.id)} type="button">
+                          Mark Read
+                        </button>
+                      )}
+                    </div>
                   </div>
                   <p className="mt-1 text-xs text-dsr-muted">
                     {item.created_at ? new Date(item.created_at).toLocaleString() : ""}
@@ -499,10 +594,10 @@ const EmployeeDashboard = () => {
         )}
 
         {activeTab === "Profile" && (
-          <section className="grid gap-4 lg:grid-cols-2">
+          <section className="space-y-4">
             <div className="card-green">
-              <h2 className="mb-3 text-xl font-bold">Profile</h2>
-              <div className="space-y-2 text-sm">
+              <h2 className="mb-4 text-2xl font-bold">Profile</h2>
+              <div className="grid gap-3 rounded-xl border border-dsr-border/70 bg-white/60 p-4 text-sm md:grid-cols-2">
                 <p><span className="font-semibold">Name:</span> {user?.name}</p>
                 <p><span className="font-semibold">Role:</span> {String(user?.role || "").toUpperCase()}</p>
                 <p><span className="font-semibold">Email:</span> {user?.email}</p>
@@ -511,10 +606,10 @@ const EmployeeDashboard = () => {
             </div>
 
             <form className="card" onSubmit={handlePasswordChange}>
-              <h2 className="mb-3 text-xl font-bold">Settings - Change Password</h2>
-              <div className="space-y-3">
+              <h2 className="mb-4 text-2xl font-bold">Settings - Change Password</h2>
+              <div className="grid gap-3 md:grid-cols-2">
                 <input
-                  className="input"
+                  className="input md:col-span-2"
                   type="password"
                   placeholder="Current password"
                   value={passwordForm.currentPassword}
@@ -544,10 +639,10 @@ const EmployeeDashboard = () => {
                   required
                 />
 
-                {passwordError && <p className="text-sm text-rose-600">{passwordError}</p>}
-                {passwordMessage && <p className="text-sm text-emerald-700">{passwordMessage}</p>}
+                {passwordError && <p className="md:col-span-2 text-sm text-rose-600">{passwordError}</p>}
+                {passwordMessage && <p className="md:col-span-2 text-sm text-emerald-700">{passwordMessage}</p>}
 
-                <button className="btn-primary" type="submit">
+                <button className="btn-primary md:col-span-2 w-fit" type="submit">
                   Update Password
                 </button>
               </div>
