@@ -27,6 +27,7 @@ function ReportHeader({
             onChange={(event) => onDateRangeChange(event.target.value)}
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300"
           >
+            <option value="today">Today</option>
             <option value="week">Week</option>
             <option value="month">Month</option>
           </select>
@@ -49,7 +50,7 @@ function ReportHeader({
             onChange={(event) => onTeamChange(event.target.value)}
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300"
           >
-            <option value="all">All Teams</option>
+            <option value="all">All Departments (Company-Wide)</option>
             {teamOptions.map((entry) => (
               <option key={entry} value={entry}>
                 {entry}
