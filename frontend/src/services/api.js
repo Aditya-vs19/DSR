@@ -41,6 +41,7 @@ export const taskApi = {
   createTask: (payload) => api.post("/tasks", payload),
   getTasks: () => api.get("/tasks"),
   updateTask: (id, payload) => api.put(`/tasks/${id}`, payload),
+  reassignTask: (id, payload) => api.put(`/tasks/${id}/reassign`, payload),
   submitTaskToHr: (id) => api.put(`/tasks/${id}/submit-hr`),
   getDailySummary: (date) => api.get("/tasks/summary/daily", { params: { date } }),
   getTimeline: (days = 7) => api.get("/tasks/timeline", { params: { days } }),

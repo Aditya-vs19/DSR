@@ -48,7 +48,15 @@ function ReportPage({
       try {
         const usersRes = role === "admin" ? await authApi.getTeamEmployees() : await authApi.getUsers();
         const users = Array.isArray(usersRes.data) ? usersRes.data : [];
-        setDirectoryUsers(users.filter((entry) => ["employee", "admin"].includes(entry.role)));
+        setDirectoryUsers(
+          users.filter((entry) => {
+            if (role === "superadmin") {
+              return ["employee", "admin"].includes(entry.role);
+            }
+
+            return entry.role === "employee";
+          })
+        );
       } catch {
         setDirectoryUsers([]);
       }
@@ -88,7 +96,11 @@ function ReportPage({
 
       setGridData(gridRes.data);
       setTotalTasks(Array.isArray(tasksRes.data) ? tasksRes.data.length : 0);
-      setMessage(`Report loaded for ${gridRes.data.startDate} to ${gridRes.data.endDate}`);
+      const reportLabel =
+        gridRes.data.startDate === gridRes.data.endDate
+          ? gridRes.data.startDate
+          : `${gridRes.data.startDate} to ${gridRes.data.endDate}`;
+      setMessage(`Report loaded for ${reportLabel}`);
     } catch (error) {
       setMessage(error?.response?.data?.message || "Failed to generate report.");
     } finally {

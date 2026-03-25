@@ -69,6 +69,10 @@ const getDateBounds = (dateRange = "week", baseDate = new Date()) => {
   const current = new Date(baseDate);
   current.setHours(0, 0, 0, 0);
 
+  if (dateRange === "today") {
+    return { startDate: current, endDate: current };
+  }
+
   if (dateRange === "month") {
     const start = new Date(current.getFullYear(), current.getMonth(), 1);
     const end = new Date(current.getFullYear(), current.getMonth() + 1, 0);
@@ -249,6 +253,7 @@ export const getDailyReportGridByRole = async ({
   await ensureDailyReportTable();
 
   const { startDate, endDate } = getDateBounds(dateRange, date ? new Date(date) : new Date());
+  const superadminRoleFilter = role === "superadmin" ? "('employee', 'admin')" : "('employee')";
 
   let usersSql = "";
   let usersParams = [];
@@ -257,15 +262,15 @@ export const getDailyReportGridByRole = async ({
     usersSql = `
       SELECT id, name, email, role, team
       FROM users
-      WHERE team = ? AND role IN ('employee', 'admin')
-      ORDER BY role DESC, name
+      WHERE team = ? AND role = 'employee'
+      ORDER BY name
     `;
     usersParams = [team];
   } else {
     usersSql = `
       SELECT id, name, email, role, team
       FROM users
-      WHERE role IN ('employee', 'admin')
+      WHERE role IN ${superadminRoleFilter}
         ${teamFilter && teamFilter !== "all" ? "AND team = ?" : ""}
       ORDER BY team, role DESC, name
     `;
