@@ -55,6 +55,9 @@ export const taskApi = {
 export const reportApi = {
   getReports: (params = {}) => api.get("/reports", { params }),
   getDailyReportGrid: (params = {}) => api.get("/reports", { params }),
+  getHolidays: (params = {}) => api.get("/reports/holidays", { params }),
+  saveHoliday: (payload) => api.post("/reports/holidays", payload),
+  deleteHoliday: (id) => api.delete(`/reports/holidays/${id}`),
   submitReportToHr: (date) => api.post("/reports/submit", { date }),
   getReportDetails: (id) => api.get(`/reports/${id}/details`),
   updateDailyReportCell: (id, status) => api.put(`/reports/${id}`, { status }),

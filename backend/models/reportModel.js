@@ -3,6 +3,7 @@ import { query } from "../config/db.js";
 const CELL_STATUSES = ["Received", "Not Received", "Leave"];
 let dailyReportTableEnsured = false;
 let taskSubmissionColumnsEnsured = false;
+let holidaysTableEnsured = false;
 
 const ensureTaskSubmissionColumns = async () => {
   if (taskSubmissionColumnsEnsured) return;
@@ -47,6 +48,24 @@ const ensureDailyReportTable = async () => {
   `);
 
   dailyReportTableEnsured = true;
+};
+
+const ensureHolidaysTable = async () => {
+  if (holidaysTableEnsured) return;
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS report_holidays (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      holiday_date DATE NOT NULL UNIQUE,
+      title VARCHAR(140) NOT NULL,
+      created_by INT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+    )
+  `);
+
+  holidaysTableEnsured = true;
 };
 
 const formatDate = (date) => {
@@ -103,6 +122,79 @@ const getDatesInRange = (startDate, endDate) => {
     cursor.setDate(cursor.getDate() + 1);
   }
   return dates;
+};
+
+export const upsertHoliday = async ({ date, title, createdBy }) => {
+  await ensureHolidaysTable();
+
+  await query(
+    `
+      INSERT INTO report_holidays (holiday_date, title, created_by)
+      VALUES (?, ?, ?)
+      ON DUPLICATE KEY UPDATE
+        title = VALUES(title),
+        created_by = VALUES(created_by),
+        updated_at = CURRENT_TIMESTAMP
+    `,
+    [date, title, createdBy || null]
+  );
+};
+
+export const listHolidays = async ({ startDate = "", endDate = "" } = {}) => {
+  await ensureHolidaysTable();
+
+  const hasStart = Boolean(startDate);
+  const hasEnd = Boolean(endDate);
+
+  if (hasStart && hasEnd) {
+    return query(
+      `
+        SELECT id, holiday_date, title, created_by, created_at, updated_at
+        FROM report_holidays
+        WHERE holiday_date BETWEEN ? AND ?
+        ORDER BY holiday_date ASC
+      `,
+      [startDate, endDate]
+    );
+  }
+
+  if (hasStart) {
+    return query(
+      `
+        SELECT id, holiday_date, title, created_by, created_at, updated_at
+        FROM report_holidays
+        WHERE holiday_date >= ?
+        ORDER BY holiday_date ASC
+      `,
+      [startDate]
+    );
+  }
+
+  if (hasEnd) {
+    return query(
+      `
+        SELECT id, holiday_date, title, created_by, created_at, updated_at
+        FROM report_holidays
+        WHERE holiday_date <= ?
+        ORDER BY holiday_date ASC
+      `,
+      [endDate]
+    );
+  }
+
+  return query(
+    `
+      SELECT id, holiday_date, title, created_by, created_at, updated_at
+      FROM report_holidays
+      ORDER BY holiday_date DESC
+      LIMIT 200
+    `
+  );
+};
+
+export const deleteHolidayById = async (id) => {
+  await ensureHolidaysTable();
+  return query("DELETE FROM report_holidays WHERE id = ?", [id]);
 };
 
 export const generateDailyReports = async (reportDate) => {
@@ -258,6 +350,7 @@ export const getDailyReportGridByRole = async ({
   employeeId = "all"
 }) => {
   await ensureDailyReportTable();
+  await ensureHolidaysTable();
 
   const { startDate, endDate } = getDateBounds(dateRange, date ? new Date(date) : new Date());
   const superadminRoleFilter = role === "superadmin" ? "('employee', 'admin')" : "('employee')";
@@ -291,6 +384,15 @@ export const getDailyReportGridByRole = async ({
   }
 
   const dates = getDatesInRange(startDate, endDate);
+
+  const holidays = await listHolidays({
+    startDate: formatDate(startDate),
+    endDate: formatDate(endDate)
+  });
+  const holidayByDate = new Map(
+    holidays.map((entry) => [normalizeSqlDate(entry.holiday_date), entry])
+  );
+
   if (users.length === 0 || dates.length === 0) {
     return {
       dateRange,
@@ -298,7 +400,12 @@ export const getDailyReportGridByRole = async ({
       endDate: formatDate(endDate),
       employees: [],
       rows: [],
-      summary: { received: 0, notReceived: 0, leave: 0 }
+      summary: { received: 0, notReceived: 0, leave: 0 },
+      holidays: holidays.map((entry) => ({
+        id: entry.id,
+        date: normalizeSqlDate(entry.holiday_date),
+        title: entry.title
+      }))
     };
   }
 
@@ -306,19 +413,25 @@ export const getDailyReportGridByRole = async ({
   const seedParams = [];
   for (const day of dates) {
     const dateText = formatDate(day);
+    if (holidayByDate.has(dateText)) {
+      continue;
+    }
+
     for (const employee of users) {
       seedValues.push("(?, ?, 'Not Received')");
       seedParams.push(dateText, employee.id);
     }
   }
 
-  await query(
-    `
-      INSERT IGNORE INTO daily_employee_reports (report_date, user_id, status)
-      VALUES ${seedValues.join(",")}
-    `,
-    seedParams
-  );
+  if (seedValues.length > 0) {
+    await query(
+      `
+        INSERT IGNORE INTO daily_employee_reports (report_date, user_id, status)
+        VALUES ${seedValues.join(",")}
+      `,
+      seedParams
+    );
+  }
 
   const idPlaceholders = users.map(() => "?").join(",");
   const cells = await query(
@@ -354,10 +467,20 @@ export const getDailyReportGridByRole = async ({
     }
 
     const dateText = formatDate(day);
+    const holiday = holidayByDate.get(dateText);
     const dayName = day.toLocaleDateString("en-US", { weekday: "long" });
     const isWeekend = day.getDay() === 6;
 
     const employees = users.map((employee) => {
+      if (holiday) {
+        return {
+          reportId: null,
+          userId: employee.id,
+          name: employee.name,
+          status: "Holiday"
+        };
+      }
+
       const cell = cellMap.get(`${dateText}-${employee.id}`);
 
       return {
@@ -373,6 +496,7 @@ export const getDailyReportGridByRole = async ({
       day: dayName,
       weekLabel: `Week ${weekNumber}`,
       isWeekend,
+      holidayTitle: holiday?.title || "",
       employees
     };
   });
@@ -380,6 +504,10 @@ export const getDailyReportGridByRole = async ({
   const summary = rows.reduce(
     (acc, row) => {
       row.employees.forEach((entry) => {
+        if (entry.status === "Holiday") {
+          return;
+        }
+
         if (entry.status === "Received") {
           acc.received += 1;
         } else if (entry.status === "Leave") {
@@ -404,7 +532,12 @@ export const getDailyReportGridByRole = async ({
       role: entry.role
     })),
     rows,
-    summary
+    summary,
+    holidays: holidays.map((entry) => ({
+      id: entry.id,
+      date: normalizeSqlDate(entry.holiday_date),
+      title: entry.title
+    }))
   };
 };
 

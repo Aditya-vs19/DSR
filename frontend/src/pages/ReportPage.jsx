@@ -77,6 +77,13 @@ function ReportPage({
   const [loadingCellId, setLoadingCellId] = useState(null);
   const [totalTasks, setTotalTasks] = useState(0);
   const [message, setMessage] = useState("");
+  const [holidays, setHolidays] = useState([]);
+  const [holidayForm, setHolidayForm] = useState({
+    date: new Date().toISOString().slice(0, 10),
+    title: ""
+  });
+  const [holidaySaving, setHolidaySaving] = useState(false);
+  const [holidayRemovingId, setHolidayRemovingId] = useState(null);
 
   const employeeOptions = useMemo(() => {
     const scoped =
@@ -127,6 +134,21 @@ function ReportPage({
     }
   }, [employeeId, employeeOptions]);
 
+  const loadHolidays = useCallback(async () => {
+    if (role !== "superadmin") return;
+
+    try {
+      const response = await reportApi.getHolidays();
+      setHolidays(Array.isArray(response.data) ? response.data : []);
+    } catch {
+      setHolidays([]);
+    }
+  }, [role]);
+
+  useEffect(() => {
+    loadHolidays();
+  }, [loadHolidays]);
+
   const handleGenerate = useCallback(async () => {
     setLoading(true);
     setMessage("");
@@ -148,6 +170,9 @@ function ReportPage({
       ]);
 
       setGridData(gridRes.data);
+      if (role === "superadmin") {
+        setHolidays(Array.isArray(gridRes.data?.holidays) ? gridRes.data.holidays : []);
+      }
       setTotalTasks(Array.isArray(tasksRes.data) ? tasksRes.data.length : 0);
       const reportLabel =
         gridRes.data.startDate === gridRes.data.endDate
@@ -220,7 +245,7 @@ function ReportPage({
     sheet.getCell(rowCursor, 1).value = "Today";
     applyCellStyle(sheet.getCell(rowCursor, 1), { fillColor: COLOR.todayGreen, bold: true });
     sheet.getCell(rowCursor, 2).value = "Weekly report received";
-    applyCellStyle(sheet.getCell(rowCursor, 2), { fillColor: COLOR.holidayPink, bold: true });
+    applyCellStyle(sheet.getCell(rowCursor, 2), { bold: true });
 
     rowCursor += 1;
     sheet.getCell(rowCursor, 1).value = "No / On Leave";
@@ -344,6 +369,57 @@ function ReportPage({
     });
   }, [date, gridData.employees, gridData.rows, gridData.startDate, gridData.summary, totalTasks]);
 
+  const handleSaveHoliday = useCallback(async () => {
+    const dateValue = String(holidayForm.date || "").slice(0, 10);
+    const titleValue = String(holidayForm.title || "").trim();
+
+    if (!dateValue) {
+      setMessage("Please select a holiday date.");
+      return;
+    }
+
+    if (!titleValue) {
+      setMessage("Please enter a holiday title/reason.");
+      return;
+    }
+
+    setHolidaySaving(true);
+    try {
+      await reportApi.saveHoliday({ date: dateValue, title: titleValue });
+      setMessage(`Holiday saved for ${dateValue}`);
+      setHolidayForm((prev) => ({ ...prev, title: "" }));
+      await loadHolidays();
+
+      if (gridData.rows.length > 0) {
+        await handleGenerate();
+      }
+    } catch (error) {
+      setMessage(error?.response?.data?.message || "Failed to save holiday.");
+    } finally {
+      setHolidaySaving(false);
+    }
+  }, [gridData.rows.length, handleGenerate, holidayForm.date, holidayForm.title, loadHolidays]);
+
+  const handleDeleteHoliday = useCallback(
+    async (id) => {
+      setHolidayRemovingId(id);
+      try {
+        await reportApi.deleteHoliday(id);
+        setMessage("Holiday removed");
+        await loadHolidays();
+
+        if (gridData.rows.length > 0) {
+          await handleGenerate();
+        }
+      } catch (error) {
+        setMessage(error?.response?.data?.message || "Failed to remove holiday.");
+      } finally {
+        setHolidayRemovingId(null);
+      }
+    },
+    [gridData.rows.length, handleGenerate, loadHolidays]
+  );
+
   useEffect(() => {
     setDateRange(initialDateRange || "week");
   }, [initialDateRange]);
@@ -387,6 +463,85 @@ function ReportPage({
         summary={gridData.summary || { received: 0, notReceived: 0, leave: 0 }}
         totalTasks={totalTasks}
       />
+
+      {role === "superadmin" ? (
+        <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <h3 className="text-base font-bold text-slate-800">Set Holidays</h3>
+          <p className="mt-1 text-sm text-slate-500">
+            Select a date and a short title. That date will automatically appear as Holiday in report grid and Excel export.
+          </p>
+
+          <div className="mt-3 grid gap-3 md:grid-cols-4">
+            <label className="md:col-span-1">
+              <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Holiday Date</span>
+              <input
+                type="date"
+                value={holidayForm.date}
+                onChange={(event) =>
+                  setHolidayForm((prev) => ({
+                    ...prev,
+                    date: event.target.value
+                  }))
+                }
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300"
+              />
+            </label>
+
+            <label className="md:col-span-2">
+              <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Holiday Title / Reason</span>
+              <input
+                type="text"
+                maxLength={140}
+                placeholder="Example: Holi / Company Offsite"
+                value={holidayForm.title}
+                onChange={(event) =>
+                  setHolidayForm((prev) => ({
+                    ...prev,
+                    title: event.target.value
+                  }))
+                }
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300"
+              />
+            </label>
+
+            <div className="md:col-span-1 flex items-end">
+              <button
+                type="button"
+                onClick={handleSaveHoliday}
+                disabled={holidaySaving}
+                className="w-full rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                {holidaySaving ? "Saving..." : "Set Holiday"}
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-4 max-h-52 overflow-y-auto rounded-xl border border-slate-200">
+            {holidays.length === 0 ? (
+              <div className="px-3 py-3 text-sm text-slate-500">No holidays configured yet.</div>
+            ) : (
+              <ul className="divide-y divide-slate-200">
+                {holidays.map((holiday) => (
+                  <li key={holiday.id} className="flex items-center justify-between gap-3 px-3 py-2">
+                    <div>
+                      <p className="text-sm font-semibold text-slate-800">{holiday.date}</p>
+                      <p className="text-xs text-slate-600">{holiday.title}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteHoliday(holiday.id)}
+                      disabled={holidayRemovingId === holiday.id}
+                      className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {holidayRemovingId === holiday.id ? "Removing..." : "Remove"}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </section>
+      ) : null}
 
       {message ? <div className="rounded-lg bg-slate-100 px-3 py-2 text-sm text-slate-700">{message}</div> : null}
 

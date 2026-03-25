@@ -51,14 +51,25 @@ function ReportGrid({ rows = [], employees = [], onCellChange, loadingCellId = n
                   <td className="sticky left-0 z-10 border-r border-t border-slate-200 bg-inherit px-3 py-2 align-top">
                     <div className="font-semibold text-slate-700">{row.day}</div>
                     <div className="text-xs text-slate-500">{row.date}</div>
+                    {row.holidayTitle ? (
+                      <div className="mt-1 inline-flex rounded-full bg-pink-100 px-2 py-0.5 text-[11px] font-semibold text-pink-700">
+                        Holiday: {row.holidayTitle}
+                      </div>
+                    ) : null}
                   </td>
                   {row.employees.map((entry) => (
                     <td key={`${row.date}-${entry.userId}`} className="border-t border-slate-200 px-2 py-2">
-                      <ReportCell
-                        value={entry.status}
-                        disabled={!entry.reportId || loadingCellId === entry.reportId}
-                        onChange={(status) => onCellChange(entry.reportId, status)}
-                      />
+                      {entry.status === "Holiday" ? (
+                        <div className="flex min-h-[30px] min-w-[120px] items-center justify-center rounded-md border border-pink-200 bg-pink-100 px-2 py-1 text-xs font-semibold text-pink-700">
+                          Holiday
+                        </div>
+                      ) : (
+                        <ReportCell
+                          value={entry.status}
+                          disabled={!entry.reportId || loadingCellId === entry.reportId}
+                          onChange={(status) => onCellChange(entry.reportId, status)}
+                        />
+                      )}
                     </td>
                   ))}
                 </tr>

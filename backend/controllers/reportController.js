@@ -1,15 +1,24 @@
 import {
+  deleteHolidayById,
   generateDailyReports,
   getReportsByRole,
   getSuperAdminAnalytics,
+  listHolidays,
   validateReport,
   getDailyReportGridByRole,
   getDailyReportCellById,
+  upsertHoliday,
   updateDailyReportCellStatus,
   submitEmployeeDailyReport,
   getReportDetailsById
 } from "../models/reportModel.js";
 import { createNotification, getHrUserIds } from "../models/taskModel.js";
+
+const normalizeDateText = (value) => {
+  if (!value) return "";
+  if (value instanceof Date) return value.toISOString().slice(0, 10);
+  return String(value).slice(0, 10);
+};
 
 export const getReportsController = async (req, res) => {
   try {
@@ -168,5 +177,62 @@ export const getReportDetailsController = async (req, res) => {
     return res.status(200).json(details);
   } catch (error) {
     return res.status(500).json({ message: "Failed to fetch report details", error: error.message });
+  }
+};
+
+export const getHolidaysController = async (req, res) => {
+  try {
+    const holidays = await listHolidays({
+      startDate: req.query.startDate || "",
+      endDate: req.query.endDate || ""
+    });
+
+    return res.status(200).json(
+      holidays.map((entry) => ({
+        id: entry.id,
+        date: normalizeDateText(entry.holiday_date),
+        title: entry.title,
+        createdBy: entry.created_by,
+        createdAt: entry.created_at,
+        updatedAt: entry.updated_at
+      }))
+    );
+  } catch (error) {
+    return res.status(500).json({ message: "Failed to fetch holidays", error: error.message });
+  }
+};
+
+export const upsertHolidayController = async (req, res) => {
+  try {
+    const date = String(req.body.date || "").slice(0, 10);
+    const title = String(req.body.title || "").trim();
+
+    if (!date) {
+      return res.status(400).json({ message: "Holiday date is required" });
+    }
+
+    if (!title) {
+      return res.status(400).json({ message: "Holiday title is required" });
+    }
+
+    await upsertHoliday({ date, title, createdBy: req.user.id });
+    return res.status(200).json({ message: "Holiday saved", date, title });
+  } catch (error) {
+    return res.status(500).json({ message: "Failed to save holiday", error: error.message });
+  }
+};
+
+export const deleteHolidayController = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await deleteHolidayById(id);
+
+    if (!result.affectedRows) {
+      return res.status(404).json({ message: "Holiday not found" });
+    }
+
+    return res.status(200).json({ message: "Holiday removed" });
+  } catch (error) {
+    return res.status(500).json({ message: "Failed to remove holiday", error: error.message });
   }
 };
