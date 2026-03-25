@@ -77,7 +77,9 @@ const TaskTable = ({
                   )}
                 </td>
                 <td className="p-3">
-                  {editableStatus && !item.dependency ? (
+                  {item.status !== "Pending" ? (
+                    "-"
+                  ) : editableStatus && !item.dependency ? (
                     <div className="flex min-w-[220px] items-center gap-2">
                       <input
                         className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-700 outline-none focus:border-emerald-500"

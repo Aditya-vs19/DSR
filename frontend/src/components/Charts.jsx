@@ -20,7 +20,8 @@ const Charts = ({
   labels = [],
   values = [],
   chartValues = null,
-  color = "rgba(79, 70, 229, 0.8)"
+  color = "rgba(79, 70, 229, 0.8)",
+  barWidth
 }) => {
   const isCircular = type === "pie" || type === "donut";
   const renderedValues = chartValues || values;
@@ -33,7 +34,8 @@ const Charts = ({
         backgroundColor: color,
         borderColor: isCircular ? "#ffffff" : color,
         borderWidth: isCircular ? 2 : 1,
-        tension: 0.35
+        tension: 2,
+        ...(type === "bar" && barWidth ? { barThickness: barWidth } : {})
       }
     ]
   };
