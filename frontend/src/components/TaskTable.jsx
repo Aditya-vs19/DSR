@@ -20,7 +20,18 @@ const TaskTable = ({
   onReassign,
   reassigningTaskId = null
 }) => {
+  const [dependencyDrafts, setDependencyDrafts] = useState({});
   const [reassignSelections, setReassignSelections] = useState({});
+
+  useEffect(() => {
+    setDependencyDrafts(() => {
+      const next = {};
+      tasks.forEach((task) => {
+        next[task.id] = task.dependency ?? "";
+      });
+      return next;
+    });
+  }, [tasks]);
 
   useEffect(() => {
     setReassignSelections(() => {
@@ -31,6 +42,17 @@ const TaskTable = ({
       return next;
     });
   }, [tasks]);
+
+  const getDependencyValue = (item) => dependencyDrafts[item.id] ?? item.dependency ?? "";
+
+  const handleDependencySave = async (item) => {
+    const dependency = getDependencyValue(item).trim();
+    if (!dependency || !onStatusChange) {
+      return;
+    }
+
+    await onStatusChange(item, item.status, dependency);
+  };
 
   return (
     <div className="card overflow-x-auto">
@@ -71,7 +93,7 @@ const TaskTable = ({
                     <select
                       className={`rounded-md px-2 py-1 text-xs font-semibold ${statusClass[item.status] || "bg-slate-100 text-slate-700"}`}
                       value={item.status}
-                      onChange={(event) => onStatusChange(item, event.target.value)}
+                      onChange={(event) => onStatusChange(item, event.target.value, getDependencyValue(item))}
                     >
                       <option value="Pending">Pending</option>
                       <option value="Completed">Completed</option>
@@ -87,7 +109,33 @@ const TaskTable = ({
                     </p>
                   )}
                 </td>
-                <td className="p-3">{item.dependency || "-"}</td>
+                <td className="p-3">
+                  {item.status !== "Pending" ? (
+                    "-"
+                  ) : editableStatus && !item.dependency ? (
+                    <div className="flex min-w-[220px] items-center gap-2">
+                      <input
+                        className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-700 outline-none focus:border-emerald-500"
+                        type="text"
+                        placeholder="Add dependency"
+                        value={getDependencyValue(item)}
+                        onChange={(event) =>
+                          setDependencyDrafts((prev) => ({ ...prev, [item.id]: event.target.value }))
+                        }
+                      />
+                      <button
+                        type="button"
+                        className="rounded-md bg-emerald-600 px-3 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-300"
+                        disabled={!getDependencyValue(item).trim()}
+                        onClick={() => void handleDependencySave(item)}
+                      >
+                        Save
+                      </button>
+                    </div>
+                  ) : (
+                    item.dependency || "-"
+                  )}
+                </td>
                 {showAssignee && <td className="p-3">{item.assigned_to_name || "-"}</td>}
                 {showAssigner && <td className="p-3">{item.assigned_by_name || "-"}</td>}
                 {showSubmitToHr && (

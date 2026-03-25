@@ -444,9 +444,9 @@ const EmployeeDashboard = () => {
         )}
 
         {activeTab === "Overview" && (
-          <div className="grid gap-4 lg:grid-cols-2">
+          <div className="grid gap-2 lg:grid-cols-2">
             <Charts
-              type="line"
+              type="bar"
               title="Tasks Completed Per Day"
               labels={timeline.map((point) => point.day)}
               values={timeline.map((point) => point.completed_count)}
