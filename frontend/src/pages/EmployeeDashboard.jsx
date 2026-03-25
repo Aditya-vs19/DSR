@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Charts from "../components/Charts";
 import TaskTable from "../components/TaskTable";
-import logo from "../assets/logo.jpeg";
+import logo from "../assets/logo.png";
 import { useAuth } from "../context/AuthContext";
 import { authApi, reportApi, taskApi } from "../services/api";
 

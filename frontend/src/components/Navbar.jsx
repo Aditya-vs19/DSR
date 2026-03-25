@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import logo from "../assets/logo.jpeg";
+import logo from "../assets/logo.png";
 import { useAuth } from "../context/AuthContext";
 
 const Navbar = ({ notifications = [], onToggleSidebar }) => {
