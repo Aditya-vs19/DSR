@@ -8,12 +8,14 @@ import {
   getTaskById,
   getTasksByRole,
   getHrUserIds,
+  reassignTask,
   getTeamPerformance,
   getUserNotifications,
   markNotificationAsRead,
   submitTaskToHr,
   updateTaskStatus
 } from "../models/taskModel.js";
+import { findUserById } from "../models/userModel.js";
 
 const validStatuses = ["Pending", "Completed"];
 
@@ -120,6 +122,90 @@ export const updateTaskStatusController = async (req, res) => {
     return res.status(200).json({ message: "Task updated" });
   } catch (error) {
     return res.status(500).json({ message: "Failed to update task", error: error.message });
+  }
+};
+
+export const reassignTaskController = async (req, res) => {
+  try {
+    if (req.user.role !== "admin") {
+      return res.status(403).json({ message: "Only admins can reassign tasks" });
+    }
+
+    const { id } = req.params;
+    const { assignedTo } = req.body;
+
+    const nextAssigneeId = Number(assignedTo);
+    if (!Number.isInteger(nextAssigneeId) || nextAssigneeId <= 0) {
+      return res.status(400).json({ message: "Valid assignedTo is required" });
+    }
+
+    const task = await getTaskById(id);
+    if (!task) {
+      return res.status(404).json({ message: "Task not found" });
+    }
+
+    if (task.status === "Completed") {
+      return res.status(400).json({ message: "Completed tasks cannot be reassigned" });
+    }
+
+    if (Number(task.assigned_to) === nextAssigneeId) {
+      return res.status(400).json({ message: "Task already assigned to this user" });
+    }
+
+    const currentAssignee = await findUserById(task.assigned_to);
+    const canReassignTask =
+      Number(task.assigned_by) === Number(req.user.id) ||
+      (currentAssignee && currentAssignee.team && currentAssignee.team === req.user.team);
+
+    if (!canReassignTask) {
+      return res.status(403).json({ message: "You can reassign only your department tasks" });
+    }
+
+    const nextAssignee = await findUserById(nextAssigneeId);
+    if (!nextAssignee || nextAssignee.role !== "employee") {
+      return res.status(400).json({ message: "Task can be reassigned only to an employee" });
+    }
+
+    if (!req.user.team || nextAssignee.team !== req.user.team) {
+      return res.status(403).json({ message: "You can reassign only within your department" });
+    }
+
+    await reassignTask({
+      id,
+      assignedTo: nextAssigneeId,
+      assignedBy: req.user.id
+    });
+
+    await createNotification({
+      userId: nextAssignee.id,
+      message: `${req.user.name} reassigned task "${task.task}" to you`,
+      type: "task_assigned",
+      refId: Number(id)
+    });
+
+    if (currentAssignee && Number(currentAssignee.id) !== nextAssigneeId) {
+      await createNotification({
+        userId: currentAssignee.id,
+        message: `${req.user.name} reassigned task "${task.task}" to ${nextAssignee.name}`,
+        type: "task_reassigned",
+        refId: Number(id)
+      });
+    }
+
+    return res.status(200).json({
+      message: "Task reassigned successfully",
+      task: {
+        ...task,
+        assigned_to: nextAssignee.id,
+        assigned_by: req.user.id,
+        assigned_to_name: nextAssignee.name,
+        assigned_by_name: req.user.name,
+        submitted_to_hr: 0,
+        submitted_to_hr_at: null
+      }
+    });
+  } catch (error) {
+    return res.status(500).json({ message: "Failed to reassign task", error: error.message });
   }
 };
 

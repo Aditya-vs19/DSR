@@ -150,6 +150,22 @@ export const updateTaskStatus = async ({ id, status, dependency }) => {
   await query(sql, [status, dependency || null, status, completedAt, id]);
 };
 
+export const reassignTask = async ({ id, assignedTo, assignedBy }) => {
+  await ensureTaskSubmissionColumns();
+
+  const sql = `
+    UPDATE tasks
+    SET assigned_to = ?,
+        assigned_by = ?,
+        created_at = CURRENT_TIMESTAMP,
+        submitted_to_hr = 0,
+        submitted_to_hr_at = NULL
+    WHERE id = ?
+  `;
+
+  await query(sql, [assignedTo, assignedBy, id]);
+};
+
 export const getEmployeeDailySummary = async (employeeId, date) => {
   await ensureTaskSubmissionColumns();
 
