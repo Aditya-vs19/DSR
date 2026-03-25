@@ -35,6 +35,7 @@ const AdminDashboard = () => {
   });
   const [passwordMessage, setPasswordMessage] = useState("");
   const [passwordError, setPasswordError] = useState("");
+  const [reassigningTaskId, setReassigningTaskId] = useState(null);
 
   const loadData = async () => {
     setLoading(true);
@@ -102,6 +103,26 @@ const AdminDashboard = () => {
   const handleStatusChange = async (task, status, dependency = task.dependency) => {
     await taskApi.updateTask(task.id, { status, dependency });
     await loadData();
+  };
+
+  const handleReassign = async (task, nextAssigneeId) => {
+    setError("");
+    setReassigningTaskId(task.id);
+
+    try {
+      const response = await taskApi.reassignTask(task.id, { assignedTo: nextAssigneeId });
+      const updatedTask = response.data?.task;
+
+      if (updatedTask) {
+        setTasks((prev) => prev.map((entry) => (entry.id === task.id ? { ...entry, ...updatedTask } : entry)));
+      }
+
+      await loadData();
+    } catch (apiError) {
+      setError(apiError.response?.data?.message || "Failed to reassign task");
+    } finally {
+      setReassigningTaskId(null);
+    }
   };
 
   const handleMarkRead = async (id) => {
@@ -338,6 +359,7 @@ const AdminDashboard = () => {
                 />
               </div>
             </div>
+            {error && <p className="mt-3 text-sm text-rose-600">{error}</p>}
           </section>
         )}
 
@@ -365,6 +387,10 @@ const AdminDashboard = () => {
               editableStatus
               showAssignee
               showAssigner
+              showReassign
+              reassignOptions={employees}
+              onReassign={handleReassign}
+              reassigningTaskId={reassigningTaskId}
             />
           </>
         )}
@@ -376,6 +402,10 @@ const AdminDashboard = () => {
             editableStatus
             showAssignee
             showAssigner
+            showReassign
+            reassignOptions={employees}
+            onReassign={handleReassign}
+            reassigningTaskId={reassigningTaskId}
           />
         )}
 

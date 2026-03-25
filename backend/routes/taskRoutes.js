@@ -5,6 +5,7 @@ import {
   getEmployeeSummaryController,
   getEmployeeTimelineController,
   getNotificationsController,
+  reassignTaskController,
   getTasksController,
   getTeamPerformanceController,
   markNotificationReadController,
@@ -20,6 +21,7 @@ router.use(authenticate);
 router.post("/", createTaskController);
 router.get("/", getTasksController);
 router.put("/:id", updateTaskStatusController);
+router.put("/:id/reassign", authorizeRoles("admin"), reassignTaskController);
 router.put("/:id/submit-hr", authorizeRoles("employee"), submitTaskToHrController);
 router.get("/summary/daily", authorizeRoles("employee"), getEmployeeSummaryController);
 router.get("/timeline", authorizeRoles("employee"), getEmployeeTimelineController);

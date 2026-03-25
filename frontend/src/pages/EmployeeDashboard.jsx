@@ -107,7 +107,7 @@ const EmployeeDashboard = () => {
   );
 
   const newTaskNotifications = useMemo(
-    () => notifications.filter((item) => item.type === "task_assigned"),
+    () => notifications.filter((item) => ["task_assigned", "task_reassigned"].includes(item.type)),
     [notifications]
   );
 
