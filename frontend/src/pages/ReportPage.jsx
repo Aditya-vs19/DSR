@@ -54,6 +54,21 @@ const normalizeStatus = (status) => {
   return "Not Received";
 };
 
+const OFF_DAY_STATUSES = new Set(["Holiday", "Weekly Off"]);
+
+const shouldIncludeRowInExport = (row) => {
+  if (!row) {
+    return false;
+  }
+
+  const isHolidayOrSunday = Boolean(row.holidayTitle) || String(row.day).toLowerCase() === "sunday";
+  if (!isHolidayOrSunday) {
+    return true;
+  }
+
+  return (row.employees || []).some((entry) => !OFF_DAY_STATUSES.has(normalizeStatus(entry.status)));
+};
+
 const formatDateForSheet = (dateText) => {
   const dateValue = new Date(dateText);
   if (Number.isNaN(dateValue.getTime())) {
@@ -276,8 +291,10 @@ function ReportPage({
 
     rowCursor += 2;
 
+    const exportRows = gridData.rows.filter(shouldIncludeRowInExport);
+
     const weekMap = new Map();
-    gridData.rows.forEach((row) => {
+    exportRows.forEach((row) => {
       const weekKey = row.weekLabel || "Week 1";
       if (!weekMap.has(weekKey)) {
         weekMap.set(weekKey, []);
