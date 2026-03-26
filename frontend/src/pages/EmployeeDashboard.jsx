@@ -168,14 +168,81 @@ const EmployeeDashboard = () => {
     });
   }, [tasks, filters, todayText]);
 
+  const pendingTasksFromYesterday = useMemo(() => {
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayText = getLocalDateText(yesterday);
+    const carriedForwardSourceIds = new Set(
+      tasks
+        .map((item) => item.carried_forward_from_id)
+        .filter((value) => value !== null && value !== undefined)
+        .map((value) => Number(value))
+    );
+
+    return tasks.filter(
+      (item) =>
+        item.status === "Pending" &&
+        ((item.assigned_at || item.created_at || "").slice(0, 10) === yesterdayText) &&
+        !carriedForwardSourceIds.has(Number(item.id))
+    ).length;
+  }, [tasks]);
+
+  const visibleNotifications = useMemo(() => {
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayText = getLocalDateText(yesterday);
+
+    const taskById = new Map(tasks.map((item) => [Number(item.id), item]));
+    const carriedForwardSourceIds = new Set(
+      tasks
+        .map((item) => item.carried_forward_from_id)
+        .filter((value) => value !== null && value !== undefined)
+        .map((value) => Number(value))
+    );
+
+    const unresolvedYesterdayLineageIds = new Set();
+
+    tasks
+      .filter(
+        (item) =>
+          item.status === "Pending" &&
+          ((item.assigned_at || item.created_at || "").slice(0, 10) === yesterdayText) &&
+          !carriedForwardSourceIds.has(Number(item.id))
+      )
+      .forEach((item) => {
+        let currentId = Number(item.id);
+
+        while (currentId && !unresolvedYesterdayLineageIds.has(currentId)) {
+          unresolvedYesterdayLineageIds.add(currentId);
+          const currentTask = taskById.get(currentId);
+          currentId = Number(currentTask?.carried_forward_from_id || 0);
+        }
+      });
+
+    return notifications.filter((item) => {
+      const notificationDate = String(item.created_at || "").slice(0, 10);
+
+      if (notificationDate === todayText) {
+        return true;
+      }
+
+      return (
+        notificationDate === yesterdayText &&
+        item.type?.startsWith("task_") &&
+        item.reference_id &&
+        unresolvedYesterdayLineageIds.has(Number(item.reference_id))
+      );
+    });
+  }, [notifications, tasks, todayText]);
+
   const unreadCount = useMemo(
-    () => notifications.filter((item) => !item.is_read).length,
-    [notifications]
+    () => visibleNotifications.filter((item) => !item.is_read).length,
+    [visibleNotifications]
   );
 
   const newTaskNotifications = useMemo(
-    () => notifications.filter((item) => ["task_assigned", "task_reassigned"].includes(item.type)),
-    [notifications]
+    () => visibleNotifications.filter((item) => ["task_assigned", "task_reassigned", "task_carried_forward"].includes(item.type)),
+    [visibleNotifications]
   );
 
   const weeklyCompletionChart = useMemo(() => {
@@ -563,29 +630,35 @@ const EmployeeDashboard = () => {
                   }}
                 />
               </div>
-              <div className="rounded-xl border border-dsr-border bg-dsr-soft p-3 text-sm text-dsr-muted">
-                Status updates are live. Admin and SuperAdmin dashboards receive updates automatically.
-              </div>
+              {pendingTasksFromYesterday > 0 && (
+                <div className="rounded-xl border border-rose-300 bg-rose-100 p-3 text-sm font-semibold text-rose-800 md:col-start-4">
+                  You have {pendingTasksFromYesterday} pending {pendingTasksFromYesterday === 1 ? "task" : "tasks"} from yesterday.
+                </div>
+              )}
             </div>
           </section>
         )}
 
         {activeTab === "Tasks" && (
-          <form className="card mx-auto grid w-full max-w-5xl gap-2 md:grid-cols-2" onSubmit={handleCreateTask}>
+          <form className="card grid w-full gap-2 md:grid-cols-2" onSubmit={handleCreateTask}>
             <h2 className="md:col-span-2 text-lg font-semibold">Create Task</h2>
-            <h3 className="md:col-span-2 text-sm text-dsr-muted">Client / Vendor</h3>
-            <input
-              className="input md:col-span-2"
-              value={form.client}
-              onChange={(event) => setForm((prev) => ({ ...prev, client: event.target.value }))}
-            />
-            <h3 className="md:col-span-2 text-sm text-dsr-muted">Task</h3>
-            <input
-              className="input md:col-span-2"
-              value={form.task}
-              onChange={(event) => setForm((prev) => ({ ...prev, task: event.target.value }))}
-              required
-            />
+            <div>
+              <h3 className="mb-1 text-sm text-dsr-muted">Client / Vendor</h3>
+              <input
+                className="input"
+                value={form.client}
+                onChange={(event) => setForm((prev) => ({ ...prev, client: event.target.value }))}
+              />
+            </div>
+            <div>
+              <h3 className="mb-1 text-sm text-dsr-muted">Task</h3>
+              <input
+                className="input"
+                value={form.task}
+                onChange={(event) => setForm((prev) => ({ ...prev, task: event.target.value }))}
+                required
+              />
+            </div>
             <h3 className="md:col-span-2 text-sm text-dsr-muted">Action</h3>
             <textarea
               className="input md:col-span-2"
@@ -680,7 +753,7 @@ const EmployeeDashboard = () => {
               )}
             </div>
             <div className="space-y-3">
-              {notifications.map((item) => (
+              {visibleNotifications.map((item) => (
                 <div
                   key={item.id}
                   className={`rounded-xl border p-3 ${item.is_read ? "border-dsr-border" : "border-dsr-border bg-dsr-soft"}`}
@@ -709,7 +782,7 @@ const EmployeeDashboard = () => {
                   </p>
                 </div>
               ))}
-              {notifications.length === 0 && <p className="text-sm text-dsr-muted">No notifications</p>}
+              {visibleNotifications.length === 0 && <p className="text-sm text-dsr-muted">No notifications</p>}
             </div>
           </section>
         )}
