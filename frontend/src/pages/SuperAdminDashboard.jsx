@@ -7,7 +7,7 @@ import { useAuth } from "../context/AuthContext";
 import useScrollHeader from "../hooks/useScrollHeader";
 import { authApi, reportApi, taskApi } from "../services/api";
 
-const TABS = ["Overview", "Tasks", "Users", "Reports", "Profile"];
+const TABS = ["Overview", "Tasks", "Employees", "Reports", "Profile"];
 
 const defaultAnalytics = { tasksPerTeam: [], completionRate: 0, topPerformers: [] };
 
@@ -65,7 +65,7 @@ const SuperAdminDashboard = () => {
     setBusy(true);
     try {
       const [usersRes, tasksRes, reportsRes, adminPerfRes, notificationRes] = await Promise.all([
-        authApi.getUsers(),
+        authApi.getEmployees(),
         taskApi.getTasks(),
         reportApi.getReports(),
         taskApi.getAdminPerformance(),
@@ -461,7 +461,7 @@ const SuperAdminDashboard = () => {
     setCreatingUser(true);
     try {
       await authApi.register(payload);
-      setNewUserMessage("User created successfully");
+      setNewUserMessage("Employee created successfully");
       setNewUserForm((prev) => ({
         ...prev,
         name: "",
@@ -470,7 +470,7 @@ const SuperAdminDashboard = () => {
       }));
       await loadData();
     } catch (error) {
-      setNewUserError(error?.response?.data?.message || "Failed to create user");
+      setNewUserError(error?.response?.data?.message || "Failed to create employee");
     } finally {
       setCreatingUser(false);
     }
@@ -552,7 +552,7 @@ const SuperAdminDashboard = () => {
           <section className="card-green">
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
               <div>
-                <p className="text-xs uppercase tracking-wide text-dsr-muted">Users</p>
+                <p className="text-xs uppercase tracking-wide text-dsr-muted">Employees</p>
                 <h3 className="text-3xl font-extrabold">{users.length}</h3>
               </div>
               <div>
@@ -727,7 +727,7 @@ const SuperAdminDashboard = () => {
           />
         )}
 
-        {activeTab === "Users" && (
+        {activeTab === "Employees" && (
           <section className="card overflow-x-auto">
             <form className="mb-4 grid gap-3 rounded-xl border border-dsr-border/70 bg-dsr-soft p-3 md:grid-cols-2 xl:grid-cols-6" onSubmit={handleCreateUser}>
               <label>
@@ -770,7 +770,6 @@ const SuperAdminDashboard = () => {
                       if (nextRole === "superadmin" || nextRole === "hr") {
                         return { ...prev, role: nextRole, team: "" };
                       }
-
                       return { ...prev, role: nextRole };
                     })
                   }
@@ -792,7 +791,7 @@ const SuperAdminDashboard = () => {
                 />
               </label>
               <button className="btn-primary self-end" type="submit" disabled={creatingUser}>
-                {creatingUser ? "Creating..." : "Add User"}
+                {creatingUser ? "Creating..." : "Add Employee"}
               </button>
 
               {(newUserMessage || newUserError) && (
@@ -874,7 +873,7 @@ const SuperAdminDashboard = () => {
                 {filteredUsers.length === 0 && (
                   <tr>
                     <td colSpan={8} className="p-4 text-center text-dsr-muted">
-                      No users found for current filters
+                      No employees found for current filters
                     </td>
                   </tr>
                 )}

@@ -206,7 +206,7 @@ export const reassignTaskController = async (req, res) => {
     }
 
     if (Number(task.assigned_to) === nextAssigneeId) {
-      return res.status(400).json({ message: "Task already assigned to this user" });
+      return res.status(400).json({ message: "Task already assigned to this employee" });
     }
 
     const currentAssignee = await findUserById(task.assigned_to);
