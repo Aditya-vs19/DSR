@@ -32,6 +32,32 @@ const formatLocalDateTime = (value) => {
   });
 };
 
+const formatUtcDateTime = (value) => {
+  if (!value) {
+    return "-";
+  }
+
+  const rawValue = String(value).trim();
+  const normalizedValue = /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(\.\d+)?$/.test(rawValue)
+    ? `${rawValue.replace(" ", "T")}Z`
+    : rawValue;
+
+  const parsed = new Date(normalizedValue);
+  if (Number.isNaN(parsed.getTime())) {
+    return "-";
+  }
+
+  return parsed.toLocaleString([], {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: true
+  });
+};
+
 const TaskTable = ({
   tasks = [],
   onStatusChange,
@@ -225,7 +251,7 @@ const TaskTable = ({
                   )}
                 </td>
                 <td className="p-3 whitespace-nowrap">{formatLocalDateTime(item.created_at)}</td>
-                <td className="p-3 whitespace-nowrap">{item.status === "Completed" ? formatLocalDateTime(item.completed_at) : ""}</td>
+                <td className="p-3 whitespace-nowrap">{item.status === "Completed" ? formatUtcDateTime(item.completed_at) : ""}</td>
                 <td className="p-3">
                   {item.status !== "Completed" && editableStatus ? (
                     <div className="min-w-[220px]">
