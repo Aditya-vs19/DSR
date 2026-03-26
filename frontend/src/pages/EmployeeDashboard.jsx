@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Charts from "../components/Charts";
 import TaskTable from "../components/TaskTable";
 import logo from "../assets/logo.png";
@@ -7,6 +7,13 @@ import useScrollHeader from "../hooks/useScrollHeader";
 import { authApi, reportApi, taskApi } from "../services/api";
 
 const TABS = ["Overview", "Tasks", "Profile"];
+const PERIOD_OPTIONS = [
+  { value: "all", label: "All Time" },
+  { value: "today", label: "Today (Default)" },
+  { value: "yesterday", label: "Yesterday" },
+  { value: "last7", label: "Last 7 Days" },
+  { value: "custom", label: "Custom Date" }
+];
 
 const getLocalDateText = (date = new Date()) => {
   const copy = new Date(date);
@@ -18,6 +25,19 @@ const formatChartDateLabel = (date) => {
   const day = String(date.getDate()).padStart(2, "0");
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const year = date.getFullYear();
+  return `${day}-${month}-${year}`;
+};
+
+const formatDateOptionLabel = (dateText) => {
+  if (!dateText) {
+    return "Custom Date";
+  }
+
+  const [year, month, day] = String(dateText).split("-");
+  if (!year || !month || !day) {
+    return "Custom Date";
+  }
+
   return `${day}-${month}-${year}`;
 };
 
@@ -41,6 +61,8 @@ const normalizeTimelineDate = (value) => {
 const EmployeeDashboard = () => {
   const { user, logout } = useAuth();
   const isHeaderVisible = useScrollHeader();
+  const customDateInputRef = useRef(null);
+  const periodMenuRef = useRef(null);
   const todayText = getLocalDateText();
   const [tasks, setTasks] = useState([]);
   const [reports, setReports] = useState([]);
@@ -48,6 +70,7 @@ const EmployeeDashboard = () => {
   const [timeline, setTimeline] = useState([]);
   const [notifications, setNotifications] = useState([]);
   const [activeTab, setActiveTab] = useState("Overview");
+  const [isPeriodMenuOpen, setIsPeriodMenuOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [filters, setFilters] = useState({ status: "all", period: "today", date: todayText });
   const [submittingReport, setSubmittingReport] = useState(false);
@@ -95,6 +118,23 @@ const EmployeeDashboard = () => {
     const timer = setInterval(loadData, 15000);
     return () => clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    if (!isPeriodMenuOpen) {
+      return undefined;
+    }
+
+    const handleOutsideClick = (event) => {
+      if (periodMenuRef.current?.contains(event.target)) {
+        return;
+      }
+
+      setIsPeriodMenuOpen(false);
+    };
+
+    document.addEventListener("mousedown", handleOutsideClick);
+    return () => document.removeEventListener("mousedown", handleOutsideClick);
+  }, [isPeriodMenuOpen]);
 
   const filteredTasks = useMemo(() => {
     const yesterday = new Date();
@@ -256,6 +296,14 @@ const EmployeeDashboard = () => {
 
   const canSubmitReport = Boolean(selectedReportDate) && filters.period !== "last7";
 
+  const periodFieldLabel = useMemo(() => {
+    if (filters.period === "custom") {
+      return formatDateOptionLabel(filters.date);
+    }
+
+    return PERIOD_OPTIONS.find((option) => option.value === filters.period)?.label || "Task Period";
+  }, [filters.period, filters.date]);
+
   const alreadySubmittedForDate = useMemo(() => {
     if (!selectedReportDate) {
       return false;
@@ -307,6 +355,46 @@ const EmployeeDashboard = () => {
     } catch (apiError) {
       setPasswordError(apiError.response?.data?.message || "Failed to change password");
     }
+  };
+
+  const openCustomDatePicker = () => {
+    const input = customDateInputRef.current;
+    if (!input) {
+      return;
+    }
+
+    if (typeof input.showPicker === "function") {
+      input.showPicker();
+      return;
+    }
+
+    input.focus();
+    input.click();
+  };
+
+  const handlePeriodSelect = (period) => {
+    setIsPeriodMenuOpen(false);
+
+    if (period === "custom") {
+      setFilters((prev) => ({
+        ...prev,
+        period: "custom",
+        date: prev.date || todayText
+      }));
+      setTimeout(openCustomDatePicker, 0);
+      return;
+    }
+
+    setFilters((prev) => ({
+      ...prev,
+      period,
+      date:
+        period === "today"
+          ? todayText
+          : period === "yesterday"
+            ? getLocalDateText(new Date(Date.now() - 24 * 60 * 60 * 1000))
+            : prev.date
+    }));
   };
 
   return (
@@ -420,40 +508,59 @@ const EmployeeDashboard = () => {
                   <option value="Completed">Completed</option>
                 </select>
               </div>
-              <div>
+              <div className="relative" ref={periodMenuRef}>
                 <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-dsr-muted">Task Period</label>
-                <select
-                  className="input"
-                  value={filters.period}
+                <button
+                  type="button"
+                  className="input flex w-full items-center justify-between text-left"
+                  onClick={() => setIsPeriodMenuOpen((prev) => !prev)}
+                >
+                  <span>{periodFieldLabel}</span>
+                  <svg
+                    viewBox="0 0 20 20"
+                    className={`h-4 w-4 shrink-0 transition-transform ${isPeriodMenuOpen ? "rotate-180" : ""}`}
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                  >
+                    <path d="M5 7.5 10 12.5 15 7.5" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
+                {isPeriodMenuOpen && (
+                  <div className="absolute left-0 right-0 top-full z-20 mt-2 rounded-xl border border-dsr-border bg-white p-2 shadow-lg">
+                    {PERIOD_OPTIONS.map((option) => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        className={`block w-full rounded-lg px-3 py-2 text-left text-sm transition ${
+                          filters.period === option.value
+                            ? "bg-dsr-soft font-semibold text-dsr-ink"
+                            : "text-dsr-ink hover:bg-dsr-soft"
+                        }`}
+                        onClick={() => handlePeriodSelect(option.value)}
+                      >
+                        {option.value === "custom" && filters.period === "custom"
+                          ? formatDateOptionLabel(filters.date)
+                          : option.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <input
+                  ref={customDateInputRef}
+                  className="pointer-events-none absolute h-0 w-0 opacity-0"
+                  type="date"
+                  tabIndex={-1}
+                  aria-hidden="true"
+                  value={filters.date}
                   onChange={(event) => {
-                    const period = event.target.value;
                     setFilters((prev) => ({
                       ...prev,
-                      period,
-                      date:
-                        period === "today"
-                          ? todayText
-                          : period === "yesterday"
-                            ? getLocalDateText(new Date(Date.now() - 24 * 60 * 60 * 1000))
-                            : prev.date
+                      period: "custom",
+                      date: event.target.value
                     }));
+                    setIsPeriodMenuOpen(false);
                   }}
-                >
-                  <option value="all">All Time</option>
-                  <option value="today">Today (Default)</option>
-                  <option value="yesterday">Yesterday</option>
-                  <option value="last7">Last 7 Days</option>
-                  <option value="custom">Custom Date</option>
-                </select>
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-dsr-muted">Custom Date</label>
-                <input
-                  className="input"
-                  type="date"
-                  disabled={filters.period !== "custom"}
-                  value={filters.date}
-                  onChange={(event) => setFilters((prev) => ({ ...prev, date: event.target.value }))}
                 />
               </div>
               <div className="rounded-xl border border-dsr-border bg-dsr-soft p-3 text-sm text-dsr-muted">
