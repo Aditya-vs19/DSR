@@ -20,7 +20,20 @@ import {
 import { findUserById } from "../models/userModel.js";
 import { getManagedTeamsForAdmin } from "../utils/teamScope.js";
 
-const validStatuses = ["Pending", "Completed"];
+const statusMap = {
+  pending: "Pending",
+  "in progress": "In Progress",
+  inprogress: "In Progress",
+  completed: "Completed"
+};
+
+const normalizeTaskStatus = (value) => {
+  const key = String(value || "")
+    .trim()
+    .toLowerCase();
+
+  return statusMap[key] || null;
+};
 
 export const createTaskController = async (req, res) => {
   try {
@@ -58,7 +71,7 @@ export const createTaskController = async (req, res) => {
       }
     }
 
-    const normalizedStatus = status === "Completed" ? "Completed" : "Pending";
+    const normalizedStatus = normalizeTaskStatus(status) || "Pending";
 
     const taskId = await createTask({
       client,
@@ -105,9 +118,10 @@ export const updateTaskStatusController = async (req, res) => {
   try {
     const { id } = req.params;
     const { status, dependency = null } = req.body;
+    const normalizedStatus = normalizeTaskStatus(status);
 
-    if (!validStatuses.includes(status)) {
-      return res.status(400).json({ message: "Invalid status" });
+    if (!normalizedStatus) {
+      return res.status(400).json({ message: "Invalid status. Use Pending, In Progress, or Completed." });
     }
 
     const task = await getTaskById(id);
@@ -115,17 +129,28 @@ export const updateTaskStatusController = async (req, res) => {
       return res.status(404).json({ message: "Task not found" });
     }
 
+    let assignee = null;
+    if (req.user.role === "admin") {
+      assignee = await findUserById(task.assigned_to);
+    }
+
+    const adminCanEditManagedTeamTask =
+      req.user.role === "admin" &&
+      assignee &&
+      getManagedTeamsForAdmin(req.user).includes(assignee.team);
+
     const canEdit =
       req.user.role === "superadmin" ||
       req.user.role === "hr" ||
       task.assigned_to === req.user.id ||
-      task.assigned_by === req.user.id;
+      task.assigned_by === req.user.id ||
+      adminCanEditManagedTeamTask;
 
     if (!canEdit) {
       return res.status(403).json({ message: "Not allowed to update this task" });
     }
 
-    await updateTaskStatus({ id, status, dependency });
+    await updateTaskStatus({ id, status: normalizedStatus, dependency });
 
     const recipientIds = await getTaskUpdateNotificationRecipients({
       assignedBy: task.assigned_by,
@@ -137,7 +162,7 @@ export const updateTaskStatusController = async (req, res) => {
         recipientIds.map((recipientId) =>
           createNotification({
             userId: recipientId,
-            message: `${req.user.name} updated task "${task.task}" to ${status}`,
+            message: `${req.user.name} updated task "${task.task}" to ${normalizedStatus}`,
             type: "task_status_updated",
             refId: task.id
           })

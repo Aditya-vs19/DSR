@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 
 const statusClass = {
   Pending: "bg-yellow-100 text-yellow-800",
-  "In Progress": "bg-yellow-100 text-yellow-800",
+  "In Progress": "bg-blue-100 text-blue-800",
   Completed: "bg-green-100 text-green-800"
 };
 
@@ -22,6 +22,8 @@ const TaskTable = ({
   focusedTaskId = null
 }) => {
   const [dependencyDrafts, setDependencyDrafts] = useState({});
+  const [dependencyEditing, setDependencyEditing] = useState({});
+  const [dependencyToast, setDependencyToast] = useState({ show: false, kind: "success", message: "" });
   const [reassignModalTask, setReassignModalTask] = useState(null);
   const [reassignSelectionId, setReassignSelectionId] = useState("");
 
@@ -34,6 +36,28 @@ const TaskTable = ({
       return next;
     });
   }, [tasks]);
+
+  useEffect(() => {
+    setDependencyEditing(() => {
+      const next = {};
+      tasks.forEach((task) => {
+        next[task.id] = !task.dependency;
+      });
+      return next;
+    });
+  }, [tasks]);
+
+  useEffect(() => {
+    if (!dependencyToast.show) {
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      setDependencyToast({ show: false, kind: "success", message: "" });
+    }, 2200);
+
+    return () => clearTimeout(timer);
+  }, [dependencyToast]);
 
   useEffect(() => {
     if (!focusedTaskId) {
@@ -54,7 +78,13 @@ const TaskTable = ({
       return;
     }
 
-    await onStatusChange(item, item.status, dependency);
+    try {
+      await onStatusChange(item, item.status, dependency);
+      setDependencyEditing((prev) => ({ ...prev, [item.id]: false }));
+      setDependencyToast({ show: true, kind: "success", message: "Dependency saved" });
+    } catch (_error) {
+      setDependencyToast({ show: true, kind: "error", message: "Failed to save dependency" });
+    }
   };
 
   const openReassignModal = (item) => {
@@ -126,6 +156,7 @@ const TaskTable = ({
                       onChange={(event) => onStatusChange(item, event.target.value, getDependencyValue(item))}
                     >
                       <option value="Pending">Pending</option>
+                      <option value="In Progress">In Progress</option>
                       <option value="Completed">Completed</option>
                     </select>
                   ) : (
@@ -140,28 +171,46 @@ const TaskTable = ({
                   )}
                 </td>
                 <td className="p-3">
-                  {item.status !== "Pending" ? (
+                  {item.status === "Completed" ? (
                     "-"
-                  ) : editableStatus && !item.dependency ? (
-                    <div className="flex min-w-[220px] items-center gap-2">
-                      <input
-                        className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-700 outline-none focus:border-emerald-500"
-                        type="text"
-                        placeholder="Add dependency"
-                        value={getDependencyValue(item)}
-                        onChange={(event) =>
-                          setDependencyDrafts((prev) => ({ ...prev, [item.id]: event.target.value }))
-                        }
-                      />
-                      <button
-                        type="button"
-                        className="rounded-md bg-emerald-600 px-3 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-300"
-                        disabled={!getDependencyValue(item).trim()}
-                        onClick={() => void handleDependencySave(item)}
-                      >
-                        Save
-                      </button>
-                    </div>
+                  ) : editableStatus ? (
+                    dependencyEditing[item.id] ? (
+                      <div className="flex min-w-[220px] items-center gap-2">
+                        <input
+                          className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-700 outline-none focus:border-emerald-500"
+                          type="text"
+                          placeholder="Add dependency"
+                          value={getDependencyValue(item)}
+                          onChange={(event) =>
+                            setDependencyDrafts((prev) => ({ ...prev, [item.id]: event.target.value }))
+                          }
+                        />
+                        <button
+                          type="button"
+                          className="rounded-md bg-emerald-600 px-3 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-300"
+                          disabled={!getDependencyValue(item).trim()}
+                          onClick={() => void handleDependencySave(item)}
+                        >
+                          Save
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex min-w-[220px] items-center gap-2">
+                        <span className="truncate text-sm text-slate-700">{item.dependency || "-"}</span>
+                        <button
+                          type="button"
+                          className="rounded-md border border-slate-300 px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                          onClick={() =>
+                            setDependencyEditing((prev) => ({
+                              ...prev,
+                              [item.id]: true
+                            }))
+                          }
+                        >
+                          Edit
+                        </button>
+                      </div>
+                    )
                   ) : (
                     item.dependency || "-"
                   )}
@@ -262,6 +311,18 @@ const TaskTable = ({
                 {reassigningTaskId === reassignModalTask.id ? "Reassigning..." : "Confirm Reassign"}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {dependencyToast.show && (
+        <div className="fixed bottom-4 right-4 z-50">
+          <div
+            className={`rounded-lg px-4 py-2 text-sm font-semibold text-white shadow-lg ${
+              dependencyToast.kind === "error" ? "bg-rose-600" : "bg-emerald-600"
+            }`}
+          >
+            {dependencyToast.message}
           </div>
         </div>
       )}

@@ -91,6 +91,18 @@ const SuperAdminDashboard = () => {
     loadAnalytics();
   }, [filters.team, filters.date]);
 
+  useEffect(() => {
+    if (activeTab !== "Overview") {
+      return;
+    }
+
+    setFilters((prev) => ({
+      ...prev,
+      status: "all",
+      employeeId: "all"
+    }));
+  }, [activeTab]);
+
   const filteredTasks = useMemo(() => {
     return tasks.filter((item) => {
       const statusMatch = filters.status === "all" || item.status === filters.status;
@@ -240,6 +252,116 @@ const SuperAdminDashboard = () => {
     return performers.filter((item) => item.team === filters.team);
   }, [analytics.topPerformers, filters.team]);
 
+  const statusComparisonChartData = useMemo(() => {
+    const scopeTasks = tasks.filter((task) => {
+      if (filters.date) {
+        const taskDate = (task.created_at || "").slice(0, 10);
+        if (taskDate !== filters.date) {
+          return false;
+        }
+      }
+
+      if (filters.team === "all") {
+        return true;
+      }
+
+      const employee = users.find((entry) => Number(entry.id) === Number(task.assigned_to));
+      return employee?.team === filters.team;
+    });
+
+    if (filters.team === "all") {
+      const teamMap = new Map();
+
+      users
+        .filter((entry) => entry.role === "employee")
+        .forEach((entry) => {
+          const teamName = entry.team || "Unknown";
+          if (!teamMap.has(teamName)) {
+            teamMap.set(teamName, { pending: 0, inProgress: 0, completed: 0 });
+          }
+        });
+
+      scopeTasks.forEach((task) => {
+        const employee = users.find((entry) => Number(entry.id) === Number(task.assigned_to));
+        if (!employee || employee.role !== "employee") {
+          return;
+        }
+
+        const teamName = employee.team || "Unknown";
+        if (!teamMap.has(teamName)) {
+          teamMap.set(teamName, { pending: 0, inProgress: 0, completed: 0 });
+        }
+
+        const totals = teamMap.get(teamName);
+        const statusValue = String(task.raw_status || task.status || "").toLowerCase();
+
+        if (statusValue === "completed") {
+          totals.completed += 1;
+        } else if (statusValue === "in progress") {
+          totals.inProgress += 1;
+        } else {
+          totals.pending += 1;
+        }
+      });
+
+      const labels = Array.from(teamMap.keys());
+      const values = Array.from(teamMap.values());
+
+      return {
+        title: "Task Status Comparison by Department",
+        labels,
+        datasets: [
+          { label: "Pending", data: values.map((entry) => entry.pending), backgroundColor: "#94A3B8" },
+          { label: "In Progress", data: values.map((entry) => entry.inProgress), backgroundColor: "#3A6FF7" },
+          { label: "Completed", data: values.map((entry) => entry.completed), backgroundColor: "#2A7A46" }
+        ]
+      };
+    }
+
+    const employeeMap = new Map();
+
+    users
+      .filter((entry) => entry.role === "employee" && entry.team === filters.team)
+      .forEach((entry) => {
+        employeeMap.set(entry.name, { pending: 0, inProgress: 0, completed: 0 });
+      });
+
+    scopeTasks.forEach((task) => {
+      const employee = users.find((entry) => Number(entry.id) === Number(task.assigned_to));
+      if (!employee || employee.role !== "employee" || employee.team !== filters.team) {
+        return;
+      }
+
+      if (!employeeMap.has(employee.name)) {
+        employeeMap.set(employee.name, { pending: 0, inProgress: 0, completed: 0 });
+      }
+
+      const totals = employeeMap.get(employee.name);
+      const statusValue = String(task.raw_status || task.status || "").toLowerCase();
+
+      if (statusValue === "completed") {
+        totals.completed += 1;
+      } else if (statusValue === "in progress") {
+        totals.inProgress += 1;
+      } else {
+        totals.pending += 1;
+      }
+    });
+
+    const labels = Array.from(employeeMap.keys());
+    const values = Array.from(employeeMap.values());
+
+    return {
+      title: `Task Status Comparison by Employee (${filters.team})`,
+      labels,
+      datasets: [
+        { label: "Pending", data: values.map((entry) => entry.pending), backgroundColor: "#94A3B8" },
+        { label: "In Progress", data: values.map((entry) => entry.inProgress), backgroundColor: "#3A6FF7" },
+        { label: "Completed", data: values.map((entry) => entry.completed), backgroundColor: "#2A7A46" }
+      ]
+    };
+  }, [tasks, users, filters.team, filters.date]);
+
   const handleMarkRead = async (id) => {
     await taskApi.markNotificationRead(id);
     await loadData();
@@ -380,7 +502,42 @@ const SuperAdminDashboard = () => {
           </section>
         )}
 
-        {(activeTab === "Overview" || activeTab === "Tasks") && (
+        {activeTab === "Overview" && (
+          <section className="card">
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-2">
+              <div>
+                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-dsr-muted">Department</label>
+                <select
+                  className="input"
+                  value={filters.team}
+                  onChange={(event) => {
+                    const team = event.target.value;
+                    setFilters((prev) => ({ ...prev, team, employeeId: "all" }));
+                    setUsersFilter((prev) => ({ ...prev, team }));
+                  }}
+                >
+                  <option value="all">All Departments</option>
+                  {teams.map((team) => (
+                    <option key={team} value={team}>
+                      {team}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-dsr-muted">Task Date</label>
+                <input
+                  className="input"
+                  type="date"
+                  value={filters.date}
+                  onChange={(event) => setFilters((prev) => ({ ...prev, date: event.target.value }))}
+                />
+              </div>
+            </div>
+          </section>
+        )}
+
+        {activeTab === "Tasks" && (
           <section className="card">
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
               <div>
@@ -392,6 +549,7 @@ const SuperAdminDashboard = () => {
                 >
                   <option value="all">All</option>
                   <option value="Pending">Pending</option>
+                  <option value="In Progress">In Progress</option>
                   <option value="Completed">Completed</option>
                 </select>
               </div>
@@ -473,6 +631,12 @@ const SuperAdminDashboard = () => {
                   color="rgba(31, 84, 50, 0.85)"
                 />
               )}
+              <Charts
+                type="bar"
+                title={statusComparisonChartData.title}
+                labels={statusComparisonChartData.labels}
+                datasets={statusComparisonChartData.datasets}
+              />
             </div>
             <TaskTable
               tasks={filteredTasks}
@@ -559,7 +723,7 @@ const SuperAdminDashboard = () => {
                       <td className="p-3">{report?.total_tasks ?? "-"}</td>
                       <td className="p-3 text-emerald-700">{report?.completed_tasks ?? "-"}</td>
                       <td className="p-3 text-amber-700">{report?.pending_tasks ?? "-"}</td>
-                      <td className="p-3 capitalize">{report?.status ?? "-"}</td>
+                      <td className="p-3">{report?.received_status ?? "-"}</td>
                     </tr>
                   );
                 })}

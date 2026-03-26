@@ -19,31 +19,35 @@ const Charts = ({
   title,
   labels = [],
   values = [],
+  datasets = null,
   chartValues = null,
   color = "rgba(79, 70, 229, 0.8)",
   barWidth = 50
 }) => {
   const isCircular = type === "pie" || type === "donut";
+  const hasCustomDatasets = Array.isArray(datasets) && datasets.length > 0;
   const renderedValues = chartValues || values;
   const dataset = {
     labels,
-    datasets: [
-      {
-        label: title,
-        data: renderedValues,
-        backgroundColor: color,
-        borderColor: isCircular ? "#ffffff" : color,
-        borderWidth: isCircular ? 2 : 1,
-        tension: 2,
-        ...(type === "bar"
-          ? {
-              barThickness: barWidth,
-              categoryPercentage: 0.72,
-              barPercentage: 0.78
-            }
-          : {})
-      }
-    ]
+    datasets: hasCustomDatasets
+      ? datasets
+      : [
+          {
+            label: title,
+            data: renderedValues,
+            backgroundColor: color,
+            borderColor: isCircular ? "#ffffff" : color,
+            borderWidth: isCircular ? 2 : 1,
+            tension: 2,
+            ...(type === "bar"
+              ? {
+                  barThickness: barWidth,
+                  categoryPercentage: 0.72,
+                  barPercentage: 0.78
+                }
+              : {})
+          }
+        ]
   };
 
   const options = {
@@ -59,6 +63,7 @@ const Charts = ({
         }
       },
       legend: { display: isCircular },
+      legend: { display: isCircular || hasCustomDatasets },
       title: { display: true, text: title }
     },
     ...(type === "donut" ? { cutout: "65%" } : {}),
