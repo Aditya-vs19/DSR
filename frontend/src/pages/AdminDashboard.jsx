@@ -8,6 +8,17 @@ import { authApi, reportApi, taskApi } from "../services/api";
 
 const TABS = ["Overview", "Tasks", "Users", "Reports", "Profile"];
 
+const getManagedDepartmentLabel = (currentUser) => {
+  const name = String(currentUser?.name || "").trim().toLowerCase();
+  const team = String(currentUser?.team || "").trim();
+
+  if (name === "snigdha" && team === "Sales") {
+    return "Sales & Logistics";
+  }
+
+  return team || "-";
+};
+
 const AdminDashboard = () => {
   const { user, logout } = useAuth();
   const [tasks, setTasks] = useState([]);
@@ -37,6 +48,7 @@ const AdminDashboard = () => {
   const [passwordError, setPasswordError] = useState("");
   const [reassigningTaskId, setReassigningTaskId] = useState(null);
   const [focusedTaskId, setFocusedTaskId] = useState(null);
+  const managedDepartmentLabel = useMemo(() => getManagedDepartmentLabel(user), [user]);
 
   const loadData = async () => {
     setLoading(true);
@@ -242,7 +254,7 @@ const AdminDashboard = () => {
           <div className="flex items-center gap-3">
             <div className="text-right">
               <p className="text-sm font-bold capitalize">{user?.name}</p>
-              <p className="text-xs uppercase tracking-wide text-dsr-muted">{user?.team} Admin</p>
+              <p className="text-xs uppercase tracking-wide text-dsr-muted">{managedDepartmentLabel} Admin</p>
             </div>
             <button
               type="button"
@@ -283,7 +295,7 @@ const AdminDashboard = () => {
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
               <div>
                 <p className="text-xs uppercase tracking-wide text-dsr-muted">Department</p>
-                <h3 className="text-3xl font-extrabold">{user?.team || "-"}</h3>
+                <h3 className="text-3xl font-extrabold">{managedDepartmentLabel}</h3>
               </div>
               <div>
                 <p className="text-xs uppercase tracking-wide text-dsr-muted">Team Members</p>
@@ -549,7 +561,7 @@ const AdminDashboard = () => {
                 <p><span className="font-semibold">Name:</span> {user?.name}</p>
                 <p><span className="font-semibold">Role:</span> {String(user?.role || "").toUpperCase()}</p>
                 <p><span className="font-semibold">Email:</span> {user?.email}</p>
-                <p><span className="font-semibold">Department:</span> {user?.team || "-"}</p>
+                <p><span className="font-semibold">Department:</span> {managedDepartmentLabel}</p>
               </div>
             </div>
 

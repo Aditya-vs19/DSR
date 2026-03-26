@@ -2,6 +2,7 @@ import { query } from "../config/db.js";
 
 let taskSubmissionColumnsEnsured = false;
 let dailyReportTableEnsured = false;
+let taskCarryForwardColumnsEnsured = false;
 
 const ensureTaskSubmissionColumns = async () => {
   if (taskSubmissionColumnsEnsured) return;
@@ -27,6 +28,28 @@ const ensureTaskSubmissionColumns = async () => {
   }
 
   taskSubmissionColumnsEnsured = true;
+};
+
+const ensureTaskCarryForwardColumns = async () => {
+  if (taskCarryForwardColumnsEnsured) return;
+
+  const existingColumns = await query(
+    `
+      SELECT COLUMN_NAME
+      FROM information_schema.COLUMNS
+      WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = 'tasks'
+        AND COLUMN_NAME IN ('carried_forward_from_id')
+    `
+  );
+
+  const columnSet = new Set(existingColumns.map((entry) => entry.COLUMN_NAME));
+
+  if (!columnSet.has("carried_forward_from_id")) {
+    await query("ALTER TABLE tasks ADD COLUMN carried_forward_from_id INT NULL");
+  }
+
+  taskCarryForwardColumnsEnsured = true;
 };
 
 const ensureDailyReportTable = async () => {
@@ -57,16 +80,18 @@ export const createTask = async ({
   assignedTo,
   assignedBy,
   type,
-  deadline
+  deadline,
+  carriedForwardFromId = null
 }) => {
   await ensureTaskSubmissionColumns();
+  await ensureTaskCarryForwardColumns();
 
   const sql = `
     INSERT INTO tasks (
       client, task, action, status, dependency,
-      assigned_to, assigned_by, type, deadline
+      assigned_to, assigned_by, type, deadline, carried_forward_from_id
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `;
 
   const result = await query(sql, [
@@ -78,14 +103,16 @@ export const createTask = async ({
     assignedTo,
     assignedBy,
     type,
-    deadline || null
+    deadline || null,
+    carriedForwardFromId
   ]);
 
   return result.insertId;
 };
 
-export const getTasksByRole = async ({ role, userId, team }) => {
+export const getTasksByRole = async ({ role, userId, team, managedTeams = [] }) => {
   await ensureTaskSubmissionColumns();
+  await ensureTaskCarryForwardColumns();
 
   const baseSql = `
     SELECT
@@ -98,6 +125,7 @@ export const getTasksByRole = async ({ role, userId, team }) => {
       t.assigned_to,
       t.assigned_by,
       t.type,
+      t.carried_forward_from_id,
       t.submitted_to_hr,
       t.submitted_to_hr_at,
       t.created_at,
@@ -115,9 +143,12 @@ export const getTasksByRole = async ({ role, userId, team }) => {
   }
 
   if (role === "admin") {
+    const teams = Array.isArray(managedTeams) && managedTeams.length > 0 ? managedTeams : [team];
+    const placeholders = teams.map(() => "?").join(",");
+
     return query(
-      `${baseSql} WHERE assignTo.team = ? OR t.assigned_by = ? ORDER BY t.created_at DESC`,
-      [team, userId]
+      `${baseSql} WHERE assignTo.team IN (${placeholders}) OR t.assigned_by = ? ORDER BY t.created_at DESC`,
+      [...teams, userId]
     );
   }
 
@@ -126,6 +157,7 @@ export const getTasksByRole = async ({ role, userId, team }) => {
 
 export const getTaskById = async (id) => {
   await ensureTaskSubmissionColumns();
+  await ensureTaskCarryForwardColumns();
 
   const rows = await query("SELECT * FROM tasks WHERE id = ? LIMIT 1", [id]);
   return rows[0] || null;
@@ -203,6 +235,14 @@ export const getEmployeeTimeline = async (employeeId, days = 7) => {
 export const getTeamPerformance = async (team) => {
   await ensureTaskSubmissionColumns();
 
+  const teamList = Array.isArray(team) ? team.filter(Boolean) : team ? [team] : [];
+
+  if (teamList.length === 0) {
+    return [];
+  }
+
+  const placeholders = teamList.map(() => "?").join(",");
+
   const sql = `
     SELECT
       u.id,
@@ -217,12 +257,12 @@ export const getTeamPerformance = async (team) => {
       ) AS completion_rate
     FROM users u
     LEFT JOIN tasks t ON t.assigned_to = u.id
-    WHERE u.team = ? AND u.role IN ('employee', 'admin')
+    WHERE u.team IN (${placeholders}) AND u.role IN ('employee', 'admin')
     GROUP BY u.id, u.name, u.role
     ORDER BY completion_rate DESC
   `;
 
-  return query(sql, [team]);
+  return query(sql, teamList);
 };
 
 export const getDepartmentAdminPerformance = async (team = null) => {
@@ -363,4 +403,97 @@ export const submitTaskToHr = async ({ id, employeeId }) => {
   );
 
   return { task, changed: true };
+};
+
+export const carryForwardPendingTasks = async (targetDate = null) => {
+  await ensureTaskSubmissionColumns();
+  await ensureTaskCarryForwardColumns();
+
+  let effectiveTargetDate = targetDate;
+
+  if (!effectiveTargetDate) {
+    const dateRows = await query("SELECT DATE_FORMAT(CURDATE(), '%Y-%m-%d') AS today");
+    effectiveTargetDate = dateRows[0]?.today || null;
+  }
+
+  if (!effectiveTargetDate) {
+    throw new Error("Unable to resolve target date for carry forward");
+  }
+
+  const parsedTargetDate = new Date(`${effectiveTargetDate}T00:00:00.000Z`);
+  if (Number.isNaN(parsedTargetDate.getTime())) {
+    throw new Error("Invalid target date for carry forward");
+  }
+
+  const sourceDate = new Date(parsedTargetDate);
+  sourceDate.setUTCDate(sourceDate.getUTCDate() - 1);
+
+  const sourceDateString = sourceDate.toISOString().slice(0, 10);
+
+  const pendingTasks = await query(
+    `
+      SELECT
+        id,
+        client,
+        task,
+        action,
+        dependency,
+        assigned_to,
+        assigned_by,
+        type,
+        deadline
+      FROM tasks
+      WHERE status <> 'Completed'
+        AND DATE(created_at) = ?
+      ORDER BY id ASC
+    `,
+    [sourceDateString]
+  );
+
+  let createdCount = 0;
+
+  for (const sourceTask of pendingTasks) {
+    const existingCarryForwardTask = await query(
+      `
+        SELECT id
+        FROM tasks
+        WHERE carried_forward_from_id = ?
+          AND DATE(created_at) = ?
+        LIMIT 1
+      `,
+      [sourceTask.id, effectiveTargetDate]
+    );
+
+    if (existingCarryForwardTask.length > 0) {
+      continue;
+    }
+
+    const newTaskId = await createTask({
+      client: sourceTask.client,
+      task: sourceTask.task,
+      action: sourceTask.action,
+      status: "Pending",
+      dependency: sourceTask.dependency,
+      assignedTo: sourceTask.assigned_to,
+      assignedBy: sourceTask.assigned_by,
+      type: sourceTask.type,
+      deadline: sourceTask.deadline,
+      carriedForwardFromId: sourceTask.id
+    });
+
+    await createNotification({
+      userId: sourceTask.assigned_to,
+      message: `Task carried forward from ${sourceDateString}: ${sourceTask.task}`,
+      type: "task_carried_forward",
+      refId: newTaskId
+    });
+
+    createdCount += 1;
+  }
+
+  return {
+    sourceDate: sourceDateString,
+    targetDate: effectiveTargetDate,
+    createdCount
+  };
 };

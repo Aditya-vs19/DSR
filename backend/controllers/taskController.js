@@ -1,4 +1,5 @@
 import {
+  carryForwardPendingTasks,
   createNotification,
   createTask,
   getDepartmentAdminPerformance,
@@ -16,6 +17,8 @@ import {
   submitTaskToHr,
   updateTaskStatus
 } from "../models/taskModel.js";
+import { findUserById } from "../models/userModel.js";
+import { getManagedTeamsForAdmin } from "../utils/teamScope.js";
 
 const validStatuses = ["Pending", "Completed"];
 
@@ -34,6 +37,25 @@ export const createTaskController = async (req, res) => {
 
     if (req.user.role === "employee" && (type !== "self" || Number(assignedTo) !== Number(req.user.id))) {
       return res.status(403).json({ message: "Employees can create only self tasks" });
+    }
+
+    const assignee = await findUserById(assignedTo);
+    if (!assignee) {
+      return res.status(404).json({ message: "Assignee not found" });
+    }
+
+    const isSelfTask = Number(assignedTo) === Number(req.user.id) && type === "self";
+    const isAssignableEmployee = assignee.role === "employee";
+
+    if (!isSelfTask && !isAssignableEmployee) {
+      return res.status(400).json({ message: "Tasks can be assigned only to employees" });
+    }
+
+    if (req.user.role === "admin" && !isSelfTask) {
+      const managedTeams = getManagedTeamsForAdmin(req.user);
+      if (!managedTeams.includes(assignee.team)) {
+        return res.status(403).json({ message: "You can assign tasks only within your managed teams" });
+      }
     }
 
     const normalizedStatus = status === "Completed" ? "Completed" : "Pending";
@@ -67,8 +89,12 @@ export const createTaskController = async (req, res) => {
 
 export const getTasksController = async (req, res) => {
   try {
+    const today = new Date().toISOString().slice(0, 10);
+    await carryForwardPendingTasks(today);
+
     const { role, id: userId, team } = req.user;
-    const tasks = await getTasksByRole({ role, userId, team });
+    const managedTeams = role === "admin" ? getManagedTeamsForAdmin(req.user) : [];
+    const tasks = await getTasksByRole({ role, userId, team, managedTeams });
     return res.status(200).json(tasks);
   } catch (error) {
     return res.status(500).json({ message: "Failed to fetch tasks", error: error.message });
@@ -154,9 +180,10 @@ export const reassignTaskController = async (req, res) => {
     }
 
     const currentAssignee = await findUserById(task.assigned_to);
+    const managedTeams = getManagedTeamsForAdmin(req.user);
     const canReassignTask =
       Number(task.assigned_by) === Number(req.user.id) ||
-      (currentAssignee && currentAssignee.team && currentAssignee.team === req.user.team);
+      (currentAssignee && currentAssignee.team && managedTeams.includes(currentAssignee.team));
 
     if (!canReassignTask) {
       return res.status(403).json({ message: "You can reassign only your department tasks" });
@@ -167,8 +194,8 @@ export const reassignTaskController = async (req, res) => {
       return res.status(400).json({ message: "Task can be reassigned only to an employee" });
     }
 
-    if (!req.user.team || nextAssignee.team !== req.user.team) {
-      return res.status(403).json({ message: "You can reassign only within your department" });
+    if (!managedTeams.includes(nextAssignee.team)) {
+      return res.status(403).json({ message: "You can reassign only within your managed teams" });
     }
 
     await reassignTask({
@@ -233,8 +260,10 @@ export const getEmployeeTimelineController = async (req, res) => {
 
 export const getTeamPerformanceController = async (req, res) => {
   try {
-    const team = req.user.role === "admin" ? req.user.team : req.query.team;
-    if (!team && req.user.role === "admin") {
+    const managedTeams = req.user.role === "admin" ? getManagedTeamsForAdmin(req.user) : [];
+    const team = req.user.role === "admin" ? managedTeams : req.query.team;
+
+    if (req.user.role === "admin" && managedTeams.length === 0) {
       return res.status(400).json({ message: "Admin team missing" });
     }
 
