@@ -22,17 +22,19 @@ const TaskTable = ({
   focusedTaskId = null
 }) => {
   const [dependencyDrafts, setDependencyDrafts] = useState({});
+  const [dependencyMeta, setDependencyMeta] = useState({});
   const [reassignSelections, setReassignSelections] = useState({});
 
   useEffect(() => {
-    setDependencyDrafts(() => {
+    setDependencyDrafts((prev) => {
       const next = {};
       tasks.forEach((task) => {
-        next[task.id] = task.dependency ?? "";
+        const taskDependency = task.dependency ?? "";
+        next[task.id] = dependencyMeta[task.id]?.state === "saving" ? prev[task.id] ?? taskDependency : taskDependency;
       });
       return next;
     });
-  }, [tasks]);
+  }, [tasks, dependencyMeta]);
 
   useEffect(() => {
     setReassignSelections(() => {
@@ -57,13 +59,51 @@ const TaskTable = ({
 
   const getDependencyValue = (item) => dependencyDrafts[item.id] ?? item.dependency ?? "";
 
-  const handleDependencySave = async (item) => {
-    const dependency = getDependencyValue(item).trim();
-    if (!dependency || !onStatusChange) {
+  const resetDependencyMeta = (taskId) => {
+    window.setTimeout(() => {
+      setDependencyMeta((prev) => {
+        if (!prev[taskId] || prev[taskId].state !== "saved") {
+          return prev;
+        }
+
+        const next = { ...prev };
+        delete next[taskId];
+        return next;
+      });
+    }, 1200);
+  };
+
+  const persistDependency = async (item, value = undefined) => {
+    if (!onStatusChange) {
       return;
     }
 
-    await onStatusChange(item, item.status, dependency);
+    const nextDependency = String(value ?? getDependencyValue(item)).trim();
+    const currentDependency = (item.dependency ?? "").trim();
+
+    if (nextDependency === currentDependency) {
+      return;
+    }
+
+    setDependencyMeta((prev) => ({
+      ...prev,
+      [item.id]: { state: "saving" }
+    }));
+
+    try {
+      await onStatusChange(item, item.status, nextDependency);
+      setDependencyMeta((prev) => ({
+        ...prev,
+        [item.id]: { state: "saved" }
+      }));
+      resetDependencyMeta(item.id);
+    } catch {
+      setDependencyDrafts((prev) => ({ ...prev, [item.id]: item.dependency ?? "" }));
+      setDependencyMeta((prev) => ({
+        ...prev,
+        [item.id]: { state: "error" }
+      }));
+    }
   };
 
   return (
@@ -132,27 +172,50 @@ const TaskTable = ({
                   )}
                 </td>
                 <td className="p-3">
-                  {item.status !== "Pending" ? (
-                    "-"
-                  ) : editableStatus && !item.dependency ? (
-                    <div className="flex min-w-[220px] items-center gap-2">
+                  {item.status === "Pending" && editableStatus ? (
+                    <div className="min-w-[220px]">
                       <input
                         className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-700 outline-none focus:border-emerald-500"
                         type="text"
                         placeholder="Add dependency"
                         value={getDependencyValue(item)}
-                        onChange={(event) =>
-                          setDependencyDrafts((prev) => ({ ...prev, [item.id]: event.target.value }))
-                        }
+                        onChange={(event) => {
+                          setDependencyDrafts((prev) => ({ ...prev, [item.id]: event.target.value }));
+                          setDependencyMeta((prev) => {
+                            if (!prev[item.id]) {
+                              return prev;
+                            }
+
+                            const next = { ...prev };
+                            delete next[item.id];
+                            return next;
+                          });
+                        }}
+                        onBlur={(event) => void persistDependency(item, event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") {
+                            event.preventDefault();
+                            event.currentTarget.blur();
+                          }
+
+                          if (event.key === "Escape") {
+                            setDependencyDrafts((prev) => ({
+                              ...prev,
+                              [item.id]: item.dependency ?? ""
+                            }));
+                            event.currentTarget.blur();
+                          }
+                        }}
                       />
-                      <button
-                        type="button"
-                        className="rounded-md bg-emerald-600 px-3 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-300"
-                        disabled={!getDependencyValue(item).trim()}
-                        onClick={() => void handleDependencySave(item)}
-                      >
-                        Save
-                      </button>
+                      {dependencyMeta[item.id]?.state === "saving" && (
+                        <p className="mt-1 text-xs text-dsr-muted">Saving...</p>
+                      )}
+                      {dependencyMeta[item.id]?.state === "saved" && (
+                        <p className="mt-1 text-xs text-emerald-600">Saved</p>
+                      )}
+                      {dependencyMeta[item.id]?.state === "error" && (
+                        <p className="mt-1 text-xs text-rose-600">Could not save dependency</p>
+                      )}
                     </div>
                   ) : (
                     item.dependency || "-"
