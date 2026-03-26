@@ -74,23 +74,29 @@ const AdminDashboard = () => {
     });
   }, [tasks, filters]);
 
-  const completedTasksByEmployee = useMemo(() => {
-    const completionMap = new Map();
-
-    filteredTasks.forEach((task) => {
-      if (task.status !== "Completed") {
-        return;
-      }
-
-      const employeeName = task.assigned_to_name || "Unassigned";
-      completionMap.set(employeeName, (completionMap.get(employeeName) || 0) + 1);
-    });
+  const employeeTaskStatusChart = useMemo(() => {
+    const employeePerformance = performance.filter((item) => item.role === "employee");
 
     return {
-      labels: Array.from(completionMap.keys()),
-      values: Array.from(completionMap.values())
+      labels: employeePerformance.map((item) => item.name),
+      datasets: [
+        {
+          label: "Completed",
+          data: employeePerformance.map((item) => Number(item.completed_tasks || 0)),
+          backgroundColor: "rgba(33, 128, 70, 0.85)",
+          borderColor: "rgba(33, 128, 70, 1)",
+          borderWidth: 1
+        },
+        {
+          label: "Pending",
+          data: employeePerformance.map((item) => Number(item.pending_tasks || 0)),
+          backgroundColor: "rgba(220, 38, 38, 0.8)",
+          borderColor: "rgba(220, 38, 38, 1)",
+          borderWidth: 1
+        }
+      ]
     };
-  }, [filteredTasks]);
+  }, [performance]);
 
   const unreadCount = useMemo(
     () => notifications.filter((item) => !item.is_read).length,
@@ -415,10 +421,9 @@ const AdminDashboard = () => {
               />
               <Charts
                 type="bar"
-                title="Completed Tasks by Employee"
-                labels={completedTasksByEmployee.labels}
-                values={completedTasksByEmployee.values}
-                color="rgba(95, 157, 114, 0.85)"
+                title="Employee Tasks (Completed vs Pending)"
+                labels={employeeTaskStatusChart.labels}
+                datasets={employeeTaskStatusChart.datasets}
               />
             </div>
             <TaskTable

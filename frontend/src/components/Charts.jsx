@@ -19,21 +19,16 @@ const Charts = ({
   title,
   labels = [],
   values = [],
+  datasets = null,
   chartValues = null,
   color = "rgba(79, 70, 229, 0.8)",
   barWidth = 50
 }) => {
   const isCircular = type === "pie" || type === "donut";
   const renderedValues = chartValues || values;
-  const dataset = {
-    labels,
-    datasets: [
-      {
-        label: title,
-        data: renderedValues,
-        backgroundColor: color,
-        borderColor: isCircular ? "#ffffff" : color,
-        borderWidth: isCircular ? 2 : 1,
+  const hasCustomDatasets = Array.isArray(datasets) && datasets.length > 0;
+  const renderedDatasets = hasCustomDatasets
+    ? datasets.map((entry) => ({
         tension: 2,
         ...(type === "bar"
           ? {
@@ -41,9 +36,30 @@ const Charts = ({
               categoryPercentage: 0.72,
               barPercentage: 0.78
             }
-          : {})
-      }
-    ]
+          : {}),
+        ...entry
+      }))
+    : [
+        {
+          label: title,
+          data: renderedValues,
+          backgroundColor: color,
+          borderColor: isCircular ? "#ffffff" : color,
+          borderWidth: isCircular ? 2 : 1,
+          tension: 2,
+          ...(type === "bar"
+            ? {
+                barThickness: barWidth,
+                categoryPercentage: 0.72,
+                barPercentage: 0.78
+              }
+            : {})
+        }
+      ];
+
+  const dataset = {
+    labels,
+    datasets: renderedDatasets
   };
 
   const options = {
@@ -52,13 +68,12 @@ const Charts = ({
       tooltip: {
         callbacks: {
           label(context) {
-            const label = context.label ? `${context.label}: ` : "";
-            const value = values[context.dataIndex] ?? context.raw;
-            return `${label}${value}`;
+            const datasetLabel = context.dataset?.label ? `${context.dataset.label}: ` : "";
+            return `${datasetLabel}${context.raw}`;
           }
         }
       },
-      legend: { display: isCircular },
+      legend: { display: isCircular || hasCustomDatasets },
       title: { display: true, text: title }
     },
     ...(type === "donut" ? { cutout: "65%" } : {}),
