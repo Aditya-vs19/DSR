@@ -47,6 +47,7 @@ const applyCellStyle = (cell, {
 };
 
 const normalizeStatus = (status) => {
+  if (status === "-") return "-";
   if (status === "Received") return "Received";
   if (status === "Completed") return "Completed";
   if (status === "Pending") return "Pending";
@@ -110,6 +111,19 @@ const formatDateTimeText = (value) => {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return String(value);
   return date.toLocaleString();
+};
+
+const formatUtcDateTimeText = (value) => {
+  if (!value) return "-";
+
+  const rawValue = String(value).trim();
+  const normalizedValue = /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(\.\d+)?$/.test(rawValue)
+    ? `${rawValue.replace(" ", "T")}Z`
+    : rawValue;
+
+  const parsed = new Date(normalizedValue);
+  if (Number.isNaN(parsed.getTime())) return "-";
+  return parsed.toLocaleString();
 };
 
 const formatDayText = (value) => {
@@ -507,7 +521,7 @@ function ReportPage({
             Dependency: entry.dependency || "-",
             "Assigned By": entry.assigned_by_name || "-",
             "Created At": formatDateTimeText(entry.created_at),
-            "Completed At": formatDateTimeText(entry.completed_at)
+            "Completed At": formatUtcDateTimeText(entry.completed_at)
           });
 
           row.eachCell((cell) => {

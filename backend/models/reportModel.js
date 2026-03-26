@@ -404,6 +404,11 @@ export const getDailyReportGridByRole = async ({
 
   const dates = getDatesInRange(startDate, endDate);
 
+  const todayRows = await query(
+    `SELECT DATE_FORMAT(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '${REPORT_TIMEZONE_OFFSET}'), '%Y-%m-%d') AS today`
+  );
+  const todayInReportTimezone = todayRows[0]?.today || formatDate(new Date());
+
   const holidays = await listHolidays({
     startDate: formatDate(startDate),
     endDate: formatDate(endDate)
@@ -518,6 +523,7 @@ export const getDailyReportGridByRole = async ({
     const isSunday = day.getDay() === 0;
     const isWeekend = day.getDay() === 0 || day.getDay() === 6;
     const isHoliday = Boolean(holiday);
+    const isFutureDate = dateText > todayInReportTimezone;
 
     const employees = users.map((employee) => {
       const taskActivity = taskActivityMap.get(`${dateText}-${employee.id}`);
@@ -542,6 +548,15 @@ export const getDailyReportGridByRole = async ({
           totalTasks: Number(taskActivity.totalTasks || 0),
           completedTasks: Number(taskActivity.completedTasks || 0),
           pendingTasks: Number(taskActivity.pendingTasks || 0)
+        };
+      }
+
+      if (isFutureDate) {
+        return {
+          reportId: null,
+          userId: employee.id,
+          name: employee.name,
+          status: "-"
         };
       }
 
