@@ -129,8 +129,8 @@ export const getTasksByRole = async ({ role, userId, team, managedTeams = [] }) 
       t.carried_forward_from_id,
       t.submitted_to_hr,
       t.submitted_to_hr_at,
-      t.created_at,
-      t.completed_at,
+      DATE_FORMAT(t.created_at, '%Y-%m-%d %H:%i:%s') AS created_at,
+      DATE_FORMAT(t.completed_at, '%Y-%m-%d %H:%i:%s') AS completed_at,
       t.deadline,
       assignTo.name AS assigned_to_name,
       assignBy.name AS assigned_by_name
