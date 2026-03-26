@@ -55,7 +55,7 @@ export const findUserAuthById = async (id) => {
 };
 
 export const updateUserPasswordById = async (id, hashedPassword) => {
-  await query("UPDATE users SET password = ? WHERE id = ?", [hashedPassword, id]);
+  return query("UPDATE users SET password = ? WHERE id = ?", [hashedPassword, id]);
 };
 
 export const listUsers = async () => {
