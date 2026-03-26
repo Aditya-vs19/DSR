@@ -73,8 +73,12 @@ const TaskTable = ({
   const getDependencyValue = (item) => dependencyDrafts[item.id] ?? item.dependency ?? "";
 
   const handleDependencySave = async (item) => {
-    const dependency = getDependencyValue(item).trim();
-    if (!dependency || !onStatusChange) {
+    if (!onStatusChange) {
+      return;
+    }
+
+    const dependency = String(getDependencyValue(item)).trim();
+    if (!dependency) {
       return;
     }
 
@@ -82,7 +86,7 @@ const TaskTable = ({
       await onStatusChange(item, item.status, dependency);
       setDependencyEditing((prev) => ({ ...prev, [item.id]: false }));
       setDependencyToast({ show: true, kind: "success", message: "Dependency saved" });
-    } catch (_error) {
+    } catch {
       setDependencyToast({ show: true, kind: "error", message: "Failed to save dependency" });
     }
   };
