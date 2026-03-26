@@ -730,39 +730,48 @@ const SuperAdminDashboard = () => {
         {activeTab === "Employees" && (
           <section className="card overflow-x-auto">
             <form className="mb-4 grid gap-3 rounded-xl border border-dsr-border/70 bg-dsr-soft p-3 md:grid-cols-2 xl:grid-cols-6" onSubmit={handleCreateUser}>
-              <input
-                className="input"
-                placeholder="Full Name"
-                value={newUserForm.name}
-                onChange={(event) => setNewUserForm((prev) => ({ ...prev, name: event.target.value }))}
-                required
-              />
-              <input
-                className="input"
-                type="email"
-                placeholder="Email"
-                value={newUserForm.email}
-                onChange={(event) => setNewUserForm((prev) => ({ ...prev, email: event.target.value }))}
-                required
-              />
-              <input
-                className="input"
-                type="password"
-                placeholder="Password"
-                value={newUserForm.password}
-                onChange={(event) => setNewUserForm((prev) => ({ ...prev, password: event.target.value }))}
-                required
-              />
-              <select
-                className="input"
-                value={newUserForm.role}
-                onChange={(event) =>
-                  setNewUserForm((prev) => {
-                    const nextRole = event.target.value;
-                    if (nextRole === "superadmin" || nextRole === "hr") {
-                      return { ...prev, role: nextRole, team: "" };
-                    }
+              <label>
+                <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-dsr-muted">Name</span>
+                <input
+                  className="input"
+                  value={newUserForm.name}
+                  onChange={(event) => setNewUserForm((prev) => ({ ...prev, name: event.target.value }))}
+                  required
+                />
+              </label>
+              <label>
+                <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-dsr-muted">Email</span>
+                <input
+                  className="input"
+                  type="email"
+                  value={newUserForm.email}
+                  onChange={(event) => setNewUserForm((prev) => ({ ...prev, email: event.target.value }))}
+                  required
+                />
+              </label>
+              <label>
+                <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-dsr-muted">Password</span>
+                <input
+                  className="input"
+                  type="password"
+                  value={newUserForm.password}
+                  onChange={(event) => setNewUserForm((prev) => ({ ...prev, password: event.target.value }))}
+                  required
+                />
+              </label>
+              <label>
+                <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-dsr-muted">Role</span>
+                <select
+                  className="input"
+                  value={newUserForm.role}
+                  onChange={(event) =>
+                    setNewUserForm((prev) => {
+                      const nextRole = event.target.value;
+                      if (nextRole === "superadmin" || nextRole === "hr") {
+                        return { ...prev, role: nextRole, team: "" };
+                      }
 
+<<<<<<< HEAD
                     return { ...prev, role: nextRole };
                   })
                 }
@@ -782,6 +791,30 @@ const SuperAdminDashboard = () => {
               />
               <button className="btn-primary" type="submit" disabled={creatingUser}>
                 {creatingUser ? "Creating..." : "Add Employee"}
+=======
+                      return { ...prev, role: nextRole };
+                    })
+                  }
+                >
+                  <option value="employee">Employee</option>
+                  <option value="admin">Admin</option>
+                  <option value="hr">HR</option>
+                  <option value="superadmin">Superadmin</option>
+                </select>
+              </label>
+              <label>
+                <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-dsr-muted">Department</span>
+                <input
+                  className="input"
+                  value={newUserForm.team}
+                  onChange={(event) => setNewUserForm((prev) => ({ ...prev, team: event.target.value }))}
+                  disabled={newUserForm.role === "superadmin" || newUserForm.role === "hr"}
+                  required={newUserForm.role === "employee" || newUserForm.role === "admin"}
+                />
+              </label>
+              <button className="btn-primary self-end" type="submit" disabled={creatingUser}>
+                {creatingUser ? "Creating..." : "Add User"}
+>>>>>>> 4228752b67b43c0a7b4a7188dfb5a915475f4720
               </button>
 
               {(newUserMessage || newUserError) && (
@@ -792,12 +825,14 @@ const SuperAdminDashboard = () => {
             </form>
 
             <div className="mb-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-              <input
-                className="input"
-                placeholder="Search name or email"
-                value={usersFilter.search}
-                onChange={(event) => setUsersFilter((prev) => ({ ...prev, search: event.target.value }))}
-              />
+              <label>
+                <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-dsr-muted">Search (Name / Email)</span>
+                <input
+                  className="input"
+                  value={usersFilter.search}
+                  onChange={(event) => setUsersFilter((prev) => ({ ...prev, search: event.target.value }))}
+                />
+              </label>
               <select
                 className="input"
                 value={usersFilter.team}

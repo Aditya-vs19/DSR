@@ -463,7 +463,7 @@ const AdminDashboard = () => {
           </form>
         )}
 
-        {(activeTab === "Overview" || activeTab === "Tasks") && (
+        {activeTab === "Tasks" && (
           <section className="card">
             <div className="grid gap-3 md:grid-cols-4">
               <div>
