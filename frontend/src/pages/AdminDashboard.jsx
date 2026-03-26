@@ -162,6 +162,27 @@ const AdminDashboard = () => {
     };
   }, [employees, tasks, comparisonFilter]);
 
+  const pendingTasksFromYesterday = useMemo(() => {
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayText = new Date(yesterday.getTime() - yesterday.getTimezoneOffset() * 60000)
+      .toISOString()
+      .slice(0, 10);
+    const carriedForwardSourceIds = new Set(
+      tasks
+        .map((item) => item.carried_forward_from_id)
+        .filter((value) => value !== null && value !== undefined)
+        .map((value) => Number(value))
+    );
+
+    return tasks.filter(
+      (item) =>
+        item.status === "Pending" &&
+        ((item.assigned_at || item.created_at || "").slice(0, 10) === yesterdayText) &&
+        !carriedForwardSourceIds.has(Number(item.id))
+    ).length;
+  }, [tasks]);
+
   const unreadCount = useMemo(
     () => notifications.filter((item) => !item.is_read).length,
     [notifications]
@@ -376,21 +397,25 @@ const AdminDashboard = () => {
         )}
 
         {activeTab === "Tasks" && (
-          <form className="card mx-auto grid w-full max-w-5xl gap-2 md:grid-cols-2" onSubmit={handleAssign}>
+          <form className="card grid w-full gap-2 md:grid-cols-2" onSubmit={handleAssign}>
             <h2 className="md:col-span-2 text-lg font-semibold">Create Task</h2>
-            <h2 className="md:col-span-2 text-sm text-dsr-muted">Client / Vendor</h2>
-            <input
-              className="input md:col-span-2"
-              value={form.client}
-              onChange={(event) => setForm((prev) => ({ ...prev, client: event.target.value }))}
-            />
-            <h2 className="md:col-span-2 text-sm text-dsr-muted">Task</h2>
-            <input
-              className="input md:col-span-2"
-              value={form.task}
-              onChange={(event) => setForm((prev) => ({ ...prev, task: event.target.value }))}
-              required
-            />
+            <div>
+              <h2 className="mb-1 text-sm text-dsr-muted">Client / Vendor</h2>
+              <input
+                className="input"
+                value={form.client}
+                onChange={(event) => setForm((prev) => ({ ...prev, client: event.target.value }))}
+              />
+            </div>
+            <div>
+              <h2 className="mb-1 text-sm text-dsr-muted">Task</h2>
+              <input
+                className="input"
+                value={form.task}
+                onChange={(event) => setForm((prev) => ({ ...prev, task: event.target.value }))}
+                required
+              />
+            </div>
             <h2 className="md:col-span-2 text-sm text-dsr-muted">Assign</h2>
             <select
               className="input"
@@ -440,7 +465,7 @@ const AdminDashboard = () => {
 
         {(activeTab === "Overview" || activeTab === "Tasks") && (
           <section className="card">
-            <div className="grid gap-3 md:grid-cols-3">
+            <div className="grid gap-3 md:grid-cols-4">
               <div>
                 <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-dsr-muted">Status</label>
                 <select
@@ -479,6 +504,11 @@ const AdminDashboard = () => {
                   onChange={(event) => setFilters((prev) => ({ ...prev, date: event.target.value }))}
                 />
               </div>
+              {pendingTasksFromYesterday > 0 && (
+                <div className="rounded-xl border border-rose-300 bg-rose-100 p-3 text-sm font-semibold text-rose-800 md:col-start-4">
+                  You have {pendingTasksFromYesterday} pending {pendingTasksFromYesterday === 1 ? "task" : "tasks"} from yesterday.
+                </div>
+              )}
             </div>
             {error && <p className="mt-3 text-sm text-rose-600">{error}</p>}
           </section>
