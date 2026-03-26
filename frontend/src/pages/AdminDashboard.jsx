@@ -103,7 +103,13 @@ const AdminDashboard = () => {
         return true;
       }
 
-      return (item.created_at || "").slice(0, 10) === comparisonFilter.date;
+      const statusValue = String(item.raw_status || item.status || "").toLowerCase();
+      const taskDate =
+        statusValue === "completed"
+          ? (item.completed_at || item.created_at || "").slice(0, 10)
+          : (item.created_at || "").slice(0, 10);
+
+      return taskDate === comparisonFilter.date;
     });
 
     const employeeStatusMap = new Map();
@@ -124,9 +130,11 @@ const AdminDashboard = () => {
         return;
       }
 
-      if (task.status === "Completed") {
+      const statusValue = String(task.raw_status || task.status || "").toLowerCase();
+
+      if (statusValue === "completed") {
         target.completed += 1;
-      } else {
+      } else if (statusValue === "pending") {
         target.pending += 1;
       }
     });
