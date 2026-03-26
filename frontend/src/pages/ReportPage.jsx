@@ -249,7 +249,7 @@ function ReportPage({
   useEffect(() => {
     const loadFilterOptions = async () => {
       try {
-        const usersRes = role === "admin" ? await authApi.getTeamEmployees() : await authApi.getUsers();
+        const usersRes = role === "admin" ? await authApi.getDepartmentEmployees() : await authApi.getEmployees();
         const users = Array.isArray(usersRes.data) ? usersRes.data : [];
         setDirectoryUsers(
           users.filter((entry) => {
@@ -299,7 +299,7 @@ function ReportPage({
     try {
       const [tasksRes, usersRes] = await Promise.all([
         taskApi.getTasks(),
-        role === "admin" ? authApi.getTeamEmployees() : authApi.getUsers()
+        role === "admin" ? authApi.getDepartmentEmployees() : authApi.getEmployees()
       ]);
 
       const allTasks = Array.isArray(tasksRes.data) ? tasksRes.data : [];

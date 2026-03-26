@@ -58,12 +58,15 @@ export const updateUserPasswordById = async (id, hashedPassword) => {
   return query("UPDATE users SET password = ? WHERE id = ?", [hashedPassword, id]);
 };
 
-export const listUsers = async () => {
+export const listEmployees = async () => {
   await ensureOrganizationBootstrap();
   return query(
     "SELECT id, name, email, role, team, created_at FROM users ORDER BY role, name"
   );
 };
+
+// Backward-compatible alias
+export const listUsers = listEmployees;
 
 export const listTeamEmployees = async (teams) => {
   await ensureOrganizationBootstrap();

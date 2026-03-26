@@ -5,8 +5,8 @@ import {
   findUserAuthById,
   findUserByEmail,
   findUserByUsername,
+  listEmployees,
   listTeamEmployees,
-  listUsers,
   updateUserPasswordById
 } from "../models/userModel.js";
 import { getManagedTeamsForAdmin } from "../utils/teamScope.js";
@@ -70,7 +70,7 @@ export const register = async (req, res) => {
       team
     });
 
-    return res.status(201).json({ message: "User registered", user });
+    return res.status(201).json({ message: "Employee registered", user });
   } catch (error) {
     return res.status(500).json({ message: "Registration failed", error: error.message });
   }
@@ -124,16 +124,16 @@ export const login = async (req, res) => {
   }
 };
 
-export const getUsers = async (_req, res) => {
+export const getEmployees = async (_req, res) => {
   try {
-    const users = await listUsers();
-    return res.status(200).json(users);
+    const employees = await listEmployees();
+    return res.status(200).json(employees);
   } catch (error) {
-    return res.status(500).json({ message: "Failed to fetch users", error: error.message });
+    return res.status(500).json({ message: "Failed to fetch employees", error: error.message });
   }
 };
 
-export const getTeamEmployees = async (req, res) => {
+export const getDepartmentEmployees = async (req, res) => {
   try {
     const teams = req.user.role === "admin" ? getManagedTeamsForAdmin(req.user) : req.query.team;
     const employees = await listTeamEmployees(teams || null);
@@ -142,6 +142,10 @@ export const getTeamEmployees = async (req, res) => {
     return res.status(500).json({ message: "Failed to fetch employees", error: error.message });
   }
 };
+
+// Backward-compatible aliases
+export const getUsers = getEmployees;
+export const getTeamEmployees = getDepartmentEmployees;
 
 export const changePassword = async (req, res) => {
   try {
@@ -160,7 +164,7 @@ export const changePassword = async (req, res) => {
 
     const user = await findUserAuthById(req.user.id);
     if (!user) {
-      return res.status(404).json({ message: "User not found" });
+      return res.status(404).json({ message: "Employee not found" });
     }
 
     const matches = await verifyCurrentPassword(normalizedCurrentPassword, user.password);
