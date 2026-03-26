@@ -2,6 +2,7 @@ import React from "react";
 import ReportCell from "./ReportCell";
 
 const STATUS_BADGES = {
+  "-": "border-slate-200 bg-slate-50 text-slate-500",
   Holiday: "border-pink-200 bg-pink-100 text-pink-700",
   "Weekly Off": "border-slate-300 bg-slate-100 text-slate-600",
   Completed: "border-emerald-200 bg-emerald-100 text-emerald-700",

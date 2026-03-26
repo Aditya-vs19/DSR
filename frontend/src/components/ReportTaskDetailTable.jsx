@@ -13,6 +13,22 @@ const formatDateTime = (value) => {
   return date.toLocaleString();
 };
 
+const formatUtcDateTime = (value) => {
+  if (!value) return "-";
+
+  const rawValue = String(value).trim();
+  const normalizedValue = /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(\.\d+)?$/.test(rawValue)
+    ? `${rawValue.replace(" ", "T")}Z`
+    : rawValue;
+
+  const parsed = new Date(normalizedValue);
+  if (Number.isNaN(parsed.getTime())) {
+    return "-";
+  }
+
+  return parsed.toLocaleString();
+};
+
 const formatDaySectionLabel = (task, dateRange) => {
   if (dateRange === "month" && task.groupLabel) {
     return task.groupLabel;
@@ -104,7 +120,7 @@ function ReportTaskDetailTable({ tasks = [], dateRange = "week" }) {
                   <td className="px-3 py-2 text-slate-600">{task.dependency || "-"}</td>
                   <td className="px-3 py-2 text-slate-600">{task.assigned_by_name || "-"}</td>
                   <td className="px-3 py-2 text-slate-600">{formatDateTime(task.created_at)}</td>
-                  <td className="px-3 py-2 text-slate-600">{formatDateTime(task.completed_at)}</td>
+                  <td className="px-3 py-2 text-slate-600">{formatUtcDateTime(task.completed_at)}</td>
                 </tr>
               ))}
             </React.Fragment>
