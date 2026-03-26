@@ -200,13 +200,14 @@ const TaskTable = ({
                 <td className="p-3">{item.task}</td>
                 <td className="p-3">{item.action}</td>
                 <td className="p-3">
-                  {editableStatus ? (
+                  {editableStatus && item.status !== "Completed" ? (
                     <select
                       className={`rounded-md px-2 py-1 text-xs font-semibold ${statusClass[item.status] || "bg-slate-100 text-slate-700"}`}
                       value={item.status}
                       onChange={(event) => onStatusChange(item, event.target.value, getDependencyValue(item))}
                     >
                       <option value="Pending">Pending</option>
+                      <option value="In Progress">In Progress</option>
                       <option value="Completed">Completed</option>
                     </select>
                   ) : (
@@ -218,7 +219,7 @@ const TaskTable = ({
                 <td className="p-3 whitespace-nowrap">{formatTime(item.created_at)}</td>
                 <td className="p-3 whitespace-nowrap">{item.status === "Completed" ? formatTime(item.completed_at) : ""}</td>
                 <td className="p-3">
-                  {item.status === "Pending" && editableStatus ? (
+                  {item.status !== "Completed" && editableStatus ? (
                     <div className="min-w-[220px]">
                       <input
                         className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-700 outline-none focus:border-emerald-500"

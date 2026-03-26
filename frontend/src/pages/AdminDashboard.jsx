@@ -21,6 +21,7 @@ const getManagedDepartmentLabel = (currentUser) => {
 
 const AdminDashboard = () => {
   const { user, logout } = useAuth();
+  const todayText = new Date().toISOString().slice(0, 10);
   const [tasks, setTasks] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [performance, setPerformance] = useState([]);
@@ -48,6 +49,7 @@ const AdminDashboard = () => {
   const [passwordError, setPasswordError] = useState("");
   const [reassigningTaskId, setReassigningTaskId] = useState(null);
   const [focusedTaskId, setFocusedTaskId] = useState(null);
+  const [comparisonFilter, setComparisonFilter] = useState({ mode: "overall", date: todayText });
   const managedDepartmentLabel = useMemo(() => getManagedDepartmentLabel(user), [user]);
 
   const loadData = async () => {
@@ -87,28 +89,68 @@ const AdminDashboard = () => {
   }, [tasks, filters]);
 
   const employeeTaskStatusChart = useMemo(() => {
-    const employeePerformance = performance.filter((item) => item.role === "employee");
+    const employeeRecords = employees.filter((item) => item.role === "employee");
+    const employeeIdSet = new Set(employeeRecords.map((item) => Number(item.id)));
+    const chartTaskPool = tasks.filter((item) => {
+      const assigneeId = Number(item.assigned_to);
+      if (!employeeIdSet.has(assigneeId)) {
+        return false;
+      }
+
+      if (comparisonFilter.mode !== "daywise") {
+        return true;
+      }
+
+      return (item.created_at || "").slice(0, 10) === comparisonFilter.date;
+    });
+
+    const employeeStatusMap = new Map();
+
+    employeeRecords.forEach((item) => {
+      employeeStatusMap.set(Number(item.id), {
+        name: item.name,
+        completed: 0,
+        pending: 0
+      });
+    });
+
+    chartTaskPool.forEach((task) => {
+      const assigneeId = Number(task.assigned_to);
+      const target = employeeStatusMap.get(assigneeId);
+
+      if (!target) {
+        return;
+      }
+
+      if (task.status === "Completed") {
+        target.completed += 1;
+      } else {
+        target.pending += 1;
+      }
+    });
+
+    const rows = Array.from(employeeStatusMap.values()).sort((a, b) => a.name.localeCompare(b.name));
 
     return {
-      labels: employeePerformance.map((item) => item.name),
+      labels: rows.map((item) => item.name),
       datasets: [
         {
           label: "Completed",
-          data: employeePerformance.map((item) => Number(item.completed_tasks || 0)),
+          data: rows.map((item) => Number(item.completed || 0)),
           backgroundColor: "rgba(33, 128, 70, 0.85)",
           borderColor: "rgba(33, 128, 70, 1)",
           borderWidth: 1
         },
         {
           label: "Pending",
-          data: employeePerformance.map((item) => Number(item.pending_tasks || 0)),
+          data: rows.map((item) => Number(item.pending || 0)),
           backgroundColor: "rgba(220, 38, 38, 0.8)",
           borderColor: "rgba(220, 38, 38, 1)",
           borderWidth: 1
         }
       ]
     };
-  }, [performance]);
+  }, [employees, tasks, comparisonFilter]);
 
   const unreadCount = useMemo(
     () => notifications.filter((item) => !item.is_read).length,
@@ -327,7 +369,6 @@ const AdminDashboard = () => {
               className="input"
               value={form.client}
               onChange={(event) => setForm((prev) => ({ ...prev, client: event.target.value }))}
-              required
             />
             <h2 className="md:col-span-2 text-sm text-dsr-muted">Task</h2>
             <input
@@ -394,6 +435,7 @@ const AdminDashboard = () => {
                 >
                   <option value="all">All</option>
                   <option value="Pending">Pending</option>
+                  <option value="In Progress">In Progress</option>
                   <option value="Completed">Completed</option>
                 </select>
               </div>
@@ -429,6 +471,51 @@ const AdminDashboard = () => {
 
         {activeTab === "Overview" && (
           <>
+            <section className="card">
+              <div className="grid gap-3 md:grid-cols-3">
+                <div>
+                  <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-dsr-muted">
+                    Comparison View
+                  </label>
+                  <select
+                    className="input"
+                    value={comparisonFilter.mode}
+                    onChange={(event) =>
+                      setComparisonFilter((prev) => ({
+                        ...prev,
+                        mode: event.target.value
+                      }))
+                    }
+                  >
+                    <option value="overall">Overall Tasks</option>
+                    <option value="daywise">Day-wise Tasks</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-dsr-muted">
+                    Comparison Date
+                  </label>
+                  <input
+                    className="input"
+                    type="date"
+                    value={comparisonFilter.date}
+                    disabled={comparisonFilter.mode !== "daywise"}
+                    onChange={(event) =>
+                      setComparisonFilter((prev) => ({
+                        ...prev,
+                        date: event.target.value
+                      }))
+                    }
+                  />
+                </div>
+                <div className="rounded-xl border border-dsr-border bg-dsr-soft p-3 text-sm text-dsr-muted">
+                  {comparisonFilter.mode === "overall"
+                    ? "Showing overall completed vs pending tasks for all department employees."
+                    : `Showing completed vs pending tasks for ${comparisonFilter.date || "selected date"}.`}
+                </div>
+              </div>
+            </section>
+
             <div className="grid gap-4 lg:grid-cols-2">
               <Charts
                 type="bar"
@@ -439,7 +526,11 @@ const AdminDashboard = () => {
               />
               <Charts
                 type="bar"
-                title="Employee Tasks (Completed vs Pending)"
+                title={
+                  comparisonFilter.mode === "overall"
+                    ? "Employee Tasks (Completed vs Pending) - Overall"
+                    : `Employee Tasks (Completed vs Pending) - ${comparisonFilter.date}`
+                }
                 labels={employeeTaskStatusChart.labels}
                 datasets={employeeTaskStatusChart.datasets}
               />

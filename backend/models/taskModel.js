@@ -120,7 +120,8 @@ export const getTasksByRole = async ({ role, userId, team, managedTeams = [] }) 
       t.client,
       t.task,
       t.action,
-      CASE WHEN t.status = 'In Progress' THEN 'Pending' ELSE t.status END AS status,
+      t.status AS raw_status,
+      t.status AS status,
       t.dependency,
       t.assigned_to,
       t.assigned_by,
@@ -167,6 +168,7 @@ export const updateTaskStatus = async ({ id, status, dependency }) => {
   await ensureTaskSubmissionColumns();
 
   const completedAt = status === "Completed" ? new Date() : null;
+  const resolvedDependency = status === "Completed" ? null : dependency || null;
 
   const sql = `
     UPDATE tasks
@@ -179,7 +181,7 @@ export const updateTaskStatus = async ({ id, status, dependency }) => {
     WHERE id = ?
   `;
 
-  await query(sql, [status, dependency || null, status, completedAt, id]);
+  await query(sql, [status, resolvedDependency, status, completedAt, id]);
 };
 
 export const reassignTask = async ({ id, assignedTo, assignedBy }) => {
@@ -343,7 +345,6 @@ export const getHrUserIds = async () => {
 
 export const submitTaskToHr = async ({ id, employeeId }) => {
   await ensureTaskSubmissionColumns();
-  await ensureDailyReportTable();
 
   const taskRows = await query(
     `
@@ -371,35 +372,6 @@ export const submitTaskToHr = async ({ id, employeeId }) => {
   await query(
     "UPDATE tasks SET submitted_to_hr = 1, submitted_to_hr_at = CURRENT_TIMESTAMP WHERE id = ?",
     [id]
-  );
-
-  await query(
-    `
-      INSERT INTO daily_employee_reports (report_date, user_id, status)
-      VALUES (?, ?, 'Received')
-      ON DUPLICATE KEY UPDATE status = 'Received', updated_at = CURRENT_TIMESTAMP
-    `,
-    [task.task_date, employeeId]
-  );
-
-  await query(
-    `
-      INSERT INTO reports (employee_id, date, total_tasks, completed_tasks, pending_tasks, status)
-      SELECT
-        ?,
-        ?,
-        COUNT(*) AS total_tasks,
-        SUM(CASE WHEN status = 'Completed' THEN 1 ELSE 0 END) AS completed_tasks,
-        SUM(CASE WHEN status <> 'Completed' THEN 1 ELSE 0 END) AS pending_tasks,
-        'pending'
-      FROM tasks
-      WHERE assigned_to = ? AND DATE(created_at) = ?
-      ON DUPLICATE KEY UPDATE
-        total_tasks = VALUES(total_tasks),
-        completed_tasks = VALUES(completed_tasks),
-        pending_tasks = VALUES(pending_tasks)
-    `,
-    [employeeId, task.task_date, employeeId, task.task_date]
   );
 
   return { task, changed: true };

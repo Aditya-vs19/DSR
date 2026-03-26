@@ -732,7 +732,7 @@ export const getReportDetailsById = async (reportId) => {
         client,
         task,
         action,
-        CASE WHEN status = 'In Progress' THEN 'Pending' ELSE status END AS status,
+        status,
         dependency,
         created_at,
         completed_at,
