@@ -116,10 +116,11 @@ export const updateTaskStatusController = async (req, res) => {
     }
 
     const canEdit =
+      req.user.role === "admin" ||
       req.user.role === "superadmin" ||
       req.user.role === "hr" ||
-      task.assigned_to === req.user.id ||
-      task.assigned_by === req.user.id;
+      Number(task.assigned_to) === Number(req.user.id) ||
+      Number(task.assigned_by) === Number(req.user.id);
 
     if (!canEdit) {
       return res.status(403).json({ message: "Not allowed to update this task" });
