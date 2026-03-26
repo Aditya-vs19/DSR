@@ -443,7 +443,6 @@ const AdminDashboard = () => {
               onStatusChange={handleStatusChange}
               editableStatus
               showAssignee
-              showAssigner
               showReassign
               reassignOptions={employees}
               onReassign={handleReassign}
@@ -459,7 +458,6 @@ const AdminDashboard = () => {
             onStatusChange={handleStatusChange}
             editableStatus
             showAssignee
-            showAssigner
             showReassign
             reassignOptions={employees}
             onReassign={handleReassign}

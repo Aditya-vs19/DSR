@@ -6,6 +6,24 @@ const statusClass = {
   Completed: "bg-green-100 text-green-800"
 };
 
+const formatTime = (value) => {
+  if (!value) {
+    return "-";
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return "-";
+  }
+
+  return parsed.toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: true
+  });
+};
+
 const TaskTable = ({
   tasks = [],
   onStatusChange,
@@ -90,6 +108,8 @@ const TaskTable = ({
             <th className="p-3">Task</th>
             <th className="p-3">Action</th>
             <th className="p-3">Status</th>
+            <th className="p-3">Assigned Time</th>
+            <th className="p-3">Completed Time</th>
             <th className="p-3">Dependency</th>
             {showAssignee && <th className="p-3">Assigned To</th>}
             {showAssigner && <th className="p-3">Assigned By</th>}
@@ -133,12 +153,9 @@ const TaskTable = ({
                       {item.status}
                     </span>
                   )}
-                  {item.completed_at && (
-                    <p className="mt-1 text-xs text-slate-500">
-                      Completed: {new Date(item.completed_at).toLocaleString()}
-                    </p>
-                  )}
                 </td>
+                <td className="p-3 whitespace-nowrap">{formatTime(item.created_at)}</td>
+                <td className="p-3 whitespace-nowrap">{item.status === "Completed" ? formatTime(item.completed_at) : ""}</td>
                 <td className="p-3">
                   {item.status !== "Pending" ? (
                     "-"
@@ -209,7 +226,7 @@ const TaskTable = ({
             <tr>
               <td
                 colSpan={
-                  6 +
+                  8 +
                   (showAssignee ? 1 : 0) +
                   (showAssigner ? 1 : 0) +
                   (showSubmitToHr ? 1 : 0) +
