@@ -642,7 +642,6 @@ const SuperAdminDashboard = () => {
               tasks={filteredTasks}
               editableStatus={false}
               showAssignee
-              showAssigner
               focusedTaskId={focusedTaskId}
             />
           </>
@@ -653,7 +652,6 @@ const SuperAdminDashboard = () => {
             tasks={filteredTasks}
             editableStatus={false}
             showAssignee
-            showAssigner
             focusedTaskId={focusedTaskId}
           />
         )}

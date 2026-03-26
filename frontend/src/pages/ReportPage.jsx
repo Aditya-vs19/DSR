@@ -11,10 +11,15 @@ const COLOR = {
   sectionBeige: "FFF3E6B3",
   todayGreen: "FF7CB342",
   receivedGreen: "FF6AA84F",
+  completedGreen: "FF34A853",
+  pendingAmber: "FFF59E0B",
   leaveBlue: "FF4FC3F7",
   notReceivedRed: "FFFF0000",
-  holidayPink: "FFE88CE8"
+  holidayPink: "FFE88CE8",
+  weeklyOffGray: "FFE5E7EB"
 };
+
+const RECEIVED_STATUSES = new Set(["Received", "Not Received", "Leave"]);
 
 const applyCellStyle = (cell, {
   fillColor = null,
@@ -41,8 +46,11 @@ const applyCellStyle = (cell, {
 
 const normalizeStatus = (status) => {
   if (status === "Received") return "Received";
+  if (status === "Completed") return "Completed";
+  if (status === "Pending") return "Pending";
   if (status === "Leave") return "No / On Leave";
   if (status === "Holiday") return "Holiday";
+  if (status === "Weekly Off") return "Weekly Off";
   return "Not Received";
 };
 
@@ -204,6 +212,10 @@ function ReportPage({
           const summary = rows.reduce(
             (acc, row) => {
               row.employees.forEach((entry) => {
+                if (!RECEIVED_STATUSES.has(entry.status)) {
+                  return;
+                }
+
                 if (entry.status === "Received") acc.received += 1;
                 else if (entry.status === "Leave") acc.leave += 1;
                 else acc.notReceived += 1;
@@ -320,9 +332,12 @@ function ReportPage({
 
           let fillColor = COLOR.white;
           if (statusValue === "Received") fillColor = COLOR.receivedGreen;
+          if (statusValue === "Completed") fillColor = COLOR.completedGreen;
+          if (statusValue === "Pending") fillColor = COLOR.pendingAmber;
           if (statusValue === "No / On Leave") fillColor = COLOR.leaveBlue;
           if (statusValue === "Not Received") fillColor = COLOR.notReceivedRed;
           if (statusValue === "Holiday") fillColor = COLOR.holidayPink;
+          if (statusValue === "Weekly Off") fillColor = COLOR.weeklyOffGray;
 
           applyCellStyle(cell, { fillColor });
         });

@@ -1,6 +1,7 @@
 import { query } from "../config/db.js";
 
 const CELL_STATUSES = ["Received", "Not Received", "Leave"];
+const REPORT_TIMEZONE_OFFSET = "+05:30";
 let dailyReportTableEnsured = false;
 let taskSubmissionColumnsEnsured = false;
 let holidaysTableEnsured = false;
@@ -108,7 +109,7 @@ const getDateBounds = (dateRange = "week", baseDate = new Date()) => {
   const start = new Date(current);
   start.setDate(current.getDate() - diffToMonday);
   const end = new Date(start);
-  end.setDate(start.getDate() + 5);
+  end.setDate(start.getDate() + 6);
   return { startDate: start, endDate: end };
 };
 
@@ -116,9 +117,7 @@ const getDatesInRange = (startDate, endDate) => {
   const dates = [];
   const cursor = new Date(startDate);
   while (cursor <= endDate) {
-    if (cursor.getDay() !== 0) {
-      dates.push(new Date(cursor));
-    }
+    dates.push(new Date(cursor));
     cursor.setDate(cursor.getDate() + 1);
   }
   return dates;
@@ -208,7 +207,7 @@ export const generateDailyReports = async (reportDate) => {
       SUM(CASE WHEN t.status <> 'Completed' THEN 1 ELSE 0 END) AS pending_tasks,
       'pending' AS status
     FROM tasks t
-    WHERE DATE(t.created_at) = ?
+    WHERE DATE(CONVERT_TZ(t.created_at, '+00:00', '${REPORT_TIMEZONE_OFFSET}')) = ?
     GROUP BY t.assigned_to
     ON DUPLICATE KEY UPDATE
       total_tasks = VALUES(total_tasks),
@@ -276,7 +275,7 @@ export const getSuperAdminAnalytics = async ({ team = "all", date = "" } = {}) =
   }
 
   if (date) {
-    taskFilters.push("DATE(t.created_at) = ?");
+    taskFilters.push(`DATE(CONVERT_TZ(t.created_at, '+00:00', '${REPORT_TIMEZONE_OFFSET}')) = ?`);
     taskParams.push(date);
   }
 
@@ -323,7 +322,7 @@ export const getSuperAdminAnalytics = async ({ team = "all", date = "" } = {}) =
       LEFT JOIN tasks t ON t.assigned_to = u.id
       WHERE u.role = 'employee'
         ${team && team !== "all" ? "AND u.team = ?" : ""}
-        ${date ? "AND DATE(t.created_at) = ?" : ""}
+        ${date ? `AND DATE(CONVERT_TZ(t.created_at, '+00:00', '${REPORT_TIMEZONE_OFFSET}')) = ?` : ""}
       GROUP BY u.id, u.name, u.team
       ORDER BY productivity_score DESC
       LIMIT 10
@@ -454,6 +453,33 @@ export const getDailyReportGridByRole = async ({
   }
 
   const idPlaceholders = users.map(() => "?").join(",");
+  const taskActivityRows = await query(
+    `
+      SELECT
+        t.assigned_to AS user_id,
+        DATE(CONVERT_TZ(t.created_at, '+00:00', '${REPORT_TIMEZONE_OFFSET}')) AS task_date,
+        COUNT(t.id) AS total_tasks,
+        SUM(CASE WHEN t.status = 'Completed' THEN 1 ELSE 0 END) AS completed_tasks,
+        SUM(CASE WHEN t.status <> 'Completed' THEN 1 ELSE 0 END) AS pending_tasks
+      FROM tasks t
+      WHERE DATE(CONVERT_TZ(t.created_at, '+00:00', '${REPORT_TIMEZONE_OFFSET}')) BETWEEN ? AND ?
+        AND t.assigned_to IN (${idPlaceholders})
+      GROUP BY t.assigned_to, DATE(CONVERT_TZ(t.created_at, '+00:00', '${REPORT_TIMEZONE_OFFSET}'))
+    `,
+    [formatDate(startDate), formatDate(endDate), ...users.map((entry) => entry.id)]
+  );
+
+  const taskActivityMap = new Map(
+    taskActivityRows.map((entry) => [
+      `${normalizeSqlDate(entry.task_date)}-${entry.user_id}`,
+      {
+        totalTasks: Number(entry.total_tasks || 0),
+        completedTasks: Number(entry.completed_tasks || 0),
+        pendingTasks: Number(entry.pending_tasks || 0)
+      }
+    ])
+  );
+
   const cells = await query(
     `
       SELECT
@@ -489,15 +515,33 @@ export const getDailyReportGridByRole = async ({
     const dateText = formatDate(day);
     const holiday = holidayByDate.get(dateText);
     const dayName = day.toLocaleDateString("en-US", { weekday: "long" });
-    const isWeekend = day.getDay() === 6;
+    const isSunday = day.getDay() === 0;
+    const isWeekend = day.getDay() === 0 || day.getDay() === 6;
+    const isHoliday = Boolean(holiday);
 
     const employees = users.map((employee) => {
-      if (holiday) {
+      const taskActivity = taskActivityMap.get(`${dateText}-${employee.id}`);
+      const workedOnDay = Number(taskActivity?.totalTasks || 0) > 0;
+      const isOffDayForEmployee = (isSunday || isHoliday) && !workedOnDay;
+
+      if (isOffDayForEmployee) {
         return {
           reportId: null,
           userId: employee.id,
           name: employee.name,
-          status: "Holiday"
+          status: isHoliday ? "Holiday" : "Weekly Off"
+        };
+      }
+
+      if ((isSunday || isHoliday) && workedOnDay) {
+        return {
+          reportId: null,
+          userId: employee.id,
+          name: employee.name,
+          status: Number(taskActivity.pendingTasks || 0) > 0 ? "Pending" : "Completed",
+          totalTasks: Number(taskActivity.totalTasks || 0),
+          completedTasks: Number(taskActivity.completedTasks || 0),
+          pendingTasks: Number(taskActivity.pendingTasks || 0)
         };
       }
 
@@ -524,7 +568,7 @@ export const getDailyReportGridByRole = async ({
   const summary = rows.reduce(
     (acc, row) => {
       row.employees.forEach((entry) => {
-        if (entry.status === "Holiday") {
+        if (!CELL_STATUSES.includes(entry.status)) {
           return;
         }
 
@@ -598,7 +642,8 @@ export const submitEmployeeDailyReport = async ({ employeeId, date }) => {
         SUM(CASE WHEN status = 'Completed' THEN 1 ELSE 0 END) AS completed_tasks,
         SUM(CASE WHEN status <> 'Completed' THEN 1 ELSE 0 END) AS pending_tasks
       FROM tasks
-      WHERE assigned_to = ? AND DATE(created_at) = ?
+      WHERE assigned_to = ?
+        AND DATE(CONVERT_TZ(created_at, '+00:00', '${REPORT_TIMEZONE_OFFSET}')) = ?
     `,
     [employeeId, date]
   );
@@ -613,7 +658,8 @@ export const submitEmployeeDailyReport = async ({ employeeId, date }) => {
       UPDATE tasks
       SET submitted_to_hr = 1,
           submitted_to_hr_at = CURRENT_TIMESTAMP
-      WHERE assigned_to = ? AND DATE(created_at) = ?
+      WHERE assigned_to = ?
+        AND DATE(CONVERT_TZ(created_at, '+00:00', '${REPORT_TIMEZONE_OFFSET}')) = ?
     `,
     [employeeId, date]
   );
@@ -694,7 +740,7 @@ export const getReportDetailsById = async (reportId) => {
         submitted_to_hr_at
       FROM tasks
       WHERE assigned_to = ?
-        AND DATE(created_at) = ?
+        AND DATE(CONVERT_TZ(created_at, '+00:00', '${REPORT_TIMEZONE_OFFSET}')) = ?
       ORDER BY created_at DESC
     `,
     [report.employee_id, report.date]

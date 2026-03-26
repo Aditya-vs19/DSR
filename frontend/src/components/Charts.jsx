@@ -27,27 +27,39 @@ const Charts = ({
   const isCircular = type === "pie" || type === "donut";
   const hasCustomDatasets = Array.isArray(datasets) && datasets.length > 0;
   const renderedValues = chartValues || values;
+  const renderedDatasets = hasCustomDatasets
+    ? datasets.map((entry) => ({
+        tension: 2,
+        ...(type === "bar"
+          ? {
+              barThickness: barWidth,
+              categoryPercentage: 0.72,
+              barPercentage: 0.78
+            }
+          : {}),
+        ...entry
+      }))
+    : [
+        {
+          label: title,
+          data: renderedValues,
+          backgroundColor: color,
+          borderColor: isCircular ? "#ffffff" : color,
+          borderWidth: isCircular ? 2 : 1,
+          tension: 2,
+          ...(type === "bar"
+            ? {
+                barThickness: barWidth,
+                categoryPercentage: 0.72,
+                barPercentage: 0.78
+              }
+            : {})
+        }
+      ];
+
   const dataset = {
     labels,
-    datasets: hasCustomDatasets
-      ? datasets
-      : [
-          {
-            label: title,
-            data: renderedValues,
-            backgroundColor: color,
-            borderColor: isCircular ? "#ffffff" : color,
-            borderWidth: isCircular ? 2 : 1,
-            tension: 2,
-            ...(type === "bar"
-              ? {
-                  barThickness: barWidth,
-                  categoryPercentage: 0.72,
-                  barPercentage: 0.78
-                }
-              : {})
-          }
-        ]
+    datasets: renderedDatasets
   };
 
   const options = {
@@ -56,13 +68,11 @@ const Charts = ({
       tooltip: {
         callbacks: {
           label(context) {
-            const label = context.label ? `${context.label}: ` : "";
-            const value = values[context.dataIndex] ?? context.raw;
-            return `${label}${value}`;
+            const datasetLabel = context.dataset?.label ? `${context.dataset.label}: ` : "";
+            return `${datasetLabel}${context.raw}`;
           }
         }
       },
-      legend: { display: isCircular },
       legend: { display: isCircular || hasCustomDatasets },
       title: { display: true, text: title }
     },

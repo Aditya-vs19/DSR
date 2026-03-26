@@ -1,6 +1,13 @@
 import React from "react";
 import ReportCell from "./ReportCell";
 
+const STATUS_BADGES = {
+  Holiday: "border-pink-200 bg-pink-100 text-pink-700",
+  "Weekly Off": "border-slate-300 bg-slate-100 text-slate-600",
+  Completed: "border-emerald-200 bg-emerald-100 text-emerald-700",
+  Pending: "border-amber-200 bg-amber-100 text-amber-700"
+};
+
 function ReportGrid({ rows = [], employees = [], onCellChange, loadingCellId = null }) {
   if (!rows.length || !employees.length) {
     return (
@@ -59,9 +66,16 @@ function ReportGrid({ rows = [], employees = [], onCellChange, loadingCellId = n
                   </td>
                   {row.employees.map((entry) => (
                     <td key={`${row.date}-${entry.userId}`} className="border-t border-slate-200 px-2 py-2">
-                      {entry.status === "Holiday" ? (
-                        <div className="flex min-h-[30px] min-w-[120px] items-center justify-center rounded-md border border-pink-200 bg-pink-100 px-2 py-1 text-xs font-semibold text-pink-700">
-                          Holiday
+                      {STATUS_BADGES[entry.status] ? (
+                        <div
+                          className={`flex min-h-[30px] min-w-[120px] items-center justify-center rounded-md border px-2 py-1 text-xs font-semibold ${STATUS_BADGES[entry.status]}`}
+                          title={
+                            entry.status === "Completed" || entry.status === "Pending"
+                              ? `Tasks: ${entry.totalTasks || 0}, Completed: ${entry.completedTasks || 0}, Pending: ${entry.pendingTasks || 0}`
+                              : entry.status
+                          }
+                        >
+                          {entry.status}
                         </div>
                       ) : (
                         <ReportCell
