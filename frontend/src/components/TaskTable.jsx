@@ -250,7 +250,7 @@ const TaskTable = ({
                     </span>
                   )}
                 </td>
-                <td className="p-3 whitespace-nowrap">{formatLocalDateTime(item.created_at)}</td>
+                <td className="p-3 whitespace-nowrap">{formatLocalDateTime(item.assigned_at || item.created_at)}</td>
                 <td className="p-3 whitespace-nowrap">{item.status === "Completed" ? formatUtcDateTime(item.completed_at) : ""}</td>
                 <td className="p-3">
                   {item.status !== "Completed" && editableStatus ? (

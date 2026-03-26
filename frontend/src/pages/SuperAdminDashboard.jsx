@@ -14,7 +14,7 @@ const defaultAnalytics = { tasksPerTeam: [], completionRate: 0, topPerformers: [
 const TEAM_DONUT_COLORS = {
   Operations: "#E67E22",
   Technical: "#3A6FF7",
-  Sales: "#6EC6FF",
+  Sales: "#8B5CF6",
   Finance: "#E57399",
   Logistics: "#F4C542"
 };
