@@ -129,6 +129,7 @@ export const getTasksByRole = async ({ role, userId, team, managedTeams = [] }) 
       t.carried_forward_from_id,
       t.submitted_to_hr,
       t.submitted_to_hr_at,
+      DATE_FORMAT(COALESCE(sourceTask.created_at, t.created_at), '%Y-%m-%d %H:%i:%s') AS assigned_at,
       DATE_FORMAT(t.created_at, '%Y-%m-%d %H:%i:%s') AS created_at,
       DATE_FORMAT(t.completed_at, '%Y-%m-%d %H:%i:%s') AS completed_at,
       t.deadline,
@@ -137,6 +138,7 @@ export const getTasksByRole = async ({ role, userId, team, managedTeams = [] }) 
     FROM tasks t
     LEFT JOIN users assignTo ON assignTo.id = t.assigned_to
     LEFT JOIN users assignBy ON assignBy.id = t.assigned_by
+    LEFT JOIN tasks sourceTask ON sourceTask.id = t.carried_forward_from_id
   `;
 
   if (role === "employee") {
