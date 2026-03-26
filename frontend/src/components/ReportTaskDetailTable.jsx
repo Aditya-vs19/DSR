@@ -1,5 +1,11 @@
 import React from "react";
 
+const statusBadgeClass = {
+  Completed: "bg-emerald-100 text-emerald-800 border-emerald-200",
+  Pending: "bg-amber-100 text-amber-800 border-amber-200",
+  "In Progress": "bg-sky-100 text-sky-800 border-sky-200"
+};
+
 const formatDateTime = (value) => {
   if (!value) return "-";
   const date = new Date(value);
@@ -36,7 +42,10 @@ function ReportTaskDetailTable({ tasks = [] }) {
         </thead>
         <tbody>
           {tasks.map((task) => (
-            <tr key={task.id} className="border-b border-slate-200/80">
+            <tr
+              key={task.id}
+              className={`border-b border-slate-200/80 ${task.status === "Completed" ? "bg-emerald-50/30" : task.status === "Pending" ? "bg-amber-50/20" : task.status === "In Progress" ? "bg-sky-50/30" : "bg-white"}`}
+            >
               <td className="px-3 py-2 text-slate-600">{task.id}</td>
               <td className="px-3 py-2 font-medium text-slate-700">{task.assigned_to_name || "-"}</td>
               <td className="px-3 py-2 text-slate-600">{task.assigned_to_team || "-"}</td>
@@ -44,7 +53,7 @@ function ReportTaskDetailTable({ tasks = [] }) {
               <td className="px-3 py-2 text-slate-700">{task.task || "-"}</td>
               <td className="px-3 py-2 text-slate-600">{task.action || "-"}</td>
               <td className="px-3 py-2">
-                <span className="rounded-md bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700">
+                <span className={`rounded-md border px-2 py-1 text-xs font-semibold ${statusBadgeClass[task.status] || "bg-slate-100 text-slate-700 border-slate-200"}`}>
                   {task.status || "-"}
                 </span>
               </td>
