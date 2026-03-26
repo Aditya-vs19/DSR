@@ -770,28 +770,6 @@ const SuperAdminDashboard = () => {
                       if (nextRole === "superadmin" || nextRole === "hr") {
                         return { ...prev, role: nextRole, team: "" };
                       }
-
-<<<<<<< HEAD
-                    return { ...prev, role: nextRole };
-                  })
-                }
-              >
-                <option value="employee">Employee</option>
-                <option value="admin">Admin</option>
-                <option value="hr">HR</option>
-                <option value="superadmin">Superadmin</option>
-              </select>
-              <input
-                className="input"
-                placeholder="Department"
-                value={newUserForm.team}
-                onChange={(event) => setNewUserForm((prev) => ({ ...prev, team: event.target.value }))}
-                disabled={newUserForm.role === "superadmin" || newUserForm.role === "hr"}
-                required={newUserForm.role === "employee" || newUserForm.role === "admin"}
-              />
-              <button className="btn-primary" type="submit" disabled={creatingUser}>
-                {creatingUser ? "Creating..." : "Add Employee"}
-=======
                       return { ...prev, role: nextRole };
                     })
                   }
@@ -813,8 +791,7 @@ const SuperAdminDashboard = () => {
                 />
               </label>
               <button className="btn-primary self-end" type="submit" disabled={creatingUser}>
-                {creatingUser ? "Creating..." : "Add User"}
->>>>>>> 4228752b67b43c0a7b4a7188dfb5a915475f4720
+                {creatingUser ? "Creating..." : "Add Employee"}
               </button>
 
               {(newUserMessage || newUserError) && (
