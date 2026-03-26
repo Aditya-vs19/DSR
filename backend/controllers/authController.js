@@ -9,6 +9,7 @@ import {
   listUsers,
   updateUserPasswordById
 } from "../models/userModel.js";
+import { getManagedTeamsForAdmin } from "../utils/teamScope.js";
 
 const allowedRoles = ["employee", "admin", "hr", "superadmin"];
 
@@ -120,8 +121,8 @@ export const getUsers = async (_req, res) => {
 
 export const getTeamEmployees = async (req, res) => {
   try {
-    const team = req.user.role === "admin" ? req.user.team : req.query.team;
-    const employees = await listTeamEmployees(team || null);
+    const teams = req.user.role === "admin" ? getManagedTeamsForAdmin(req.user) : req.query.team;
+    const employees = await listTeamEmployees(teams || null);
     return res.status(200).json(employees);
   } catch (error) {
     return res.status(500).json({ message: "Failed to fetch employees", error: error.message });

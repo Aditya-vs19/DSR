@@ -22,23 +22,14 @@ const TaskTable = ({
   focusedTaskId = null
 }) => {
   const [dependencyDrafts, setDependencyDrafts] = useState({});
-  const [reassignSelections, setReassignSelections] = useState({});
+  const [reassignModalTask, setReassignModalTask] = useState(null);
+  const [reassignSelectionId, setReassignSelectionId] = useState("");
 
   useEffect(() => {
     setDependencyDrafts(() => {
       const next = {};
       tasks.forEach((task) => {
         next[task.id] = task.dependency ?? "";
-      });
-      return next;
-    });
-  }, [tasks]);
-
-  useEffect(() => {
-    setReassignSelections(() => {
-      const next = {};
-      tasks.forEach((task) => {
-        next[task.id] = String(task.assigned_to || "");
       });
       return next;
     });
@@ -66,6 +57,29 @@ const TaskTable = ({
     await onStatusChange(item, item.status, dependency);
   };
 
+  const openReassignModal = (item) => {
+    setReassignModalTask(item);
+    setReassignSelectionId("");
+  };
+
+  const closeReassignModal = () => {
+    setReassignModalTask(null);
+    setReassignSelectionId("");
+  };
+
+  const handleConfirmReassign = async () => {
+    if (!reassignModalTask || !reassignSelectionId || !onReassign) {
+      return;
+    }
+
+    await onReassign(reassignModalTask, Number(reassignSelectionId));
+    closeReassignModal();
+  };
+
+  const availableReassignOptions = reassignModalTask
+    ? reassignOptions.filter((member) => Number(member.id) !== Number(reassignModalTask.assigned_to))
+    : [];
+
   return (
     <div className="card overflow-x-auto">
       <table className="min-w-full border-collapse text-sm">
@@ -87,12 +101,6 @@ const TaskTable = ({
           {tasks.map((item, index) => {
             const overdue = item.deadline && item.status !== "Completed" && new Date(item.deadline) < new Date();
             const isCompletedTask = item.status === "Completed";
-            const selectedAssigneeId = String(reassignSelections[item.id] ?? item.assigned_to ?? "");
-            const canSubmitReassign =
-              !isCompletedTask &&
-              selectedAssigneeId &&
-              Number(selectedAssigneeId) !== Number(item.assigned_to) &&
-              Boolean(onReassign);
 
             return (
               <tr
@@ -183,33 +191,14 @@ const TaskTable = ({
                     {isCompletedTask ? (
                       <span className="text-xs text-slate-500">-</span>
                     ) : (
-                      <div className="flex min-w-[220px] items-center gap-2">
-                        <select
-                          className="input py-1"
-                          value={selectedAssigneeId}
-                          onChange={(event) =>
-                            setReassignSelections((prev) => ({
-                              ...prev,
-                              [item.id]: event.target.value
-                            }))
-                          }
-                        >
-                          <option value="">Select employee</option>
-                          {reassignOptions.map((member) => (
-                            <option key={member.id} value={String(member.id)}>
-                              {member.name}
-                            </option>
-                          ))}
-                        </select>
-                        <button
-                          type="button"
-                          className="btn-secondary whitespace-nowrap"
-                          disabled={!canSubmitReassign || reassigningTaskId === item.id}
-                          onClick={() => onReassign?.(item, Number(selectedAssigneeId))}
-                        >
-                          {reassigningTaskId === item.id ? "Reassigning..." : "Reassign"}
-                        </button>
-                      </div>
+                      <button
+                        type="button"
+                        className="btn-secondary whitespace-nowrap"
+                        disabled={!onReassign || reassigningTaskId === item.id}
+                        onClick={() => openReassignModal(item)}
+                      >
+                        {reassigningTaskId === item.id ? "Reassigning..." : "Reassign"}
+                      </button>
                     )}
                   </td>
                 )}
@@ -234,6 +223,48 @@ const TaskTable = ({
           )}
         </tbody>
       </table>
+
+      {reassignModalTask && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl">
+            <h3 className="text-lg font-semibold text-dsr-ink">Reassign Task</h3>
+            <p className="mt-1 text-sm text-dsr-muted">Task: {reassignModalTask.task}</p>
+            <p className="mt-1 text-sm text-dsr-muted">Current assignee: {reassignModalTask.assigned_to_name || "-"}</p>
+
+            <div className="mt-4">
+              <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-dsr-muted">
+                Select employee
+              </label>
+              <select
+                className="input"
+                value={reassignSelectionId}
+                onChange={(event) => setReassignSelectionId(event.target.value)}
+              >
+                <option value="">Choose employee</option>
+                {availableReassignOptions.map((member) => (
+                  <option key={member.id} value={String(member.id)}>
+                    {member.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="mt-5 flex justify-end gap-2">
+              <button type="button" className="btn-secondary" onClick={closeReassignModal}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn-primary"
+                disabled={!reassignSelectionId || reassigningTaskId === reassignModalTask.id}
+                onClick={() => void handleConfirmReassign()}
+              >
+                {reassigningTaskId === reassignModalTask.id ? "Reassigning..." : "Confirm Reassign"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
