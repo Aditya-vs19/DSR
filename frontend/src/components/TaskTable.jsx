@@ -1,4 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+
+const TASKS_PER_PAGE = 10;
 
 const statusClass = {
   Pending: "bg-yellow-100 text-yellow-800",
@@ -78,6 +80,19 @@ const TaskTable = ({
   const [skipPersistIds, setSkipPersistIds] = useState({});
   const [reassignModalTask, setReassignModalTask] = useState(null);
   const [reassignSelectionId, setReassignSelectionId] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+
+  const totalPages = Math.max(1, Math.ceil(tasks.length / TASKS_PER_PAGE));
+  const paginatedTasks = useMemo(() => {
+    const startIndex = (currentPage - 1) * TASKS_PER_PAGE;
+    return tasks.slice(startIndex, startIndex + TASKS_PER_PAGE);
+  }, [currentPage, tasks]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
 
   useEffect(() => {
     setDependencyDrafts((prev) => {
@@ -95,11 +110,20 @@ const TaskTable = ({
       return;
     }
 
+    const focusedIndex = tasks.findIndex((task) => Number(task.id) === Number(focusedTaskId));
+    if (focusedIndex >= 0) {
+      const targetPage = Math.floor(focusedIndex / TASKS_PER_PAGE) + 1;
+      if (targetPage !== currentPage) {
+        setCurrentPage(targetPage);
+        return;
+      }
+    }
+
     const rowElement = document.querySelector(`[data-task-id='${focusedTaskId}']`);
     if (rowElement) {
       rowElement.scrollIntoView({ behavior: "smooth", block: "center" });
     }
-  }, [focusedTaskId, tasks]);
+  }, [focusedTaskId, tasks, currentPage]);
 
   const getDependencyValue = (item) => dependencyDrafts[item.id] ?? item.dependency ?? "";
   const clearDependencyMeta = (taskId) => {
@@ -213,7 +237,7 @@ const TaskTable = ({
           </tr>
         </thead>
         <tbody>
-          {tasks.map((item, index) => {
+          {paginatedTasks.map((item, index) => {
             const overdue = item.deadline && item.status !== "Completed" && new Date(item.deadline) < new Date();
             const isCompletedTask = item.status === "Completed";
 
@@ -229,7 +253,7 @@ const TaskTable = ({
                       : ""
                 }`}
               >
-                <td className="p-3">{index + 1}</td>
+                <td className="p-3">{(currentPage - 1) * TASKS_PER_PAGE + index + 1}</td>
                 <td className="p-3 font-medium">{item.client}</td>
                 <td className="p-3">{item.task}</td>
                 <td className="p-3">{item.action}</td>
@@ -353,6 +377,36 @@ const TaskTable = ({
           )}
         </tbody>
       </table>
+
+      {tasks.length > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-3 py-3 text-sm">
+          <p className="text-slate-600">
+            Showing {(currentPage - 1) * TASKS_PER_PAGE + 1}
+            -{Math.min(currentPage * TASKS_PER_PAGE, tasks.length)} of {tasks.length}
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              className="rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={currentPage === 1}
+              onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+            >
+              Previous
+            </button>
+            <span className="rounded-md bg-slate-100 px-3 py-1.5 text-sm font-semibold text-slate-700">
+              Page {currentPage} / {totalPages}
+            </span>
+            <button
+              type="button"
+              className="rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={currentPage === totalPages}
+              onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      )}
 
       {reassignModalTask && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
