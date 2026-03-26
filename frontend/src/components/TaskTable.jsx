@@ -245,7 +245,7 @@ const TaskTable = ({
                       <option value="Completed">Completed</option>
                     </select>
                   ) : (
-                    <span className={`rounded-md px-2 py-1 text-xs font-semibold ${statusClass[item.status]}`}>
+                    <span className={`inline-flex whitespace-nowrap rounded-md px-2 py-1 text-xs font-semibold ${statusClass[item.status]}`}>
                       {item.status}
                     </span>
                   )}

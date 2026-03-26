@@ -112,6 +112,44 @@ const formatDateTimeText = (value) => {
   return date.toLocaleString();
 };
 
+const formatDayText = (value) => {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  return date.toLocaleDateString("en-US", { weekday: "long" });
+};
+
+const getWeekLabelForDate = (value, rangeStart) => {
+  if (!value || !rangeStart) {
+    return "Week 1";
+  }
+
+  const targetDate = new Date(value);
+  const startDate = new Date(rangeStart);
+  if (Number.isNaN(targetDate.getTime()) || Number.isNaN(startDate.getTime())) {
+    return "Week 1";
+  }
+
+  targetDate.setHours(0, 0, 0, 0);
+  startDate.setHours(0, 0, 0, 0);
+
+  if (targetDate < startDate) {
+    return "Week 1";
+  }
+
+  const cursor = new Date(startDate);
+  let weekNumber = 1;
+
+  while (cursor < targetDate) {
+    cursor.setDate(cursor.getDate() + 1);
+    if (cursor <= targetDate && cursor.getDay() === 1) {
+      weekNumber += 1;
+    }
+  }
+
+  return `Week ${weekNumber}`;
+};
+
 const shouldIncludeRowInExport = (row) => {
   if (!row) {
     return false;
@@ -258,9 +296,24 @@ function ReportPage({
           if (employeeId === "all") return true;
           return String(entry.assigned_to) === String(employeeId);
         })
+        .sort((left, right) => {
+          const leftTime = new Date(left.created_at).getTime();
+          const rightTime = new Date(right.created_at).getTime();
+
+          if (Number.isNaN(leftTime) || Number.isNaN(rightTime)) {
+            return 0;
+          }
+
+          return leftTime - rightTime;
+        })
         .map((entry) => ({
           ...entry,
-          assigned_to_team: teamByUserId.get(String(entry.assigned_to)) || "-"
+          assigned_to_team: teamByUserId.get(String(entry.assigned_to)) || "-",
+          day: formatDayText(entry.created_at),
+          groupLabel:
+            dateRange === "month"
+              ? getWeekLabelForDate(entry.created_at, startDate)
+              : formatDayText(entry.created_at)
         }));
 
       setDetailedTasks(scopedDetailedTasks);
@@ -368,6 +421,7 @@ function ReportPage({
       const sheet = workbook.addWorksheet("Detailed Tasks");
       const headers = [
         "Task ID",
+        "Day",
         "Employee",
         "Team",
         "Client",
@@ -399,6 +453,7 @@ function ReportPage({
       detailedTasks.forEach((entry) => {
         const row = sheet.addRow({
           "Task ID": entry.id,
+          Day: entry.day || "-",
           Employee: entry.assigned_to_name || "-",
           Team: entry.assigned_to_team || "-",
           Client: entry.client || "-",
@@ -415,7 +470,7 @@ function ReportPage({
           applyCellStyle(cell, { fillColor: COLOR.white, align: "left" });
         });
 
-        const statusCell = row.getCell(7);
+        const statusCell = row.getCell(8);
         if (entry.status === "Completed") {
           applyCellStyle(statusCell, { fillColor: COLOR.completedGreen, bold: true });
         } else if (entry.status === "In Progress") {
@@ -781,7 +836,7 @@ function ReportPage({
             loadingCellId={loadingCellId}
           />
         ) : (
-          <ReportTaskDetailTable tasks={detailedTasks} />
+          <ReportTaskDetailTable tasks={detailedTasks} dateRange={dateRange} />
         )}
       </div>
     </div>
