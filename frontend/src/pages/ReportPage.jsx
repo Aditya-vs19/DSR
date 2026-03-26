@@ -150,6 +150,29 @@ const getWeekLabelForDate = (value, rangeStart) => {
   return `Week ${weekNumber}`;
 };
 
+const getDetailedGroupKey = (task, dateRange) => {
+  if (dateRange === "month") {
+    return task.groupLabel || `week-unknown-${task.id}`;
+  }
+
+  return String(task.created_at || "").slice(0, 10) || `unknown-${task.id}`;
+};
+
+const getDetailedGroupLabel = (task, dateRange) => {
+  if (dateRange === "month" && task.groupLabel) {
+    return task.groupLabel;
+  }
+
+  const parsed = new Date(task.created_at);
+  if (Number.isNaN(parsed.getTime())) {
+    return task.groupLabel || task.day || "Unknown Day";
+  }
+
+  const dayLabel = task.groupLabel || task.day || parsed.toLocaleDateString("en-US", { weekday: "long" });
+  const dateLabel = parsed.toLocaleDateString("en-GB");
+  return `${dayLabel} - ${dateLabel}`;
+};
+
 const shouldIncludeRowInExport = (row) => {
   if (!row) {
     return false;
@@ -421,7 +444,6 @@ function ReportPage({
       const sheet = workbook.addWorksheet("Detailed Tasks");
       const headers = [
         "Task ID",
-        "Day",
         "Employee",
         "Team",
         "Client",
@@ -433,6 +455,24 @@ function ReportPage({
         "Created At",
         "Completed At"
       ];
+      const groupedDetailedTasks = [];
+      const groupIndexByKey = new Map();
+
+      detailedTasks.forEach((entry) => {
+        const groupKey = getDetailedGroupKey(entry, dateRange);
+
+        if (!groupIndexByKey.has(groupKey)) {
+          groupIndexByKey.set(groupKey, groupedDetailedTasks.length);
+          groupedDetailedTasks.push({
+            key: groupKey,
+            label: getDetailedGroupLabel(entry, dateRange),
+            tasks: [entry]
+          });
+          return;
+        }
+
+        groupedDetailedTasks[groupIndexByKey.get(groupKey)].tasks.push(entry);
+      });
 
       sheet.columns = headers.map((header) => ({
         header,
@@ -450,36 +490,41 @@ function ReportPage({
         applyCellStyle(cell, { fillColor: COLOR.headerGray, bold: true });
       });
 
-      detailedTasks.forEach((entry) => {
-        const row = sheet.addRow({
-          "Task ID": entry.id,
-          Day: entry.day || "-",
-          Employee: entry.assigned_to_name || "-",
-          Team: entry.assigned_to_team || "-",
-          Client: entry.client || "-",
-          Task: entry.task || "-",
-          Action: entry.action || "-",
-          Status: entry.status || "-",
-          Dependency: entry.dependency || "-",
-          "Assigned By": entry.assigned_by_name || "-",
-          "Created At": formatDateTimeText(entry.created_at),
-          "Completed At": formatDateTimeText(entry.completed_at)
-        });
+      groupedDetailedTasks.forEach((group) => {
+        const groupRow = sheet.addRow([group.label]);
+        sheet.mergeCells(groupRow.number, 1, groupRow.number, headers.length);
+        applyCellStyle(groupRow.getCell(1), { fillColor: COLOR.weekYellow, bold: true, align: "left" });
 
-        row.eachCell((cell) => {
-          applyCellStyle(cell, { fillColor: COLOR.white, align: "left" });
-        });
+        group.tasks.forEach((entry) => {
+          const row = sheet.addRow({
+            "Task ID": entry.id,
+            Employee: entry.assigned_to_name || "-",
+            Team: entry.assigned_to_team || "-",
+            Client: entry.client || "-",
+            Task: entry.task || "-",
+            Action: entry.action || "-",
+            Status: entry.status || "-",
+            Dependency: entry.dependency || "-",
+            "Assigned By": entry.assigned_by_name || "-",
+            "Created At": formatDateTimeText(entry.created_at),
+            "Completed At": formatDateTimeText(entry.completed_at)
+          });
 
-        const statusCell = row.getCell(8);
-        if (entry.status === "Completed") {
-          applyCellStyle(statusCell, { fillColor: COLOR.completedGreen, bold: true });
-        } else if (entry.status === "In Progress") {
-          applyCellStyle(statusCell, { fillColor: COLOR.inProgressBlue, bold: true });
-        } else if (entry.status === "Pending") {
-          applyCellStyle(statusCell, { fillColor: COLOR.pendingAmber, bold: true });
-        } else {
-          applyCellStyle(statusCell, { fillColor: COLOR.headerGray, bold: true });
-        }
+          row.eachCell((cell) => {
+            applyCellStyle(cell, { fillColor: COLOR.white, align: "left" });
+          });
+
+          const statusCell = row.getCell(7);
+          if (entry.status === "Completed") {
+            applyCellStyle(statusCell, { fillColor: COLOR.completedGreen, bold: true });
+          } else if (entry.status === "In Progress") {
+            applyCellStyle(statusCell, { fillColor: COLOR.inProgressBlue, bold: true });
+          } else if (entry.status === "Pending") {
+            applyCellStyle(statusCell, { fillColor: COLOR.pendingAmber, bold: true });
+          } else {
+            applyCellStyle(statusCell, { fillColor: COLOR.headerGray, bold: true });
+          }
+        });
       });
 
       workbook.xlsx.writeBuffer().then((buffer) => {
@@ -646,7 +691,7 @@ function ReportPage({
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
     });
-  }, [date, detailedTasks, gridData.employees, gridData.rows, gridData.startDate, gridData.summary, reportType, totalTasks]);
+  }, [date, dateRange, detailedTasks, gridData.employees, gridData.rows, gridData.startDate, gridData.summary, reportType, totalTasks]);
 
   const handleSaveHoliday = useCallback(async () => {
     const dateValue = String(holidayForm.date || "").slice(0, 10);
