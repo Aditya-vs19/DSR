@@ -1,6 +1,8 @@
 import React from "react";
 
 function ReportHeader({
+  reportType,
+  onReportTypeChange,
   dateRange,
   onDateRangeChange,
   date,
@@ -15,11 +17,55 @@ function ReportHeader({
   onExportXlsx,
   loading,
   summary,
-  totalTasks
+  totalTasks,
+  detailedSummary
 }) {
+  const stats =
+    reportType === "detailed"
+      ? [
+          {
+            label: "Total Tasks",
+            value: detailedSummary?.total ?? 0,
+            className: "bg-slate-100 text-slate-700"
+          },
+          {
+            label: "Completed",
+            value: detailedSummary?.completed ?? 0,
+            className: "bg-emerald-50 text-emerald-800"
+          },
+          {
+            label: "In Progress",
+            value: detailedSummary?.inProgress ?? 0,
+            className: "bg-blue-50 text-blue-800"
+          },
+          {
+            label: "Pending",
+            value: detailedSummary?.pending ?? 0,
+            className: "bg-amber-50 text-amber-800"
+          }
+        ]
+      : [
+          { label: "Received", value: summary.received, className: "bg-emerald-50 text-emerald-800" },
+          { label: "Not Received", value: summary.notReceived, className: "bg-rose-50 text-rose-800" },
+          { label: "Leave", value: summary.leave, className: "bg-amber-50 text-amber-800" },
+          { label: "Tasks Tracked", value: totalTasks, className: "bg-slate-100 text-slate-700" }
+        ];
+
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="grid gap-3 md:grid-cols-6">
+      <div className="grid gap-3 md:grid-cols-7">
+        <label className="md:col-span-1">
+          <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Report Type</span>
+          <select
+            value={reportType}
+            onChange={(event) => onReportTypeChange(event.target.value)}
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300"
+          >
+            <option value="received">Received / Not Received</option>
+            <option value="detailed">Detailed Task List</option>
+          </select>
+        </label>
+
         <label className="md:col-span-1">
           <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Range</span>
           <select
@@ -82,23 +128,24 @@ function ReportHeader({
             disabled={loading}
             className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-70"
           >
-            {loading ? "Loading..." : "Generate Report"}
+            {loading ? "Loading..." : reportType === "detailed" ? "Generate Detailed Report" : "Generate Report"}
           </button>
           <button
             type="button"
             onClick={onExportXlsx}
             className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
           >
-            Download XLSX
+            {reportType === "detailed" ? "Download Task XLSX" : "Download XLSX"}
           </button>
         </div>
       </div>
 
       <div className="mt-4 grid gap-2 sm:grid-cols-4">
-        <div className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">Received: {summary.received}</div>
-        <div className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-800">Not Received: {summary.notReceived}</div>
-        <div className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">Leave: {summary.leave}</div>
-        <div className="rounded-lg bg-slate-100 px-3 py-2 text-sm text-slate-700">Tasks Tracked: {totalTasks}</div>
+        {stats.map((item) => (
+          <div key={item.label} className={`rounded-lg px-3 py-2 text-sm ${item.className}`}>
+            {item.label}: {item.value}
+          </div>
+        ))}
       </div>
     </div>
   );
