@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import ExcelJS from "exceljs/dist/exceljs.min.js";
 import ReportHeader from "../components/ReportHeader";
 import ReportGrid from "../components/ReportGrid";
+import ReportTaskDetailTable from "../components/ReportTaskDetailTable";
 import { authApi, reportApi, taskApi } from "../services/api";
 
 const COLOR = {
@@ -56,6 +57,60 @@ const normalizeStatus = (status) => {
 
 const OFF_DAY_STATUSES = new Set(["Holiday", "Weekly Off"]);
 
+const getDateBounds = (dateRange, anchorDateText) => {
+  const anchor = anchorDateText ? new Date(`${anchorDateText}T00:00:00`) : new Date();
+  if (Number.isNaN(anchor.getTime())) {
+    const fallback = new Date();
+    fallback.setHours(0, 0, 0, 0);
+    return { startDate: fallback, endDate: fallback };
+  }
+
+  anchor.setHours(0, 0, 0, 0);
+
+  if (dateRange === "today") {
+    return { startDate: anchor, endDate: anchor };
+  }
+
+  if (dateRange === "month") {
+    return {
+      startDate: new Date(anchor.getFullYear(), anchor.getMonth(), 1),
+      endDate: new Date(anchor.getFullYear(), anchor.getMonth() + 1, 0)
+    };
+  }
+
+  const day = anchor.getDay();
+  const diffToMonday = (day + 6) % 7;
+  const start = new Date(anchor);
+  start.setDate(anchor.getDate() - diffToMonday);
+  const end = new Date(start);
+  end.setDate(start.getDate() + 6);
+  return { startDate: start, endDate: end };
+};
+
+const toDateText = (dateValue) => {
+  const year = dateValue.getFullYear();
+  const month = String(dateValue.getMonth() + 1).padStart(2, "0");
+  const day = String(dateValue.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+const taskFallsWithinRange = (task, rangeStart, rangeEnd) => {
+  const taskDateValue = new Date(task.created_at);
+  if (Number.isNaN(taskDateValue.getTime())) {
+    return false;
+  }
+
+  const taskDate = new Date(taskDateValue.getFullYear(), taskDateValue.getMonth(), taskDateValue.getDate());
+  return taskDate >= rangeStart && taskDate <= rangeEnd;
+};
+
+const formatDateTimeText = (value) => {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return date.toLocaleString();
+};
+
 const shouldIncludeRowInExport = (row) => {
   if (!row) {
     return false;
@@ -92,9 +147,12 @@ function ReportPage({
 }) {
   const [dateRange, setDateRange] = useState(initialDateRange);
   const [date, setDate] = useState(initialDate || new Date().toISOString().slice(0, 10));
+  const [reportType, setReportType] = useState("received");
   const [team, setTeam] = useState(initialTeam);
   const [employeeId, setEmployeeId] = useState(initialEmployeeId);
   const [gridData, setGridData] = useState({ employees: [], rows: [], summary: { received: 0, notReceived: 0, leave: 0 } });
+  const [detailedTasks, setDetailedTasks] = useState([]);
+  const [detailedSummary, setDetailedSummary] = useState({ total: 0, completed: 0, inProgress: 0, pending: 0 });
   const [directoryUsers, setDirectoryUsers] = useState([]);
   const [loading, setLoading] = useState(false);
   const [loadingCellId, setLoadingCellId] = useState(null);
@@ -177,6 +235,57 @@ function ReportPage({
     setMessage("");
 
     try {
+      const [tasksRes, usersRes] = await Promise.all([
+        taskApi.getTasks(),
+        role === "admin" ? authApi.getTeamEmployees() : authApi.getUsers()
+      ]);
+
+      const allTasks = Array.isArray(tasksRes.data) ? tasksRes.data : [];
+      const users = Array.isArray(usersRes.data) ? usersRes.data : [];
+
+      const teamByUserId = new Map(users.map((entry) => [String(entry.id), entry.team || "-"]));
+
+      const { startDate, endDate } = getDateBounds(dateRange, date);
+
+      const scopedDetailedTasks = allTasks
+        .filter((entry) => taskFallsWithinRange(entry, startDate, endDate))
+        .filter((entry) => {
+          if (team === "all") return true;
+          return teamByUserId.get(String(entry.assigned_to)) === team;
+        })
+        .filter((entry) => {
+          if (employeeId === "all") return true;
+          return String(entry.assigned_to) === String(employeeId);
+        })
+        .map((entry) => ({
+          ...entry,
+          assigned_to_team: teamByUserId.get(String(entry.assigned_to)) || "-"
+        }));
+
+      setDetailedTasks(scopedDetailedTasks);
+
+      const taskSummary = scopedDetailedTasks.reduce(
+        (acc, entry) => {
+          acc.total += 1;
+          if (entry.status === "Completed") acc.completed += 1;
+          else if (entry.status === "In Progress") acc.inProgress += 1;
+          else acc.pending += 1;
+          return acc;
+        },
+        { total: 0, completed: 0, inProgress: 0, pending: 0 }
+      );
+
+      setDetailedSummary(taskSummary);
+      setTotalTasks(allTasks.length);
+
+      if (reportType === "detailed") {
+        const startText = toDateText(startDate);
+        const endText = toDateText(endDate);
+        const reportLabel = startText === endText ? startText : `${startText} to ${endText}`;
+        setMessage(`Detailed task report loaded for ${reportLabel}`);
+        return;
+      }
+
       const reportParams = {
         dateRange,
         date,
@@ -187,16 +296,12 @@ function ReportPage({
         reportParams.team = team;
       }
 
-      const [gridRes, tasksRes] = await Promise.all([
-        reportApi.getDailyReportGrid(reportParams),
-        taskApi.getTasks()
-      ]);
+      const gridRes = await reportApi.getDailyReportGrid(reportParams);
 
       setGridData(gridRes.data);
       if (role === "superadmin") {
         setHolidays(Array.isArray(gridRes.data?.holidays) ? gridRes.data.holidays : []);
       }
-      setTotalTasks(Array.isArray(tasksRes.data) ? tasksRes.data.length : 0);
       const reportLabel =
         gridRes.data.startDate === gridRes.data.endDate
           ? gridRes.data.startDate
@@ -207,7 +312,7 @@ function ReportPage({
     } finally {
       setLoading(false);
     }
-  }, [date, dateRange, employeeId, role, team]);
+  }, [date, dateRange, employeeId, reportType, role, team]);
 
   const handleCellChange = useCallback(
     async (reportId, status) => {
@@ -252,6 +357,74 @@ function ReportPage({
   );
 
   const handleExportXlsx = useCallback(() => {
+    if (reportType === "detailed") {
+      if (!detailedTasks.length) {
+        setMessage("Generate detailed report data before exporting.");
+        return;
+      }
+
+      const workbook = new ExcelJS.Workbook();
+      const sheet = workbook.addWorksheet("Detailed Tasks");
+      const headers = [
+        "Task ID",
+        "Employee",
+        "Team",
+        "Client",
+        "Task",
+        "Action",
+        "Status",
+        "Dependency",
+        "Assigned By",
+        "Created At",
+        "Completed At"
+      ];
+
+      sheet.columns = headers.map((header) => ({
+        header,
+        key: header,
+        width: header === "Task" || header === "Action" ? 32 : 20
+      }));
+
+      sheet.getRow(1).font = { name: "Calibri", size: 11, bold: true };
+      sheet.getRow(1).fill = {
+        type: "pattern",
+        pattern: "solid",
+        fgColor: { argb: COLOR.headerGray }
+      };
+
+      detailedTasks.forEach((entry) => {
+        sheet.addRow({
+          "Task ID": entry.id,
+          Employee: entry.assigned_to_name || "-",
+          Team: entry.assigned_to_team || "-",
+          Client: entry.client || "-",
+          Task: entry.task || "-",
+          Action: entry.action || "-",
+          Status: entry.status || "-",
+          Dependency: entry.dependency || "-",
+          "Assigned By": entry.assigned_by_name || "-",
+          "Created At": formatDateTimeText(entry.created_at),
+          "Completed At": formatDateTimeText(entry.completed_at)
+        });
+      });
+
+      workbook.xlsx.writeBuffer().then((buffer) => {
+        const blob = new Blob([
+          buffer
+        ], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `detailed-task-report-${date}.xlsx`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+      });
+
+      return;
+    }
+
     if (!gridData.rows.length || !gridData.employees.length) {
       setMessage("Generate report data before exporting.");
       return;
@@ -399,7 +572,7 @@ function ReportPage({
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
     });
-  }, [date, gridData.employees, gridData.rows, gridData.startDate, gridData.summary, totalTasks]);
+  }, [date, detailedTasks, gridData.employees, gridData.rows, gridData.startDate, gridData.summary, reportType, totalTasks]);
 
   const handleSaveHoliday = useCallback(async () => {
     const dateValue = String(holidayForm.date || "").slice(0, 10);
@@ -479,6 +652,8 @@ function ReportPage({
   return (
     <div className="space-y-4">
       <ReportHeader
+        reportType={reportType}
+        onReportTypeChange={setReportType}
         dateRange={dateRange}
         onDateRangeChange={setDateRange}
         date={date}
@@ -494,6 +669,7 @@ function ReportPage({
         loading={loading}
         summary={gridData.summary || { received: 0, notReceived: 0, leave: 0 }}
         totalTasks={totalTasks}
+        detailedSummary={detailedSummary}
       />
 
       {role === "superadmin" ? (
@@ -578,12 +754,16 @@ function ReportPage({
       {message ? <div className="rounded-lg bg-slate-100 px-3 py-2 text-sm text-slate-700">{message}</div> : null}
 
       <div className="bg-white">
-        <ReportGrid
-          rows={gridData.rows}
-          employees={gridData.employees}
-          onCellChange={handleCellChange}
-          loadingCellId={loadingCellId}
-        />
+        {reportType === "received" ? (
+          <ReportGrid
+            rows={gridData.rows}
+            employees={gridData.employees}
+            onCellChange={handleCellChange}
+            loadingCellId={loadingCellId}
+          />
+        ) : (
+          <ReportTaskDetailTable tasks={detailedTasks} />
+        )}
       </div>
     </div>
   );
