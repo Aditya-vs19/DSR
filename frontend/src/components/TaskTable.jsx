@@ -6,19 +6,14 @@ const statusClass = {
   Completed: "bg-green-100 text-green-800"
 };
 
-const formatDateTime = (value) => {
+const formatLocalDateTime = (value) => {
   if (!value) {
     return "-";
   }
 
   const rawValue = String(value).trim();
-
-  const isSqlDateTimeWithoutTimezone =
-    /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(\.\d+)?$/.test(rawValue) &&
-    !/[zZ]|[+\-]\d{2}:?\d{2}$/.test(rawValue);
-
-  const normalizedValue = isSqlDateTimeWithoutTimezone
-    ? `${rawValue.replace(" ", "T")}Z`
+  const normalizedValue = /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(\.\d+)?$/.test(rawValue)
+    ? rawValue.replace(" ", "T")
     : rawValue;
 
   const parsed = new Date(normalizedValue);
@@ -229,8 +224,8 @@ const TaskTable = ({
                     </span>
                   )}
                 </td>
-                <td className="p-3 whitespace-nowrap">{formatDateTime(item.created_at)}</td>
-                <td className="p-3 whitespace-nowrap">{item.status === "Completed" ? formatDateTime(item.completed_at) : ""}</td>
+                <td className="p-3 whitespace-nowrap">{formatLocalDateTime(item.created_at)}</td>
+                <td className="p-3 whitespace-nowrap">{item.status === "Completed" ? formatLocalDateTime(item.completed_at) : ""}</td>
                 <td className="p-3">
                   {item.status !== "Completed" && editableStatus ? (
                     <div className="min-w-[220px]">
