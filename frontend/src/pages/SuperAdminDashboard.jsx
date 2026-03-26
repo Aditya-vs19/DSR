@@ -47,6 +47,16 @@ const SuperAdminDashboard = () => {
     newPassword: "",
     confirmPassword: ""
   });
+  const [newUserForm, setNewUserForm] = useState({
+    name: "",
+    email: "",
+    password: "",
+    role: "employee",
+    team: ""
+  });
+  const [newUserMessage, setNewUserMessage] = useState("");
+  const [newUserError, setNewUserError] = useState("");
+  const [creatingUser, setCreatingUser] = useState(false);
   const [passwordMessage, setPasswordMessage] = useState("");
   const [passwordError, setPasswordError] = useState("");
   const [focusedTaskId, setFocusedTaskId] = useState(null);
@@ -422,6 +432,50 @@ const SuperAdminDashboard = () => {
     }
   };
 
+  const handleCreateUser = async (event) => {
+    event.preventDefault();
+    setNewUserMessage("");
+    setNewUserError("");
+
+    const payload = {
+      name: String(newUserForm.name || "").trim(),
+      email: String(newUserForm.email || "").trim(),
+      password: String(newUserForm.password || ""),
+      role: newUserForm.role,
+      team:
+        newUserForm.role === "superadmin" || newUserForm.role === "hr"
+          ? null
+          : String(newUserForm.team || "").trim()
+    };
+
+    if (!payload.name || !payload.email || !payload.password) {
+      setNewUserError("Name, email and password are required");
+      return;
+    }
+
+    if ((payload.role === "employee" || payload.role === "admin") && !payload.team) {
+      setNewUserError("Department is required for employee/admin");
+      return;
+    }
+
+    setCreatingUser(true);
+    try {
+      await authApi.register(payload);
+      setNewUserMessage("User created successfully");
+      setNewUserForm((prev) => ({
+        ...prev,
+        name: "",
+        email: "",
+        password: ""
+      }));
+      await loadData();
+    } catch (error) {
+      setNewUserError(error?.response?.data?.message || "Failed to create user");
+    } finally {
+      setCreatingUser(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-dsr-page text-dsr-ink">
       <header
@@ -675,6 +729,68 @@ const SuperAdminDashboard = () => {
 
         {activeTab === "Users" && (
           <section className="card overflow-x-auto">
+            <form className="mb-4 grid gap-3 rounded-xl border border-dsr-border/70 bg-dsr-soft p-3 md:grid-cols-2 xl:grid-cols-6" onSubmit={handleCreateUser}>
+              <input
+                className="input"
+                placeholder="Full Name"
+                value={newUserForm.name}
+                onChange={(event) => setNewUserForm((prev) => ({ ...prev, name: event.target.value }))}
+                required
+              />
+              <input
+                className="input"
+                type="email"
+                placeholder="Email"
+                value={newUserForm.email}
+                onChange={(event) => setNewUserForm((prev) => ({ ...prev, email: event.target.value }))}
+                required
+              />
+              <input
+                className="input"
+                type="password"
+                placeholder="Password"
+                value={newUserForm.password}
+                onChange={(event) => setNewUserForm((prev) => ({ ...prev, password: event.target.value }))}
+                required
+              />
+              <select
+                className="input"
+                value={newUserForm.role}
+                onChange={(event) =>
+                  setNewUserForm((prev) => {
+                    const nextRole = event.target.value;
+                    if (nextRole === "superadmin" || nextRole === "hr") {
+                      return { ...prev, role: nextRole, team: "" };
+                    }
+
+                    return { ...prev, role: nextRole };
+                  })
+                }
+              >
+                <option value="employee">Employee</option>
+                <option value="admin">Admin</option>
+                <option value="hr">HR</option>
+                <option value="superadmin">Superadmin</option>
+              </select>
+              <input
+                className="input"
+                placeholder="Department"
+                value={newUserForm.team}
+                onChange={(event) => setNewUserForm((prev) => ({ ...prev, team: event.target.value }))}
+                disabled={newUserForm.role === "superadmin" || newUserForm.role === "hr"}
+                required={newUserForm.role === "employee" || newUserForm.role === "admin"}
+              />
+              <button className="btn-primary" type="submit" disabled={creatingUser}>
+                {creatingUser ? "Creating..." : "Add User"}
+              </button>
+
+              {(newUserMessage || newUserError) && (
+                <p className={`text-sm md:col-span-2 xl:col-span-6 ${newUserError ? "text-rose-600" : "text-emerald-700"}`}>
+                  {newUserError || newUserMessage}
+                </p>
+              )}
+            </form>
+
             <div className="mb-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
               <input
                 className="input"
