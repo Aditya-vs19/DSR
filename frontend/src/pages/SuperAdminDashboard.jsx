@@ -10,6 +10,23 @@ const TABS = ["Overview", "Tasks", "Users", "Reports", "Profile"];
 
 const defaultAnalytics = { tasksPerTeam: [], completionRate: 0, topPerformers: [] };
 
+const TEAM_DONUT_COLORS = {
+  Operations: "#E67E22",
+  Technical: "#3A6FF7",
+  Sales: "#6EC6FF",
+  Finance: "#E57399",
+  Logistics: "#F4C542"
+};
+
+const FALLBACK_DONUT_COLORS = [
+  "#2A7A46",
+  "#5F9D72",
+  "#1F5432",
+  "#398859",
+  "#7AAE89",
+  "#166534"
+];
+
 const SuperAdminDashboard = () => {
   const { user, logout } = useAuth();
   const [users, setUsers] = useState([]);
@@ -185,7 +202,8 @@ const SuperAdminDashboard = () => {
         title: `Completed Tasks by Employee (${filters.team})`,
         labels: Array.from(employeeTotals.keys()),
         values: Array.from(employeeTotals.values()),
-        chartValues: Array.from(employeeTotals.values()).map((value) => (value === 0 ? 0.05 : value))
+        chartValues: Array.from(employeeTotals.values()).map((value) => (value === 0 ? 0.05 : value)),
+        colors: FALLBACK_DONUT_COLORS
       };
     }
 
@@ -205,7 +223,10 @@ const SuperAdminDashboard = () => {
       title: "Completed Tasks by Department",
       labels: Array.from(teamTotals.keys()),
       values: Array.from(teamTotals.values()),
-      chartValues: Array.from(teamTotals.values())
+      chartValues: Array.from(teamTotals.values()),
+      colors: Array.from(teamTotals.keys()).map(
+        (teamName, index) => TEAM_DONUT_COLORS[teamName] || FALLBACK_DONUT_COLORS[index % FALLBACK_DONUT_COLORS.length]
+      )
     };
   }, [filters.date, filters.team, tasks, users]);
 
@@ -430,14 +451,7 @@ const SuperAdminDashboard = () => {
                 labels={completedTasksPieData.labels}
                 values={completedTasksPieData.values}
                 chartValues={completedTasksPieData.chartValues}
-                color={[
-                  "rgba(42, 122, 70, 0.85)",
-                  "rgba(95, 157, 114, 0.85)",
-                  "rgba(31, 84, 50, 0.85)",
-                  "rgba(57, 136, 89, 0.85)",
-                  "rgba(122, 174, 137, 0.85)",
-                  "rgba(22, 101, 52, 0.85)"
-                ]}
+                color={completedTasksPieData.colors || FALLBACK_DONUT_COLORS}
               />
               <Charts
                 type="bar"

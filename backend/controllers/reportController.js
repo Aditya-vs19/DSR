@@ -13,6 +13,7 @@ import {
   getReportDetailsById
 } from "../models/reportModel.js";
 import { createNotification, getHrUserIds } from "../models/taskModel.js";
+import { getManagedTeamsForAdmin } from "../utils/teamScope.js";
 
 const normalizeDateText = (value) => {
   if (!value) return "";
@@ -23,6 +24,7 @@ const normalizeDateText = (value) => {
 export const getReportsController = async (req, res) => {
   try {
     const { role, id: userId, team } = req.user;
+    const managedTeams = role === "admin" ? getManagedTeamsForAdmin(req.user) : [];
 
     if (req.query.dateRange) {
       if (!["admin", "hr", "superadmin"].includes(role)) {
@@ -33,6 +35,7 @@ export const getReportsController = async (req, res) => {
         role,
         userId,
         team,
+        managedTeams,
         dateRange: req.query.dateRange,
         date: req.query.date,
         teamFilter: req.query.team,
@@ -42,7 +45,7 @@ export const getReportsController = async (req, res) => {
       return res.status(200).json(grid);
     }
 
-    const reports = await getReportsByRole({ role, userId, team });
+    const reports = await getReportsByRole({ role, userId, team, managedTeams });
     return res.status(200).json(reports);
   } catch (error) {
     return res.status(500).json({ message: "Failed to fetch reports", error: error.message });
@@ -107,7 +110,9 @@ export const updateDailyReportCellController = async (req, res) => {
       return res.status(404).json({ message: "Report cell not found" });
     }
 
-    if (req.user.role === "admin" && req.user.team !== cell.team) {
+    const managedTeams = req.user.role === "admin" ? getManagedTeamsForAdmin(req.user) : [];
+
+    if (req.user.role === "admin" && !managedTeams.includes(cell.team)) {
       return res.status(403).json({ message: "Forbidden" });
     }
 
@@ -166,7 +171,9 @@ export const getReportDetailsController = async (req, res) => {
       return res.status(404).json({ message: "Report not found" });
     }
 
-    if (req.user.role === "admin" && req.user.team !== details.report.employee_team) {
+    const managedTeams = req.user.role === "admin" ? getManagedTeamsForAdmin(req.user) : [];
+
+    if (req.user.role === "admin" && !managedTeams.includes(details.report.employee_team)) {
       return res.status(403).json({ message: "Forbidden" });
     }
 

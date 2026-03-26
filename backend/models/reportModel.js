@@ -220,7 +220,7 @@ export const generateDailyReports = async (reportDate) => {
   await query(sql, [reportDate, reportDate]);
 };
 
-export const getReportsByRole = async ({ role, userId, team }) => {
+export const getReportsByRole = async ({ role, userId, team, managedTeams = [] }) => {
   await ensureDailyReportTable();
 
   const baseSql = `
@@ -248,7 +248,9 @@ export const getReportsByRole = async ({ role, userId, team }) => {
   }
 
   if (role === "admin") {
-    return query(`${baseSql} WHERE u.team = ? ORDER BY r.date DESC`, [team]);
+    const teams = Array.isArray(managedTeams) && managedTeams.length > 0 ? managedTeams : [team];
+    const placeholders = teams.map(() => "?").join(",");
+    return query(`${baseSql} WHERE u.team IN (${placeholders}) ORDER BY r.date DESC`, teams);
   }
 
   return query(`${baseSql} ORDER BY r.date DESC`);
@@ -344,6 +346,7 @@ export const getDailyReportGridByRole = async ({
   role,
   userId,
   team,
+  managedTeams = [],
   dateRange = "week",
   date,
   teamFilter = "all",
@@ -359,13 +362,30 @@ export const getDailyReportGridByRole = async ({
   let usersParams = [];
 
   if (role === "admin") {
+    const teams = Array.isArray(managedTeams) && managedTeams.length > 0 ? managedTeams : [team];
+    const scopedTeams =
+      teamFilter && teamFilter !== "all" ? teams.filter((entry) => entry === teamFilter) : teams;
+
+    if (scopedTeams.length === 0) {
+      return {
+        dateRange,
+        startDate: formatDate(startDate),
+        endDate: formatDate(endDate),
+        employees: [],
+        rows: [],
+        summary: { received: 0, notReceived: 0, leave: 0 },
+        holidays: []
+      };
+    }
+
+    const placeholders = scopedTeams.map(() => "?").join(",");
     usersSql = `
       SELECT id, name, email, role, team
       FROM users
-      WHERE team = ? AND role = 'employee'
+      WHERE team IN (${placeholders}) AND role = 'employee'
       ORDER BY name
     `;
-    usersParams = [team];
+    usersParams = scopedTeams;
   } else {
     usersSql = `
       SELECT id, name, email, role, team
