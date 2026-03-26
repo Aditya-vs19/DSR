@@ -184,8 +184,26 @@ const EmployeeDashboard = () => {
   };
 
   const handleStatusChange = async (task, status, dependency = task.dependency) => {
-    await taskApi.updateTask(task.id, { status, dependency });
-    await loadData();
+    setError("");
+
+    try {
+      await taskApi.updateTask(task.id, { status, dependency });
+      setTasks((prev) =>
+        prev.map((entry) =>
+          entry.id === task.id
+            ? {
+                ...entry,
+                status,
+                dependency
+              }
+            : entry
+        )
+      );
+      void loadData().catch(() => {});
+    } catch (apiError) {
+      setError(apiError.response?.data?.message || "Failed to update task");
+      throw apiError;
+    }
   };
 
   const handleMarkRead = async (id) => {
@@ -441,39 +459,28 @@ const EmployeeDashboard = () => {
         {activeTab === "Tasks" && (
           <form className="card grid gap-3 md:grid-cols-2" onSubmit={handleCreateTask}>
             <h2 className="md:col-span-2 text-lg font-semibold">Create Task</h2>
+            <h3 className="md:col-span-2 text-sm text-dsr-muted">Client / Vendor</h3>
             <input
               className="input"
-              placeholder="Client"
               value={form.client}
               onChange={(event) => setForm((prev) => ({ ...prev, client: event.target.value }))}
               required
             />
+            <h3 className="md:col-span-2 text-sm text-dsr-muted">Task</h3>
             <input
               className="input"
-              placeholder="Task title"
               value={form.task}
               onChange={(event) => setForm((prev) => ({ ...prev, task: event.target.value }))}
               required
             />
+            <h3 className="md:col-span-2 text-sm text-dsr-muted">Action</h3>
             <textarea
               className="input md:col-span-2"
-              placeholder="Action"
               value={form.action}
               onChange={(event) => setForm((prev) => ({ ...prev, action: event.target.value }))}
               required
             />
-            <input
-              className="input"
-              placeholder="Dependency"
-              value={form.dependency}
-              onChange={(event) => setForm((prev) => ({ ...prev, dependency: event.target.value }))}
-            />
-            <input
-              className="input"
-              type="datetime-local"
-              value={form.deadline}
-              onChange={(event) => setForm((prev) => ({ ...prev, deadline: event.target.value }))}
-            />
+            
             <button className="btn-primary md:col-span-2" type="submit">
               Add Task
             </button>
