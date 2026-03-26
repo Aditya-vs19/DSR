@@ -1,9 +1,11 @@
 import { useMemo } from "react";
 import logo from "../assets/logo.png";
 import { useAuth } from "../context/AuthContext";
+import useScrollHeader from "../hooks/useScrollHeader";
 
 const Navbar = ({ notifications = [], onToggleSidebar }) => {
   const { user, logout } = useAuth();
+  const isHeaderVisible = useScrollHeader();
 
   const unreadCount = useMemo(
     () => notifications.filter((notification) => !notification.is_read).length,
@@ -11,7 +13,11 @@ const Navbar = ({ notifications = [], onToggleSidebar }) => {
   );
 
   return (
-    <header className="sticky top-0 z-30 border-b border-slate-200 bg-[#f3f3f3]">
+    <header
+      className={`sticky top-0 z-30 border-b border-slate-200 bg-[#f3f3f3] transition-transform duration-300 ${
+        isHeaderVisible ? "translate-y-0" : "-translate-y-full"
+      }`}
+    >
       <div className="flex items-center justify-between gap-6 px-4 py-4">
         <div className="flex items-center gap-5">
           <button

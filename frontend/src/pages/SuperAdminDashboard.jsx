@@ -4,6 +4,7 @@ import ReportPage from "./ReportPage";
 import TaskTable from "../components/TaskTable";
 import logo from "../assets/logo.png";
 import { useAuth } from "../context/AuthContext";
+import useScrollHeader from "../hooks/useScrollHeader";
 import { authApi, reportApi, taskApi } from "../services/api";
 
 const TABS = ["Overview", "Tasks", "Users", "Reports", "Profile"];
@@ -29,6 +30,7 @@ const FALLBACK_DONUT_COLORS = [
 
 const SuperAdminDashboard = () => {
   const { user, logout } = useAuth();
+  const isHeaderVisible = useScrollHeader();
   const [users, setUsers] = useState([]);
   const [tasks, setTasks] = useState([]);
   const [reports, setReports] = useState([]);
@@ -291,7 +293,11 @@ const SuperAdminDashboard = () => {
 
   return (
     <div className="min-h-screen bg-dsr-page text-dsr-ink">
-      <header className="sticky top-0 z-30 border-b border-dsr-border bg-[#f3f3f3]">
+      <header
+        className={`sticky top-0 z-30 border-b border-dsr-border bg-[#f3f3f3] transition-transform duration-300 ${
+          isHeaderVisible ? "translate-y-0" : "-translate-y-full"
+        }`}
+      >
         <div className="mx-auto flex max-w-[1400px] items-center justify-between gap-6 px-4 py-4 lg:px-8">
           <div className="flex items-center gap-5">
             <img
