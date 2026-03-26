@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 
 const statusClass = {
   Pending: "bg-yellow-100 text-yellow-800",
-  "In Progress": "bg-yellow-100 text-yellow-800",
+  "In Progress": "bg-sky-100 text-sky-800",
   Completed: "bg-green-100 text-green-800"
 };
 

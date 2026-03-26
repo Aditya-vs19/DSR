@@ -13,6 +13,7 @@ const COLOR = {
   todayGreen: "FF7CB342",
   receivedGreen: "FF6AA84F",
   completedGreen: "FF34A853",
+  inProgressBlue: "FF3B82F6",
   pendingAmber: "FFF59E0B",
   leaveBlue: "FF4FC3F7",
   notReceivedRed: "FFFF0000",
@@ -391,9 +392,12 @@ function ReportPage({
         pattern: "solid",
         fgColor: { argb: COLOR.headerGray }
       };
+      sheet.getRow(1).eachCell((cell) => {
+        applyCellStyle(cell, { fillColor: COLOR.headerGray, bold: true });
+      });
 
       detailedTasks.forEach((entry) => {
-        sheet.addRow({
+        const row = sheet.addRow({
           "Task ID": entry.id,
           Employee: entry.assigned_to_name || "-",
           Team: entry.assigned_to_team || "-",
@@ -406,6 +410,21 @@ function ReportPage({
           "Created At": formatDateTimeText(entry.created_at),
           "Completed At": formatDateTimeText(entry.completed_at)
         });
+
+        row.eachCell((cell) => {
+          applyCellStyle(cell, { fillColor: COLOR.white, align: "left" });
+        });
+
+        const statusCell = row.getCell(7);
+        if (entry.status === "Completed") {
+          applyCellStyle(statusCell, { fillColor: COLOR.completedGreen, bold: true });
+        } else if (entry.status === "In Progress") {
+          applyCellStyle(statusCell, { fillColor: COLOR.inProgressBlue, bold: true });
+        } else if (entry.status === "Pending") {
+          applyCellStyle(statusCell, { fillColor: COLOR.pendingAmber, bold: true });
+        } else {
+          applyCellStyle(statusCell, { fillColor: COLOR.headerGray, bold: true });
+        }
       });
 
       workbook.xlsx.writeBuffer().then((buffer) => {
