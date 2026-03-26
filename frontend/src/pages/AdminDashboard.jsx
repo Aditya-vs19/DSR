@@ -376,17 +376,17 @@ const AdminDashboard = () => {
         )}
 
         {activeTab === "Tasks" && (
-          <form className="card grid gap-3 md:grid-cols-2" onSubmit={handleAssign}>
+          <form className="card mx-auto grid w-full max-w-5xl gap-2 md:grid-cols-2" onSubmit={handleAssign}>
             <h2 className="md:col-span-2 text-lg font-semibold">Create Task</h2>
             <h2 className="md:col-span-2 text-sm text-dsr-muted">Client / Vendor</h2>
             <input
-              className="input"
+              className="input md:col-span-2"
               value={form.client}
               onChange={(event) => setForm((prev) => ({ ...prev, client: event.target.value }))}
             />
             <h2 className="md:col-span-2 text-sm text-dsr-muted">Task</h2>
             <input
-              className="input"
+              className="input md:col-span-2"
               value={form.task}
               onChange={(event) => setForm((prev) => ({ ...prev, task: event.target.value }))}
               required
@@ -426,6 +426,7 @@ const AdminDashboard = () => {
             <textarea
               className="input md:col-span-2"
               placeholder="Action"
+              rows={3}
               value={form.action}
               onChange={(event) => setForm((prev) => ({ ...prev, action: event.target.value }))}
               required
