@@ -12,6 +12,20 @@ import {
 import { getManagedTeamsForAdmin } from "../utils/teamScope.js";
 
 const allowedRoles = ["employee", "admin", "hr", "superadmin"];
+const BCRYPT_HASH_PATTERN = /^\$2[aby]\$\d{2}\$/;
+
+const verifyCurrentPassword = async (inputPassword, storedPassword) => {
+  if (!inputPassword || !storedPassword) {
+    return false;
+  }
+
+  if (BCRYPT_HASH_PATTERN.test(String(storedPassword))) {
+    return bcrypt.compare(inputPassword, storedPassword);
+  }
+
+  // Backward compatibility for legacy rows that stored plaintext passwords.
+  return inputPassword === storedPassword;
+};
 
 const signToken = (user) =>
   jwt.sign(
@@ -76,13 +90,13 @@ export const login = async (req, res) => {
       return res.status(401).json({ message: "Invalid credentials" });
     }
 
-    let passwordMatch = await bcrypt.compare(password, user.password);
+    const usesBcryptHash = BCRYPT_HASH_PATTERN.test(String(user.password || ""));
+    let passwordMatch = await verifyCurrentPassword(password, user.password);
 
-    if (!passwordMatch && password === "123") {
+    if (passwordMatch && !usesBcryptHash) {
       const migratedHash = await bcrypt.hash(password, 10);
       await updateUserPasswordById(user.id, migratedHash);
-      passwordMatch = true;
-      console.info(`[auth] Migrated legacy password hash (${username})`);
+      console.info(`[auth] Migrated legacy plaintext password to bcrypt (${username})`);
     }
 
     if (!passwordMatch) {
@@ -137,7 +151,10 @@ export const changePassword = async (req, res) => {
       return res.status(400).json({ message: "currentPassword and newPassword are required" });
     }
 
-    if (String(newPassword).length < 3) {
+    const normalizedCurrentPassword = String(currentPassword);
+    const normalizedNewPassword = String(newPassword);
+
+    if (normalizedNewPassword.length < 3) {
       return res.status(400).json({ message: "New password must be at least 3 characters" });
     }
 
@@ -146,13 +163,22 @@ export const changePassword = async (req, res) => {
       return res.status(404).json({ message: "User not found" });
     }
 
-    const matches = await bcrypt.compare(currentPassword, user.password);
+    const matches = await verifyCurrentPassword(normalizedCurrentPassword, user.password);
     if (!matches) {
       return res.status(401).json({ message: "Current password is incorrect" });
     }
 
-    const nextHash = await bcrypt.hash(newPassword, 10);
-    await updateUserPasswordById(req.user.id, nextHash);
+    const isSameAsCurrent = await verifyCurrentPassword(normalizedNewPassword, user.password);
+    if (isSameAsCurrent) {
+      return res.status(400).json({ message: "New password must be different from current password" });
+    }
+
+    const nextHash = await bcrypt.hash(normalizedNewPassword, 10);
+    const result = await updateUserPasswordById(req.user.id, nextHash);
+
+    if (!result?.affectedRows) {
+      return res.status(500).json({ message: "Password update was not persisted" });
+    }
 
     return res.status(200).json({ message: "Password changed successfully" });
   } catch (error) {
