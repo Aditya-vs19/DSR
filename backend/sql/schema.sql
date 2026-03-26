@@ -23,6 +23,7 @@ CREATE TABLE tasks (
   type ENUM('self', 'assigned') NOT NULL,
   submitted_to_hr TINYINT(1) NOT NULL DEFAULT 0,
   submitted_to_hr_at TIMESTAMP NULL,
+  carried_forward_from_id INT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   completed_at TIMESTAMP NULL,
   deadline DATETIME NULL,
@@ -107,7 +108,7 @@ INSERT INTO users (name, email, password, role, team) VALUES
 -- TECH TEAM
 ('Ravindra', 'ravindra@cludobits.com', '$2a$10$9uM6P6pMpT2FQm40XW5GFutxuxMxDPZWS9Vyuk3F7S3w7Dnk3a1lW', 'employee', 'Technical'),
 ('Kavita', 'kavita@cludobits.com', '$2a$10$9uM6P6pMpT2FQm40XW5GFutxuxMxDPZWS9Vyuk3F7S3w7Dnk3a1lW', 'employee', 'Technical'),
-('Avinash', 'avinash@cludobits.com', '$2a$10$9uM6P6pMpT2FQm40XW5GFutxuxMxDPZWS9Vyuk3F7S3w7Dnk3a1lW', 'employee', 'Technical'),
+('Avinash', 'avinash@cludobits.com', '$2a$10$9uM6P6pMpT2FQm40XW5GFutxuxMxDPZWS9Vyuk3F7S3w7Dnk3a1lW', 'employee', 'Logistics'),
 
 -- FINANCE TEAM
 ('Apurva', 'apurva@cludobits.com', '$2a$10$9uM6P6pMpT2FQm40XW5GFutxuxMxDPZWS9Vyuk3F7S3w7Dnk3a1lW', 'employee', 'Finance');
