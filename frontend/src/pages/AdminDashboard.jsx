@@ -7,7 +7,7 @@ import { useAuth } from "../context/AuthContext";
 import useScrollHeader from "../hooks/useScrollHeader";
 import { authApi, reportApi, taskApi } from "../services/api";
 
-const TABS = ["Overview", "Tasks", "Users", "Reports", "Profile"];
+const TABS = ["Overview", "Tasks", "Employees", "Reports", "Profile"];
 
 const getManagedDepartmentLabel = (currentUser) => {
   const name = String(currentUser?.name || "").trim().toLowerCase();
@@ -608,9 +608,9 @@ const AdminDashboard = () => {
           />
         )}
 
-        {activeTab === "Users" && (
+        {activeTab === "Employees" && (
           <section className="card overflow-x-auto">
-            <h2 className="mb-3 text-lg font-semibold">Department Users</h2>
+            <h2 className="mb-3 text-lg font-semibold">Department Employees</h2>
             <table className="min-w-full text-sm">
               <thead>
                 <tr className="border-b bg-dsr-soft text-left">
@@ -632,7 +632,7 @@ const AdminDashboard = () => {
                 {employees.length === 0 && (
                   <tr>
                     <td colSpan={4} className="p-4 text-center text-dsr-muted">
-                      No users found in this department
+                      No employees found in this department
                     </td>
                   </tr>
                 )}

@@ -1,8 +1,8 @@
 import express from "express";
 import {
   changePassword,
-  getTeamEmployees,
-  getUsers,
+  getDepartmentEmployees,
+  getEmployees,
   login,
   register
 } from "../controllers/authController.js";
@@ -13,8 +13,12 @@ const router = express.Router();
 router.post("/login", login);
 router.post("/change-password", authenticate, changePassword);
 router.post("/register", authenticateOptional, registerProtected, register);
-router.get("/users", authenticate, authorizeRoles("superadmin", "hr"), getUsers);
-router.get("/users/team", authenticate, authorizeRoles("admin", "hr", "superadmin"), getTeamEmployees);
+router.get("/employees", authenticate, authorizeRoles("superadmin", "hr"), getEmployees);
+router.get("/employees/team", authenticate, authorizeRoles("admin", "hr", "superadmin"), getDepartmentEmployees);
+
+// Backward-compatible aliases
+router.get("/users", authenticate, authorizeRoles("superadmin", "hr"), getEmployees);
+router.get("/users/team", authenticate, authorizeRoles("admin", "hr", "superadmin"), getDepartmentEmployees);
 
 function authenticateOptional(req, _res, next) {
   const authHeader = req.headers.authorization || "";
@@ -30,7 +34,7 @@ function registerProtected(req, res, next) {
 
   if (["superadmin", "hr", "admin"].includes(role)) {
     if (!req.user) {
-      return res.status(401).json({ message: "Token required to create privileged users" });
+      return res.status(401).json({ message: "Token required to create privileged employees" });
     }
 
     return authorizeRoles("superadmin", "hr")(req, res, next);
