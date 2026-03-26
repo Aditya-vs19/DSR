@@ -416,6 +416,7 @@ const EmployeeDashboard = () => {
                 >
                   <option value="all">All</option>
                   <option value="Pending">Pending</option>
+                  <option value="In Progress">In Progress</option>
                   <option value="Completed">Completed</option>
                 </select>
               </div>
@@ -470,7 +471,6 @@ const EmployeeDashboard = () => {
               className="input"
               value={form.client}
               onChange={(event) => setForm((prev) => ({ ...prev, client: event.target.value }))}
-              required
             />
             <h3 className="md:col-span-2 text-sm text-dsr-muted">Task</h3>
             <input

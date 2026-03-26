@@ -22,17 +22,19 @@ const Charts = ({
   datasets = null,
   chartValues = null,
   color = "rgba(79, 70, 229, 0.8)",
-  barWidth = 50
+  barWidth = 50,
+  xAxisTitle = "",
+  yAxisTitle = ""
 }) => {
   const isCircular = type === "pie" || type === "donut";
-  const renderedValues = chartValues || values;
   const hasCustomDatasets = Array.isArray(datasets) && datasets.length > 0;
+  const renderedValues = chartValues || values;
   const renderedDatasets = hasCustomDatasets
     ? datasets.map((entry) => ({
         tension: 2,
         ...(type === "bar"
           ? {
-              barThickness: barWidth,
+              maxBarThickness: 24,
               categoryPercentage: 0.72,
               barPercentage: 0.78
             }
@@ -64,6 +66,15 @@ const Charts = ({
 
   const options = {
     responsive: true,
+    maintainAspectRatio: false,
+    layout: {
+      padding: {
+        top: 8,
+        right: 8,
+        left: 8,
+        bottom: 8
+      }
+    },
     plugins: {
       tooltip: {
         callbacks: {
@@ -73,7 +84,16 @@ const Charts = ({
           }
         }
       },
-      legend: { display: isCircular || hasCustomDatasets },
+      legend: {
+        display: isCircular || hasCustomDatasets,
+        position: "top",
+        align: "center",
+        labels: {
+          boxWidth: 18,
+          boxHeight: 10,
+          padding: 14
+        }
+      },
       title: { display: true, text: title }
     },
     ...(type === "donut" ? { cutout: "65%" } : {}),
@@ -81,8 +101,22 @@ const Charts = ({
       ? {}
       : {
           scales: {
+            x: {
+              ticks: {
+                maxRotation: 0,
+                minRotation: 0
+              },
+              title: {
+                display: Boolean(xAxisTitle),
+                text: xAxisTitle
+              }
+            },
             y: {
               beginAtZero: true,
+              title: {
+                display: Boolean(yAxisTitle),
+                text: yAxisTitle
+              },
               ticks: {
                 stepSize: 1,
                 precision: 0
@@ -97,13 +131,15 @@ const Charts = ({
       {type === "line" ? (
         <Line data={dataset} options={options} />
       ) : type === "donut" ? (
-        <div className="mx-auto w-full max-w-[280px]">
+        <div className="mx-auto h-[280px] w-full max-w-[280px]">
           <Doughnut data={dataset} options={options} />
         </div>
       ) : type === "pie" ? (
         <Pie data={dataset} options={options} />
       ) : (
-        <Bar data={dataset} options={options} />
+        <div className="h-[340px] w-full">
+          <Bar data={dataset} options={options} />
+        </div>
       )}
     </div>
   );
