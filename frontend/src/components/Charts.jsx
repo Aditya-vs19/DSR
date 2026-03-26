@@ -86,17 +86,17 @@ const Charts = ({
       },
       legend: {
         display: isCircular || hasCustomDatasets,
-        position: "top",
-        align: "center",
+        position: type === "donut" ? "left" : "top",
+        align: type === "donut" ? "start" : "center",
         labels: {
           boxWidth: 18,
           boxHeight: 10,
-          padding: 14
+          padding: type === "donut" ? 12 : 14
         }
       },
       title: { display: true, text: title }
     },
-    ...(type === "donut" ? { cutout: "65%" } : {}),
+    ...(type === "donut" ? { cutout: "60%" } : {}),
     ...(isCircular
       ? {}
       : {
@@ -131,7 +131,7 @@ const Charts = ({
       {type === "line" ? (
         <Line data={dataset} options={options} />
       ) : type === "donut" ? (
-        <div className="mx-auto h-[280px] w-full max-w-[280px]">
+        <div className="mx-auto h-[340px] w-full max-w-[540px]">
           <Doughnut data={dataset} options={options} />
         </div>
       ) : type === "pie" ? (
