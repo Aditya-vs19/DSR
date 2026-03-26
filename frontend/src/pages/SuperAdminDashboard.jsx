@@ -255,7 +255,12 @@ const SuperAdminDashboard = () => {
   const statusComparisonChartData = useMemo(() => {
     const scopeTasks = tasks.filter((task) => {
       if (filters.date) {
-        const taskDate = (task.created_at || "").slice(0, 10);
+        const statusValue = String(task.raw_status || task.status || "").toLowerCase();
+        const taskDate =
+          statusValue === "completed"
+            ? (task.completed_at || task.created_at || "").slice(0, 10)
+            : (task.created_at || "").slice(0, 10);
+
         if (taskDate !== filters.date) {
           return false;
         }
@@ -310,10 +315,12 @@ const SuperAdminDashboard = () => {
       return {
         title: "Task Status Comparison by Department",
         labels,
+        xAxisTitle: "Department",
+        yAxisTitle: "Task Count",
         datasets: [
-          { label: "Pending", data: values.map((entry) => entry.pending), backgroundColor: "#94A3B8" },
-          { label: "In Progress", data: values.map((entry) => entry.inProgress), backgroundColor: "#3A6FF7" },
-          { label: "Completed", data: values.map((entry) => entry.completed), backgroundColor: "#2A7A46" }
+          { label: "Pending Tasks", data: values.map((entry) => entry.pending), backgroundColor: "#94A3B8" },
+          { label: "In Progress Tasks", data: values.map((entry) => entry.inProgress), backgroundColor: "#3A6FF7" },
+          { label: "Completed Tasks", data: values.map((entry) => entry.completed), backgroundColor: "#2A7A46" }
         ]
       };
     }
@@ -354,10 +361,12 @@ const SuperAdminDashboard = () => {
     return {
       title: `Task Status Comparison by Employee (${filters.team})`,
       labels,
+      xAxisTitle: "Employee",
+      yAxisTitle: "Task Count",
       datasets: [
-        { label: "Pending", data: values.map((entry) => entry.pending), backgroundColor: "#94A3B8" },
-        { label: "In Progress", data: values.map((entry) => entry.inProgress), backgroundColor: "#3A6FF7" },
-        { label: "Completed", data: values.map((entry) => entry.completed), backgroundColor: "#2A7A46" }
+        { label: "Pending Tasks", data: values.map((entry) => entry.pending), backgroundColor: "#94A3B8" },
+        { label: "In Progress Tasks", data: values.map((entry) => entry.inProgress), backgroundColor: "#3A6FF7" },
+        { label: "Completed Tasks", data: values.map((entry) => entry.completed), backgroundColor: "#2A7A46" }
       ]
     };
   }, [tasks, users, filters.team, filters.date]);
@@ -636,6 +645,8 @@ const SuperAdminDashboard = () => {
                 title={statusComparisonChartData.title}
                 labels={statusComparisonChartData.labels}
                 datasets={statusComparisonChartData.datasets}
+                xAxisTitle={statusComparisonChartData.xAxisTitle}
+                yAxisTitle={statusComparisonChartData.yAxisTitle}
               />
             </div>
             <TaskTable

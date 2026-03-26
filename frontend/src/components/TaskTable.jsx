@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 
 const statusClass = {
   Pending: "bg-yellow-100 text-yellow-800",
-  "In Progress": "bg-blue-100 text-blue-800",
+  "In Progress": "bg-yellow-100 text-yellow-800",
   Completed: "bg-green-100 text-green-800"
 };
 
@@ -40,42 +40,21 @@ const TaskTable = ({
   focusedTaskId = null
 }) => {
   const [dependencyDrafts, setDependencyDrafts] = useState({});
-  const [dependencyEditing, setDependencyEditing] = useState({});
-  const [dependencyToast, setDependencyToast] = useState({ show: false, kind: "success", message: "" });
+  const [dependencyMeta, setDependencyMeta] = useState({});
+  const [skipPersistIds, setSkipPersistIds] = useState({});
   const [reassignModalTask, setReassignModalTask] = useState(null);
   const [reassignSelectionId, setReassignSelectionId] = useState("");
 
   useEffect(() => {
-    setDependencyDrafts(() => {
+    setDependencyDrafts((prev) => {
       const next = {};
       tasks.forEach((task) => {
-        next[task.id] = task.dependency ?? "";
+        const taskDependency = task.dependency ?? "";
+        next[task.id] = dependencyMeta[task.id]?.state === "saving" ? prev[task.id] ?? taskDependency : taskDependency;
       });
       return next;
     });
-  }, [tasks]);
-
-  useEffect(() => {
-    setDependencyEditing(() => {
-      const next = {};
-      tasks.forEach((task) => {
-        next[task.id] = !task.dependency;
-      });
-      return next;
-    });
-  }, [tasks]);
-
-  useEffect(() => {
-    if (!dependencyToast.show) {
-      return;
-    }
-
-    const timer = setTimeout(() => {
-      setDependencyToast({ show: false, kind: "success", message: "" });
-    }, 2200);
-
-    return () => clearTimeout(timer);
-  }, [dependencyToast]);
+  }, [tasks, dependencyMeta]);
 
   useEffect(() => {
     if (!focusedTaskId) {
@@ -89,23 +68,71 @@ const TaskTable = ({
   }, [focusedTaskId, tasks]);
 
   const getDependencyValue = (item) => dependencyDrafts[item.id] ?? item.dependency ?? "";
+  const clearDependencyMeta = (taskId) => {
+    setDependencyMeta((prev) => {
+      if (!prev[taskId]) {
+        return prev;
+      }
 
-  const handleDependencySave = async (item) => {
+      const next = { ...prev };
+      delete next[taskId];
+      return next;
+    });
+  };
+
+  const resetDependencyMeta = (taskId) => {
+    setTimeout(() => {
+      setDependencyMeta((prev) => {
+        if (!prev[taskId] || prev[taskId].state !== "saved") {
+          return prev;
+        }
+
+        const next = { ...prev };
+        delete next[taskId];
+        return next;
+      });
+    }, 1200);
+  };
+
+  const persistDependency = async (item, value = undefined) => {
     if (!onStatusChange) {
       return;
     }
 
-    const dependency = String(getDependencyValue(item)).trim();
-    if (!dependency) {
+    if (skipPersistIds[item.id]) {
+      setSkipPersistIds((prev) => {
+        const next = { ...prev };
+        delete next[item.id];
+        return next;
+      });
       return;
     }
 
+    const nextDependency = String(value ?? getDependencyValue(item)).trim();
+    const currentDependency = (item.dependency ?? "").trim();
+
+    if (nextDependency === currentDependency) {
+      return;
+    }
+
+    setDependencyMeta((prev) => ({
+      ...prev,
+      [item.id]: { state: "saving" }
+    }));
+
     try {
-      await onStatusChange(item, item.status, dependency);
-      setDependencyEditing((prev) => ({ ...prev, [item.id]: false }));
-      setDependencyToast({ show: true, kind: "success", message: "Dependency saved" });
+      await onStatusChange(item, item.status, nextDependency);
+      setDependencyMeta((prev) => ({
+        ...prev,
+        [item.id]: { state: "saved" }
+      }));
+      resetDependencyMeta(item.id);
     } catch {
-      setDependencyToast({ show: true, kind: "error", message: "Failed to save dependency" });
+      setDependencyDrafts((prev) => ({ ...prev, [item.id]: item.dependency ?? "" }));
+      setDependencyMeta((prev) => ({
+        ...prev,
+        [item.id]: { state: "error" }
+      }));
     }
   };
 
@@ -173,7 +200,7 @@ const TaskTable = ({
                 <td className="p-3">{item.task}</td>
                 <td className="p-3">{item.action}</td>
                 <td className="p-3">
-                  {editableStatus ? (
+                  {editableStatus && item.status !== "Completed" ? (
                     <select
                       className={`rounded-md px-2 py-1 text-xs font-semibold ${statusClass[item.status] || "bg-slate-100 text-slate-700"}`}
                       value={item.status}
@@ -192,46 +219,45 @@ const TaskTable = ({
                 <td className="p-3 whitespace-nowrap">{formatTime(item.created_at)}</td>
                 <td className="p-3 whitespace-nowrap">{item.status === "Completed" ? formatTime(item.completed_at) : ""}</td>
                 <td className="p-3">
-                  {item.status === "Completed" ? (
-                    "-"
-                  ) : editableStatus ? (
-                    dependencyEditing[item.id] ? (
-                      <div className="flex min-w-[220px] items-center gap-2">
-                        <input
-                          className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-700 outline-none focus:border-emerald-500"
-                          type="text"
-                          placeholder="Add dependency"
-                          value={getDependencyValue(item)}
-                          onChange={(event) =>
-                            setDependencyDrafts((prev) => ({ ...prev, [item.id]: event.target.value }))
+                  {item.status !== "Completed" && editableStatus ? (
+                    <div className="min-w-[220px]">
+                      <input
+                        className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-700 outline-none focus:border-emerald-500"
+                        type="text"
+                        placeholder="Add dependency"
+                        value={getDependencyValue(item)}
+                        onChange={(event) => {
+                          setDependencyDrafts((prev) => ({ ...prev, [item.id]: event.target.value }));
+                          clearDependencyMeta(item.id);
+                        }}
+                        onBlur={(event) => void persistDependency(item, event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") {
+                            event.preventDefault();
+                            event.currentTarget.blur();
                           }
-                        />
-                        <button
-                          type="button"
-                          className="rounded-md bg-emerald-600 px-3 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-300"
-                          disabled={!getDependencyValue(item).trim()}
-                          onClick={() => void handleDependencySave(item)}
-                        >
-                          Save
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="flex min-w-[220px] items-center gap-2">
-                        <span className="truncate text-sm text-slate-700">{item.dependency || "-"}</span>
-                        <button
-                          type="button"
-                          className="rounded-md border border-slate-300 px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-                          onClick={() =>
-                            setDependencyEditing((prev) => ({
+
+                          if (event.key === "Escape") {
+                            setSkipPersistIds((prev) => ({ ...prev, [item.id]: true }));
+                            setDependencyDrafts((prev) => ({
                               ...prev,
-                              [item.id]: true
-                            }))
+                              [item.id]: item.dependency ?? ""
+                            }));
+                            clearDependencyMeta(item.id);
+                            event.currentTarget.blur();
                           }
-                        >
-                          Edit
-                        </button>
-                      </div>
-                    )
+                        }}
+                      />
+                      {dependencyMeta[item.id]?.state === "saving" && (
+                        <p className="mt-1 text-xs text-dsr-muted">Saving...</p>
+                      )}
+                      {dependencyMeta[item.id]?.state === "saved" && (
+                        <p className="mt-1 text-xs text-emerald-600">Saved</p>
+                      )}
+                      {dependencyMeta[item.id]?.state === "error" && (
+                        <p className="mt-1 text-xs text-rose-600">Could not save dependency</p>
+                      )}
+                    </div>
                   ) : (
                     item.dependency || "-"
                   )}
@@ -332,18 +358,6 @@ const TaskTable = ({
                 {reassigningTaskId === reassignModalTask.id ? "Reassigning..." : "Confirm Reassign"}
               </button>
             </div>
-          </div>
-        </div>
-      )}
-
-      {dependencyToast.show && (
-        <div className="fixed bottom-4 right-4 z-50">
-          <div
-            className={`rounded-lg px-4 py-2 text-sm font-semibold text-white shadow-lg ${
-              dependencyToast.kind === "error" ? "bg-rose-600" : "bg-emerald-600"
-            }`}
-          >
-            {dependencyToast.message}
           </div>
         </div>
       )}

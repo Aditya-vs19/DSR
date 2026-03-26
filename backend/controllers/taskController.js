@@ -39,8 +39,9 @@ export const createTaskController = async (req, res) => {
   try {
     const { client, task, action, status, dependency, assignedTo, type, deadline } = req.body;
     const assignedBy = req.user.id;
+    const normalizedClient = String(client || "").trim();
 
-    if (!client || !task || !action || !assignedTo || !type) {
+    if (!task || !action || !assignedTo || !type) {
       return res.status(400).json({ message: "Missing required task fields" });
     }
 
@@ -74,7 +75,7 @@ export const createTaskController = async (req, res) => {
     const normalizedStatus = normalizeTaskStatus(status) || "Pending";
 
     const taskId = await createTask({
-      client,
+      client: normalizedClient,
       task,
       action,
       status: normalizedStatus,
@@ -127,6 +128,10 @@ export const updateTaskStatusController = async (req, res) => {
     const task = await getTaskById(id);
     if (!task) {
       return res.status(404).json({ message: "Task not found" });
+    }
+
+    if (task.status === "Completed" && normalizedStatus !== "Completed") {
+      return res.status(400).json({ message: "Completed tasks cannot be moved back to Pending or In Progress" });
     }
 
     let assignee = null;
