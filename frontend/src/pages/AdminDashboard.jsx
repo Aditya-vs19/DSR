@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import Charts from "../components/Charts";
+import ConfirmDialog from "../components/ConfirmDialog";
 import ReportPage from "./ReportPage";
 import TaskTable from "../components/TaskTable";
 import logo from "../assets/logo.png";
@@ -52,6 +53,7 @@ const AdminDashboard = () => {
   const [passwordError, setPasswordError] = useState("");
   const [reassigningTaskId, setReassigningTaskId] = useState(null);
   const [submittingOwnReport, setSubmittingOwnReport] = useState(false);
+  const [isOwnSubmitConfirmOpen, setIsOwnSubmitConfirmOpen] = useState(false);
   const [ownSubmitMessage, setOwnSubmitMessage] = useState("");
   const [focusedTaskId, setFocusedTaskId] = useState(null);
   const [comparisonFilter, setComparisonFilter] = useState({ mode: "overall", date: todayText });
@@ -305,11 +307,11 @@ const AdminDashboard = () => {
   };
 
   const handleSubmitOwnReport = async () => {
-    const confirmed = window.confirm(`Do you want to submit your self-task report for ${adminReportDate}?`);
-    if (!confirmed) {
-      return;
-    }
+    setIsOwnSubmitConfirmOpen(true);
+  };
 
+  const handleConfirmSubmitOwnReport = async () => {
+    setIsOwnSubmitConfirmOpen(false);
     setSubmittingOwnReport(true);
     setOwnSubmitMessage("");
     try {
@@ -373,6 +375,17 @@ const AdminDashboard = () => {
 
   return (
     <div className="min-h-screen bg-dsr-page text-dsr-ink">
+      <ConfirmDialog
+        open={isOwnSubmitConfirmOpen}
+        title="Submit Self-Task Report"
+        message={`Do you want to submit your self-task report for ${adminReportDate}?`}
+        confirmText="Submit"
+        cancelText="Cancel"
+        loading={submittingOwnReport}
+        onCancel={() => setIsOwnSubmitConfirmOpen(false)}
+        onConfirm={() => void handleConfirmSubmitOwnReport()}
+      />
+
       <header
         className={`sticky top-0 z-30 border-b border-dsr-border bg-[#f3f3f3] transition-transform duration-300 ${
           isHeaderVisible ? "translate-y-0" : "-translate-y-full"
