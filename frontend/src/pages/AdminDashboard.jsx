@@ -472,7 +472,7 @@ const AdminDashboard = () => {
           <form className="card grid w-full gap-2 md:grid-cols-2" onSubmit={handleAssign}>
             <h2 className="md:col-span-2 text-lg font-semibold">Create Task</h2>
             <div>
-              <h2 className="mb-1 text-sm text-dsr-muted">Client / Vendor</h2>
+              <h2 className="mb-1 text-sm font-semibold text-slate-900">Client / Vendor</h2>
               <input
                 className="input"
                 value={form.client}
@@ -480,7 +480,7 @@ const AdminDashboard = () => {
               />
             </div>
             <div>
-              <h2 className="mb-1 text-sm text-dsr-muted">Task</h2>
+              <h2 className="mb-1 text-sm font-semibold text-slate-900">Task Title</h2>
               <input
                 className="input"
                 value={form.task}
@@ -519,10 +519,9 @@ const AdminDashboard = () => {
               />
               Self assign (assign to me)
             </label>
-            <h2 className="md:col-span-2 text-sm text-dsr-muted">Action</h2>
+            <h2 className="md:col-span-2 text-sm font-semibold text-slate-900">Action</h2>
             <textarea
               className="input md:col-span-2"
-              placeholder="Action"
               rows={3}
               value={form.action}
               onChange={(event) => setForm((prev) => ({ ...prev, action: event.target.value }))}

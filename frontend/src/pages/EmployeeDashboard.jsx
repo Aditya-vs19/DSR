@@ -587,6 +587,42 @@ const EmployeeDashboard = () => {
           </section>
         )}
 
+        {activeTab === "Tasks" && (
+          <form className="card grid w-full gap-2 md:grid-cols-2" onSubmit={handleCreateTask}>
+            <h2 className="md:col-span-2 text-lg font-semibold">Create Task</h2>
+            <div>
+              <h3 className="mb-1 text-sm font-semibold text-slate-900">Client / Vendor</h3>
+              <input
+                className="input"
+                value={form.client}
+                onChange={(event) => setForm((prev) => ({ ...prev, client: event.target.value }))}
+              />
+            </div>
+            <div>
+              <h3 className="mb-1 text-sm font-semibold text-slate-900">Task Title</h3>
+              <input
+                className="input"
+                value={form.task}
+                onChange={(event) => setForm((prev) => ({ ...prev, task: event.target.value }))}
+                required
+              />
+            </div>
+            <h3 className="md:col-span-2 text-sm font-semibold text-slate-900">Action</h3>
+            <textarea
+              className="input md:col-span-2"
+              rows={3}
+              value={form.action}
+              onChange={(event) => setForm((prev) => ({ ...prev, action: event.target.value }))}
+              required
+            />
+            
+            <button className="btn-primary md:col-span-2" type="submit">
+              Add Task
+            </button>
+            {error && <p className="md:col-span-2 text-sm text-rose-600">{error}</p>}
+          </form>
+        )}
+
         {(activeTab === "Overview" || activeTab === "Tasks") && (
           <section className="card">
             <div className="grid gap-3 md:grid-cols-4">
@@ -670,42 +706,6 @@ const EmployeeDashboard = () => {
               )}
             </div>
           </section>
-        )}
-
-        {activeTab === "Tasks" && (
-          <form className="card grid w-full gap-2 md:grid-cols-2" onSubmit={handleCreateTask}>
-            <h2 className="md:col-span-2 text-lg font-semibold">Create Task</h2>
-            <div>
-              <h3 className="mb-1 text-sm text-dsr-muted">Client / Vendor</h3>
-              <input
-                className="input"
-                value={form.client}
-                onChange={(event) => setForm((prev) => ({ ...prev, client: event.target.value }))}
-              />
-            </div>
-            <div>
-              <h3 className="mb-1 text-sm text-dsr-muted">Task</h3>
-              <input
-                className="input"
-                value={form.task}
-                onChange={(event) => setForm((prev) => ({ ...prev, task: event.target.value }))}
-                required
-              />
-            </div>
-            <h3 className="md:col-span-2 text-sm text-dsr-muted">Action</h3>
-            <textarea
-              className="input md:col-span-2"
-              rows={3}
-              value={form.action}
-              onChange={(event) => setForm((prev) => ({ ...prev, action: event.target.value }))}
-              required
-            />
-            
-            <button className="btn-primary md:col-span-2" type="submit">
-              Add Task
-            </button>
-            {error && <p className="md:col-span-2 text-sm text-rose-600">{error}</p>}
-          </form>
         )}
 
         {(activeTab === "Overview" || activeTab === "Tasks") && (

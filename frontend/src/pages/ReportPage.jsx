@@ -468,7 +468,6 @@ function ReportPage({
       const workbook = new ExcelJS.Workbook();
       const sheet = workbook.addWorksheet("Detailed Tasks");
       const headers = [
-        "Task ID",
         "Employee",
         "Team",
         "Client",
@@ -522,7 +521,6 @@ function ReportPage({
 
         group.tasks.forEach((entry) => {
           const row = sheet.addRow({
-            "Task ID": entry.id,
             Employee: entry.assigned_to_name || "-",
             Team: entry.assigned_to_team || "-",
             Client: entry.client || "-",
@@ -539,7 +537,7 @@ function ReportPage({
             applyCellStyle(cell, { fillColor: COLOR.white, align: "left" });
           });
 
-          const statusCell = row.getCell(7);
+          const statusCell = row.getCell(6);
           if (entry.status === "Completed") {
             applyCellStyle(statusCell, { fillColor: COLOR.completedGreen, bold: true });
           } else if (entry.status === "In Progress") {
