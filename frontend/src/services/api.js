@@ -32,6 +32,7 @@ api.interceptors.request.use((config) => {
 export const authApi = {
   login: (payload) => api.post("/auth/login", payload),
   changePassword: (payload) => api.post("/auth/change-password", payload),
+  resetManagedPassword: (payload) => api.post("/auth/reset-managed-password", payload),
   register: (payload) => api.post("/auth/register", payload),
   getEmployees: () => api.get("/auth/employees"),
   getDepartmentEmployees: (team) => api.get("/auth/employees/team", { params: { team } }),
