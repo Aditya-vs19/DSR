@@ -250,7 +250,13 @@ const TaskTable = ({
                     ? "bg-emerald-50"
                     : overdue
                       ? "bg-rose-50"
-                      : ""
+                      : item.status === "Completed"
+                        ? "bg-green-50"
+                        : item.status === "In Progress"
+                          ? "bg-sky-50"
+                        : item.status === "Pending"
+                          ? "bg-yellow-50"
+                        : ""
                 }`}
               >
                 <td className="p-3">{(currentPage - 1) * TASKS_PER_PAGE + index + 1}</td>
