@@ -233,6 +233,17 @@ const AdminDashboard = () => {
     );
   }, [adminReportDate, reports, user?.id]);
 
+  const alreadySubmittedOwnToday = useMemo(
+    () =>
+      reports.some(
+        (entry) =>
+          String(entry.date).slice(0, 10) === todayText &&
+          Number(entry.employee_id) === Number(user?.id) &&
+          entry.received_status === "Received"
+      ),
+    [reports, todayText, user?.id]
+  );
+
   const handleAssign = async (event) => {
     event.preventDefault();
     setError("");
@@ -489,6 +500,7 @@ const AdminDashboard = () => {
               <input
                 className="input"
                 value={form.client}
+                disabled={alreadySubmittedOwnToday}
                 onChange={(event) => setForm((prev) => ({ ...prev, client: event.target.value }))}
               />
             </div>
@@ -497,6 +509,7 @@ const AdminDashboard = () => {
               <input
                 className="input"
                 value={form.task}
+                disabled={alreadySubmittedOwnToday}
                 onChange={(event) => setForm((prev) => ({ ...prev, task: event.target.value }))}
                 required
               />
@@ -506,7 +519,7 @@ const AdminDashboard = () => {
               className="input"
               value={form.assignedTo}
               onChange={(event) => setForm((prev) => ({ ...prev, assignedTo: event.target.value }))}
-              disabled={selfAssign}
+              disabled={selfAssign || alreadySubmittedOwnToday}
               required
             >
               <option value="">Assign to team employee</option>
@@ -520,6 +533,7 @@ const AdminDashboard = () => {
               <input
                 type="checkbox"
                 checked={selfAssign}
+                disabled={alreadySubmittedOwnToday}
                 onChange={(event) => {
                   const checked = event.target.checked;
                   setSelfAssign(checked);
@@ -537,12 +551,18 @@ const AdminDashboard = () => {
               className="input md:col-span-2"
               rows={3}
               value={form.action}
+              disabled={alreadySubmittedOwnToday}
               onChange={(event) => setForm((prev) => ({ ...prev, action: event.target.value }))}
               required
             />
-            <button className="btn-primary md:col-span-2" type="submit">
-              Add Task
+            <button className="btn-primary md:col-span-2" type="submit" disabled={alreadySubmittedOwnToday}>
+              {alreadySubmittedOwnToday ? "Available Tomorrow" : "Add Task"}
             </button>
+            {alreadySubmittedOwnToday && (
+              <p className="md:col-span-2 text-sm text-rose-600">
+                You already submitted today's report. New tasks can be created tomorrow.
+              </p>
+            )}
             {error && <p className="md:col-span-2 text-sm text-rose-600">{error}</p>}
           </form>
         )}
