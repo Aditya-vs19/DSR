@@ -118,6 +118,7 @@ const AdminDashboard = () => {
       employeeStatusMap.set(Number(item.id), {
         name: item.name,
         completed: 0,
+        inProgress: 0,
         pending: 0
       });
     });
@@ -134,6 +135,8 @@ const AdminDashboard = () => {
 
       if (statusValue === "completed") {
         target.completed += 1;
+      } else if (statusValue === "in progress") {
+        target.inProgress += 1;
       } else if (statusValue === "pending") {
         target.pending += 1;
       }
@@ -156,6 +159,13 @@ const AdminDashboard = () => {
           data: rows.map((item) => Number(item.pending || 0)),
           backgroundColor: "rgba(220, 38, 38, 0.8)",
           borderColor: "rgba(220, 38, 38, 1)",
+          borderWidth: 1
+        },
+        {
+          label: "In Progress",
+          data: rows.map((item) => Number(item.inProgress || 0)),
+          backgroundColor: "rgba(37, 99, 235, 0.8)",
+          borderColor: "rgba(37, 99, 235, 1)",
           borderWidth: 1
         }
       ]
@@ -555,8 +565,8 @@ const AdminDashboard = () => {
                 </div>
                 <div className="rounded-xl border border-dsr-border bg-dsr-soft p-3 text-sm text-dsr-muted">
                   {comparisonFilter.mode === "overall"
-                    ? "Showing overall completed vs pending tasks for all department employees."
-                    : `Showing completed vs pending tasks for ${comparisonFilter.date || "selected date"}.`}
+                    ? "Showing overall completed, in-progress and pending tasks for all department employees."
+                    : `Showing completed, in-progress and pending tasks for ${comparisonFilter.date || "selected date"}.`}
                 </div>
               </div>
             </section>
@@ -573,8 +583,8 @@ const AdminDashboard = () => {
                 type="bar"
                 title={
                   comparisonFilter.mode === "overall"
-                    ? "Employee Tasks (Completed vs Pending) - Overall"
-                    : `Employee Tasks (Completed vs Pending) - ${comparisonFilter.date}`
+                    ? "Employee Tasks (Completed vs In Progress vs Pending) - Overall"
+                    : `Employee Tasks (Completed vs In Progress vs Pending) - ${comparisonFilter.date}`
                 }
                 labels={employeeTaskStatusChart.labels}
                 datasets={employeeTaskStatusChart.datasets}
