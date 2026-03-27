@@ -597,8 +597,10 @@ const SuperAdminDashboard = () => {
                 <h3 className="text-3xl font-extrabold">{tasks.length}</h3>
               </div>
               <div>
-                <p className="text-xs uppercase tracking-wide text-dsr-muted">Reports</p>
-                <h3 className="text-3xl font-extrabold">{reports.length}</h3>
+                <p className="text-xs uppercase tracking-wide text-dsr-muted">Completed Tasks</p>
+                <h3 className="text-3xl font-extrabold text-emerald-700">
+                  {tasks.filter((item) => String(item.raw_status || item.status || "").toLowerCase() === "completed").length}
+                </h3>
               </div>
               <div>
                 <p className="text-xs uppercase tracking-wide text-dsr-muted">Completion Rate</p>
