@@ -81,7 +81,6 @@ function ReportTaskDetailTable({ tasks = [], dateRange = "week" }) {
       <table className="min-w-full border-collapse text-sm">
         <thead>
           <tr className="bg-slate-100">
-            <th className="border-b border-slate-200 px-3 py-3 text-left font-semibold text-slate-700">ID</th>
             <th className="border-b border-slate-200 px-3 py-3 text-left font-semibold text-slate-700">Employee</th>
             <th className="border-b border-slate-200 px-3 py-3 text-left font-semibold text-slate-700">Team</th>
             <th className="border-b border-slate-200 px-3 py-3 text-left font-semibold text-slate-700">Client</th>
@@ -98,7 +97,7 @@ function ReportTaskDetailTable({ tasks = [], dateRange = "week" }) {
           {groupedTasks.map((group) => (
             <React.Fragment key={group.key}>
               <tr className="bg-slate-200/70">
-                <td colSpan={11} className="px-3 py-2 text-left font-semibold text-slate-800">
+                <td colSpan={10} className="px-3 py-2 text-left font-semibold text-slate-800">
                   {group.label}
                 </td>
               </tr>
@@ -107,7 +106,6 @@ function ReportTaskDetailTable({ tasks = [], dateRange = "week" }) {
                   key={task.id}
                   className={`border-b border-slate-200/80 ${task.status === "Completed" ? "bg-emerald-50/30" : task.status === "Pending" ? "bg-amber-50/20" : task.status === "In Progress" ? "bg-sky-50/30" : "bg-white"}`}
                 >
-                  <td className="px-3 py-2 text-slate-600">{task.id}</td>
                   <td className="px-3 py-2 font-medium text-slate-700">{task.assigned_to_name || "-"}</td>
                   <td className="px-3 py-2 text-slate-600">{toTeamLabel(task.assigned_to_team) || "-"}</td>
                   <td className="px-3 py-2 text-slate-600">{task.client || "-"}</td>
