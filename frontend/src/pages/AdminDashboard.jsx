@@ -50,6 +50,8 @@ const AdminDashboard = () => {
   const [passwordMessage, setPasswordMessage] = useState("");
   const [passwordError, setPasswordError] = useState("");
   const [reassigningTaskId, setReassigningTaskId] = useState(null);
+  const [submittingOwnReport, setSubmittingOwnReport] = useState(false);
+  const [ownSubmitMessage, setOwnSubmitMessage] = useState("");
   const [focusedTaskId, setFocusedTaskId] = useState(null);
   const [comparisonFilter, setComparisonFilter] = useState({ mode: "overall", date: todayText });
   const managedDepartmentLabel = useMemo(() => getManagedDepartmentLabel(user), [user]);
@@ -198,6 +200,21 @@ const AdminDashboard = () => {
     [notifications]
   );
 
+  const adminReportDate = useMemo(() => filters.date || todayText, [filters.date, todayText]);
+
+  const alreadySubmittedOwnForDate = useMemo(() => {
+    if (!adminReportDate) {
+      return false;
+    }
+
+    return reports.some(
+      (entry) =>
+        String(entry.date).slice(0, 10) === adminReportDate &&
+        Number(entry.employee_id) === Number(user?.id) &&
+        entry.received_status === "Received"
+    );
+  }, [adminReportDate, reports, user?.id]);
+
   const handleAssign = async (event) => {
     event.preventDefault();
     setError("");
@@ -220,18 +237,26 @@ const AdminDashboard = () => {
     }
   };
 
-  const handleStatusChange = async (task, status, dependency = task.dependency) => {
+  const handleStatusChange = async (
+    task,
+    status,
+    dependency = task.dependency,
+    action = task.action,
+    taskTitle = task.task
+  ) => {
     setError("");
 
     try {
-      await taskApi.updateTask(task.id, { status, dependency });
+      await taskApi.updateTask(task.id, { status, dependency, action, taskTitle });
       setTasks((prev) =>
         prev.map((entry) =>
           entry.id === task.id
             ? {
                 ...entry,
+                task: taskTitle,
                 status,
-                dependency
+                dependency,
+                action
               }
             : entry
         )
@@ -260,6 +285,25 @@ const AdminDashboard = () => {
       setError(apiError.response?.data?.message || "Failed to reassign task");
     } finally {
       setReassigningTaskId(null);
+    }
+  };
+
+  const handleSubmitOwnReport = async () => {
+    const confirmed = window.confirm(`Do you want to submit your self-task report for ${adminReportDate}?`);
+    if (!confirmed) {
+      return;
+    }
+
+    setSubmittingOwnReport(true);
+    setOwnSubmitMessage("");
+    try {
+      const response = await reportApi.submitReportToHr(adminReportDate);
+      setOwnSubmitMessage(response.data?.message || "Self-task report submitted to HR.");
+      await loadData();
+    } catch (apiError) {
+      setOwnSubmitMessage(apiError.response?.data?.message || "Failed to submit self-task report to HR");
+    } finally {
+      setSubmittingOwnReport(false);
     }
   };
 
@@ -601,21 +645,51 @@ const AdminDashboard = () => {
               reassigningTaskId={reassigningTaskId}
               focusedTaskId={focusedTaskId}
             />
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-dsr-border bg-dsr-soft p-3">
+              <p className="text-sm text-dsr-muted">
+                Submit self-task report for: <span className="font-semibold text-dsr-ink">{adminReportDate}</span>
+              </p>
+              <button
+                type="button"
+                className={alreadySubmittedOwnForDate ? "rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white" : "btn-primary"}
+                disabled={submittingOwnReport || alreadySubmittedOwnForDate}
+                onClick={handleSubmitOwnReport}
+              >
+                {alreadySubmittedOwnForDate ? "Submitted" : submittingOwnReport ? "Submitting..." : "Submit Report"}
+              </button>
+            </div>
+            {ownSubmitMessage && <p className="mt-2 text-sm text-dsr-brand">{ownSubmitMessage}</p>}
           </>
         )}
 
         {activeTab === "Tasks" && (
-          <TaskTable
-            tasks={filteredTasks}
-            onStatusChange={handleStatusChange}
-            editableStatus
-            showAssignee
-            showReassign
-            reassignOptions={employees}
-            onReassign={handleReassign}
-            reassigningTaskId={reassigningTaskId}
-            focusedTaskId={focusedTaskId}
-          />
+          <>
+            <TaskTable
+              tasks={filteredTasks}
+              onStatusChange={handleStatusChange}
+              editableStatus
+              showAssignee
+              showReassign
+              reassignOptions={employees}
+              onReassign={handleReassign}
+              reassigningTaskId={reassigningTaskId}
+              focusedTaskId={focusedTaskId}
+            />
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-dsr-border bg-dsr-soft p-3">
+              <p className="text-sm text-dsr-muted">
+                Submit self-task report for: <span className="font-semibold text-dsr-ink">{adminReportDate}</span>
+              </p>
+              <button
+                type="button"
+                className={alreadySubmittedOwnForDate ? "rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white" : "btn-primary"}
+                disabled={submittingOwnReport || alreadySubmittedOwnForDate}
+                onClick={handleSubmitOwnReport}
+              >
+                {alreadySubmittedOwnForDate ? "Submitted" : submittingOwnReport ? "Submitting..." : "Submit Report"}
+              </button>
+            </div>
+            {ownSubmitMessage && <p className="mt-2 text-sm text-dsr-brand">{ownSubmitMessage}</p>}
+          </>
         )}
 
         {activeTab === "Employees" && (

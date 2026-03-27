@@ -292,18 +292,26 @@ const EmployeeDashboard = () => {
     }
   };
 
-  const handleStatusChange = async (task, status, dependency = task.dependency) => {
+  const handleStatusChange = async (
+    task,
+    status,
+    dependency = task.dependency,
+    action = task.action,
+    taskTitle = task.task
+  ) => {
     setError("");
 
     try {
-      await taskApi.updateTask(task.id, { status, dependency });
+      await taskApi.updateTask(task.id, { status, dependency, action, taskTitle });
       setTasks((prev) =>
         prev.map((entry) =>
           entry.id === task.id
             ? {
                 ...entry,
+                task: taskTitle,
                 status,
-                dependency
+                dependency,
+                action
               }
             : entry
         )
@@ -386,6 +394,11 @@ const EmployeeDashboard = () => {
   const handleSubmitReport = async () => {
     if (!canSubmitReport) {
       setSubmitMessage("Select a single day (Today, Yesterday, or Custom Date) to submit report.");
+      return;
+    }
+
+    const confirmed = window.confirm(`Do you want to submit your report for ${selectedReportDate}?`);
+    if (!confirmed) {
       return;
     }
 
@@ -703,7 +716,7 @@ const EmployeeDashboard = () => {
               </p>
               <button
                 type="button"
-                className="btn-primary"
+                className={alreadySubmittedForDate ? "rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white" : "btn-primary"}
                 disabled={!canSubmitReport || submittingReport || alreadySubmittedForDate}
                 onClick={handleSubmitReport}
               >

@@ -349,7 +349,8 @@ export const getDailyReportGridByRole = async ({
   dateRange = "week",
   date,
   teamFilter = "all",
-  employeeId = "all"
+  employeeId = "all",
+  employeeIds = []
 }) => {
   await ensureDailyReportTable();
   await ensureHolidaysTable();
@@ -398,7 +399,16 @@ export const getDailyReportGridByRole = async ({
 
   let users = await query(usersSql, usersParams);
 
-  if (employeeId && employeeId !== "all") {
+  const normalizedEmployeeIds = Array.isArray(employeeIds)
+    ? employeeIds
+      .map((entry) => Number(entry))
+      .filter((entry) => Number.isInteger(entry) && entry > 0)
+    : [];
+
+  if (normalizedEmployeeIds.length > 0) {
+    const employeeIdSet = new Set(normalizedEmployeeIds.map((entry) => String(entry)));
+    users = users.filter((entry) => employeeIdSet.has(String(entry.id)));
+  } else if (employeeId && employeeId !== "all") {
     users = users.filter((entry) => String(entry.id) === String(employeeId));
   }
 
@@ -646,9 +656,11 @@ export const updateDailyReportCellStatus = async (id, status) => {
   );
 };
 
-export const submitEmployeeDailyReport = async ({ employeeId, date }) => {
+export const submitEmployeeDailyReport = async ({ employeeId, date, onlySelfAssigned = false }) => {
   await ensureDailyReportTable();
   await ensureTaskSubmissionColumns();
+
+  const selfTaskFilterClause = onlySelfAssigned ? "AND type = 'self'" : "";
 
   const taskSummaryRows = await query(
     `
@@ -659,6 +671,7 @@ export const submitEmployeeDailyReport = async ({ employeeId, date }) => {
       FROM tasks
       WHERE assigned_to = ?
         AND DATE(CONVERT_TZ(created_at, '+00:00', '${REPORT_TIMEZONE_OFFSET}')) = ?
+        ${selfTaskFilterClause}
     `,
     [employeeId, date]
   );
@@ -675,6 +688,7 @@ export const submitEmployeeDailyReport = async ({ employeeId, date }) => {
           submitted_to_hr_at = CURRENT_TIMESTAMP
       WHERE assigned_to = ?
         AND DATE(CONVERT_TZ(created_at, '+00:00', '${REPORT_TIMEZONE_OFFSET}')) = ?
+        ${selfTaskFilterClause}
     `,
     [employeeId, date]
   );
