@@ -5,6 +5,7 @@ import logo from "../assets/logo.png";
 import { useAuth } from "../context/AuthContext";
 import useScrollHeader from "../hooks/useScrollHeader";
 import { authApi, reportApi, taskApi } from "../services/api";
+import { toTeamLabel } from "../utils/teamLabel";
 
 const TABS = ["Overview", "Tasks", "Profile"];
 const PERIOD_OPTIONS = [
@@ -168,7 +169,7 @@ const EmployeeDashboard = () => {
     });
   }, [tasks, filters, todayText]);
 
-  const pendingTasksFromYesterday = useMemo(() => {
+  const yesterdayTaskSummary = useMemo(() => {
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
     const yesterdayText = getLocalDateText(yesterday);
@@ -179,12 +180,26 @@ const EmployeeDashboard = () => {
         .map((value) => Number(value))
     );
 
-    return tasks.filter(
-      (item) =>
-        item.status === "Pending" &&
-        ((item.assigned_at || item.created_at || "").slice(0, 10) === yesterdayText) &&
-        !carriedForwardSourceIds.has(Number(item.id))
-    ).length;
+    return tasks.reduce(
+      (acc, item) => {
+        const isYesterday = (item.assigned_at || item.created_at || "").slice(0, 10) === yesterdayText;
+        const isCarriedForwardSource = carriedForwardSourceIds.has(Number(item.id));
+
+        if (!isYesterday || isCarriedForwardSource) {
+          return acc;
+        }
+
+        const normalizedStatus = String(item.status || "").toLowerCase();
+        if (normalizedStatus === "pending") {
+          acc.pending += 1;
+        } else if (normalizedStatus === "in progress") {
+          acc.inProgress += 1;
+        }
+
+        return acc;
+      },
+      { pending: 0, inProgress: 0 }
+    );
   }, [tasks]);
 
   const visibleNotifications = useMemo(() => {
@@ -513,7 +528,7 @@ const EmployeeDashboard = () => {
           <div className="flex items-center gap-3">
             <div className="text-right">
               <p className="text-sm font-bold capitalize">{user?.name}</p>
-              <p className="text-xs uppercase tracking-wide text-dsr-muted">{user?.team || "Employee"}</p>
+              <p className="text-xs uppercase tracking-wide text-dsr-muted">{toTeamLabel(user?.team) || "Employee"}</p>
             </div>
             <button
               type="button"
@@ -643,9 +658,14 @@ const EmployeeDashboard = () => {
                   }}
                 />
               </div>
-              {pendingTasksFromYesterday > 0 && (
+              {(yesterdayTaskSummary.pending > 0 || yesterdayTaskSummary.inProgress > 0) && (
                 <div className="rounded-xl border border-rose-300 bg-rose-100 p-3 text-sm font-semibold text-rose-800 md:col-start-4">
-                  You have {pendingTasksFromYesterday} pending {pendingTasksFromYesterday === 1 ? "task" : "tasks"} from yesterday.
+                  <p>
+                    You have {yesterdayTaskSummary.pending} pending {yesterdayTaskSummary.pending === 1 ? "task" : "tasks"} from yesterday.
+                  </p>
+                  <p className="mt-1">
+                    You have {yesterdayTaskSummary.inProgress} in-progress {yesterdayTaskSummary.inProgress === 1 ? "task" : "tasks"} from yesterday.
+                  </p>
                 </div>
               )}
             </div>
@@ -808,7 +828,7 @@ const EmployeeDashboard = () => {
                 <p><span className="font-semibold">Name:</span> {user?.name}</p>
                 <p><span className="font-semibold">Role:</span> {String(user?.role || "").toUpperCase()}</p>
                 <p><span className="font-semibold">Email:</span> {user?.email}</p>
-                <p><span className="font-semibold">Department:</span> {user?.team || "-"}</p>
+                <p><span className="font-semibold">Department:</span> {toTeamLabel(user?.team) || "-"}</p>
               </div>
             </div>
 

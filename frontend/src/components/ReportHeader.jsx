@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { toTeamLabel } from "../utils/teamLabel";
 
 function ReportHeader({
   reportType,
@@ -45,7 +46,7 @@ function ReportHeader({
 
     if (selectedEmployeeIds.length === 1) {
       const selected = employeeOptions.find((entry) => String(entry.id) === String(selectedEmployeeIds[0]));
-      return selected ? `${selected.name} (${selected.team})` : "1 employee selected";
+      return selected ? `${selected.name} (${toTeamLabel(selected.team)})` : "1 employee selected";
     }
 
     return `${selectedEmployeeIds.length} employees selected`;
@@ -142,7 +143,7 @@ function ReportHeader({
             <option value="all">All Departments (Company-Wide)</option>
             {teamOptions.map((entry) => (
               <option key={entry} value={entry}>
-                {entry}
+                {toTeamLabel(entry)}
               </option>
             ))}
           </select>
@@ -196,7 +197,7 @@ function ReportHeader({
                         className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-300"
                       />
                       <span className="truncate text-slate-700">
-                        {entry.name} ({entry.team})
+                        {entry.name} ({toTeamLabel(entry.team)})
                       </span>
                     </label>
                   );

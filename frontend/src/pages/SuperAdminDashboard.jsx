@@ -6,6 +6,7 @@ import logo from "../assets/logo.png";
 import { useAuth } from "../context/AuthContext";
 import useScrollHeader from "../hooks/useScrollHeader";
 import { authApi, reportApi, taskApi } from "../services/api";
+import { toTeamLabel } from "../utils/teamLabel";
 
 const TABS = ["Overview", "Tasks", "Employees", "Reports", "Profile"];
 
@@ -226,7 +227,7 @@ const SuperAdminDashboard = () => {
       });
 
       return {
-        title: `Completed Tasks by Employee (${filters.team})`,
+        title: `Completed Tasks by Employee (${toTeamLabel(filters.team)})`,
         labels: Array.from(employeeTotals.keys()),
         values: Array.from(employeeTotals.values()),
         chartValues: Array.from(employeeTotals.values()).map((value) => (value === 0 ? 0.05 : value)),
@@ -248,7 +249,7 @@ const SuperAdminDashboard = () => {
 
     return {
       title: "Completed Tasks by Department",
-      labels: Array.from(teamTotals.keys()),
+      labels: Array.from(teamTotals.keys()).map((teamName) => toTeamLabel(teamName)),
       values: Array.from(teamTotals.values()),
       chartValues: Array.from(teamTotals.values()),
       colors: Array.from(teamTotals.keys()).map(
@@ -329,7 +330,7 @@ const SuperAdminDashboard = () => {
 
       return {
         title: "Task Status Comparison by Department",
-        labels,
+        labels: labels.map((label) => toTeamLabel(label)),
         xAxisTitle: "Department",
         yAxisTitle: "Task Count",
         datasets: [
@@ -374,7 +375,7 @@ const SuperAdminDashboard = () => {
     const values = Array.from(employeeMap.values());
 
     return {
-      title: `Task Status Comparison by Employee (${filters.team})`,
+      title: `Task Status Comparison by Employee (${toTeamLabel(filters.team)})`,
       labels,
       xAxisTitle: "Employee",
       yAxisTitle: "Task Count",
@@ -626,7 +627,7 @@ const SuperAdminDashboard = () => {
                   <option value="all">All Departments</option>
                   {teams.map((team) => (
                     <option key={team} value={team}>
-                      {team}
+                      {toTeamLabel(team)}
                     </option>
                   ))}
                 </select>
@@ -674,7 +675,7 @@ const SuperAdminDashboard = () => {
                   <option value="all">All Departments</option>
                   {teams.map((team) => (
                     <option key={team} value={team}>
-                      {team}
+                      {toTeamLabel(team)}
                     </option>
                   ))}
                 </select>
@@ -723,7 +724,7 @@ const SuperAdminDashboard = () => {
                 title={
                   filters.team === "all"
                     ? "Top Performers (Productivity Score)"
-                    : `Top Performers (${filters.team})`
+                    : `Top Performers (${toTeamLabel(filters.team)})`
                 }
                 labels={filteredTopPerformers.map((item) => item.name)}
                 values={filteredTopPerformers.map((item) => Number(item.productivity_score || 0))}
@@ -856,7 +857,7 @@ const SuperAdminDashboard = () => {
                 <option value="all">All Departments</option>
                 {teams.map((team) => (
                   <option key={team} value={team}>
-                    {team}
+                    {toTeamLabel(team)}
                   </option>
                 ))}
               </select>
@@ -898,7 +899,7 @@ const SuperAdminDashboard = () => {
                       <td className="p-3">{entry.email}</td>
                       
                       <td className="p-3 uppercase">{entry.role}</td>
-                      <td className="p-3">{entry.team || "-"}</td>
+                      <td className="p-3">{toTeamLabel(entry.team) || "-"}</td>
                       <td className="p-3">
                         {canResetPassword ? (
                           <div className="flex min-w-[260px] items-center gap-2">

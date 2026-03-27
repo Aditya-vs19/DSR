@@ -1,4 +1,5 @@
 import React from "react";
+import { toTeamLabel } from "../utils/teamLabel";
 
 const statusBadgeClass = {
   Completed: "bg-emerald-100 text-emerald-800 border-emerald-200",
@@ -108,7 +109,7 @@ function ReportTaskDetailTable({ tasks = [], dateRange = "week" }) {
                 >
                   <td className="px-3 py-2 text-slate-600">{task.id}</td>
                   <td className="px-3 py-2 font-medium text-slate-700">{task.assigned_to_name || "-"}</td>
-                  <td className="px-3 py-2 text-slate-600">{task.assigned_to_team || "-"}</td>
+                  <td className="px-3 py-2 text-slate-600">{toTeamLabel(task.assigned_to_team) || "-"}</td>
                   <td className="px-3 py-2 text-slate-600">{task.client || "-"}</td>
                   <td className="px-3 py-2 text-slate-700">{task.task || "-"}</td>
                   <td className="px-3 py-2 text-slate-600">{task.action || "-"}</td>

@@ -6,6 +6,7 @@ import logo from "../assets/logo.png";
 import { useAuth } from "../context/AuthContext";
 import useScrollHeader from "../hooks/useScrollHeader";
 import { authApi, reportApi, taskApi } from "../services/api";
+import { toTeamLabel } from "../utils/teamLabel";
 
 const TABS = ["Overview", "Tasks", "Employees", "Reports", "Profile"];
 
@@ -17,7 +18,7 @@ const getManagedDepartmentLabel = (currentUser) => {
     return "Sales & Logistics";
   }
 
-  return team || "-";
+  return toTeamLabel(team) || "-";
 };
 
 const AdminDashboard = () => {
@@ -174,7 +175,7 @@ const AdminDashboard = () => {
     };
   }, [employees, tasks, comparisonFilter]);
 
-  const pendingTasksFromYesterday = useMemo(() => {
+  const yesterdayTaskSummary = useMemo(() => {
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
     const yesterdayText = new Date(yesterday.getTime() - yesterday.getTimezoneOffset() * 60000)
@@ -187,13 +188,28 @@ const AdminDashboard = () => {
         .map((value) => Number(value))
     );
 
-    return tasks.filter(
-      (item) =>
-        item.status === "Pending" &&
-        ((item.assigned_at || item.created_at || "").slice(0, 10) === yesterdayText) &&
-        !carriedForwardSourceIds.has(Number(item.id))
-    ).length;
-  }, [tasks]);
+    return tasks.reduce(
+      (acc, item) => {
+        const isYesterday = (item.assigned_at || item.created_at || "").slice(0, 10) === yesterdayText;
+        const isOwnTask = Number(item.assigned_to) === Number(user?.id);
+        const isCarriedForwardSource = carriedForwardSourceIds.has(Number(item.id));
+
+        if (!isYesterday || !isOwnTask || isCarriedForwardSource) {
+          return acc;
+        }
+
+        const normalizedStatus = String(item.status || "").toLowerCase();
+        if (normalizedStatus === "pending") {
+          acc.pending += 1;
+        } else if (normalizedStatus === "in progress") {
+          acc.inProgress += 1;
+        }
+
+        return acc;
+      },
+      { pending: 0, inProgress: 0 }
+    );
+  }, [tasks, user?.id]);
 
   const unreadCount = useMemo(
     () => notifications.filter((item) => !item.is_read).length,
@@ -560,9 +576,14 @@ const AdminDashboard = () => {
                   onChange={(event) => setFilters((prev) => ({ ...prev, date: event.target.value }))}
                 />
               </div>
-              {pendingTasksFromYesterday > 0 && (
+              {(yesterdayTaskSummary.pending > 0 || yesterdayTaskSummary.inProgress > 0) && (
                 <div className="rounded-xl border border-rose-300 bg-rose-100 p-3 text-sm font-semibold text-rose-800 md:col-start-4">
-                  You have {pendingTasksFromYesterday} pending {pendingTasksFromYesterday === 1 ? "task" : "tasks"} from yesterday.
+                  <p>
+                    You have {yesterdayTaskSummary.pending} pending {yesterdayTaskSummary.pending === 1 ? "task" : "tasks"} from yesterday.
+                  </p>
+                  <p className="mt-1">
+                    You have {yesterdayTaskSummary.inProgress} in-progress {yesterdayTaskSummary.inProgress === 1 ? "task" : "tasks"} from yesterday.
+                  </p>
                 </div>
               )}
             </div>
@@ -712,7 +733,7 @@ const AdminDashboard = () => {
                     <td className="p-3 font-semibold">{entry.name}</td>
                     <td className="p-3">{entry.email}</td>
                     <td className="p-3 uppercase">{entry.role}</td>
-                    <td className="p-3">{entry.team || "-"}</td>
+                    <td className="p-3">{toTeamLabel(entry.team) || "-"}</td>
                   </tr>
                 ))}
                 {employees.length === 0 && (

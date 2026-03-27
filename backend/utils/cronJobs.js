@@ -9,10 +9,10 @@ export const startCronJobs = () => {
     try {
       const result = await carryForwardPendingTasks(today);
       console.log(
-        `[CRON] Carried forward ${result.createdCount} pending task(s) from ${result.sourceDate} to ${result.targetDate}`
+        `[CRON] Carried forward ${result.createdCount} pending/in-progress task(s) from ${result.sourceDate} to ${result.targetDate}`
       );
     } catch (error) {
-      console.error("[CRON] Pending task carry-forward failed:", error.message);
+      console.error("[CRON] Pending/In Progress task carry-forward failed:", error.message);
     }
   });
 

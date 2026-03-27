@@ -444,13 +444,14 @@ export const carryForwardPendingTasks = async (targetDate = null) => {
         client,
         task,
         action,
+        status,
         dependency,
         assigned_to,
         assigned_by,
         type,
         deadline
       FROM tasks
-      WHERE status <> 'Completed'
+      WHERE status IN ('Pending', 'In Progress')
         AND DATE(created_at) = ?
       ORDER BY id ASC
     `,
@@ -479,7 +480,7 @@ export const carryForwardPendingTasks = async (targetDate = null) => {
       client: sourceTask.client,
       task: sourceTask.task,
       action: sourceTask.action,
-      status: "Pending",
+      status: sourceTask.status,
       dependency: sourceTask.dependency,
       assignedTo: sourceTask.assigned_to,
       assignedBy: sourceTask.assigned_by,
@@ -490,7 +491,7 @@ export const carryForwardPendingTasks = async (targetDate = null) => {
 
     await createNotification({
       userId: sourceTask.assigned_to,
-      message: `Task carried forward from ${sourceDateString}: ${sourceTask.task}`,
+      message: `${sourceTask.status} task carried forward from ${sourceDateString}: ${sourceTask.task}`,
       type: "task_carried_forward",
       refId: newTaskId
     });

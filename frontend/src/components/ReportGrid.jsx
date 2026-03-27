@@ -1,5 +1,6 @@
 import React from "react";
 import ReportCell from "./ReportCell";
+import { toTeamLabel } from "../utils/teamLabel";
 
 const STATUS_BADGES = {
   "-": "border-slate-200 bg-slate-50 text-slate-500",
@@ -30,10 +31,10 @@ function ReportGrid({ rows = [], employees = [], onCellChange, loadingCellId = n
               <th
                 key={employee.id}
                 className="border-b border-slate-200 px-3 py-3 text-left font-semibold text-slate-700"
-                title={employee.team}
+                  title={toTeamLabel(employee.team)}
               >
                 <span className="block leading-tight">{employee.name}</span>
-                <span className="text-xs font-normal text-slate-500">{employee.team}</span>
+                  <span className="text-xs font-normal text-slate-500">{toTeamLabel(employee.team)}</span>
               </th>
             ))}
           </tr>
