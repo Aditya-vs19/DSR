@@ -17,6 +17,7 @@ import {
   submitTaskToHr,
   updateTaskStatus
 } from "../models/taskModel.js";
+import { hasReceivedDailyReport } from "../models/reportModel.js";
 import { findUserById } from "../models/userModel.js";
 import { getManagedTeamsForAdmin } from "../utils/teamScope.js";
 
@@ -51,6 +52,20 @@ export const createTaskController = async (req, res) => {
 
     if (req.user.role === "employee" && (type !== "self" || Number(assignedTo) !== Number(req.user.id))) {
       return res.status(403).json({ message: "Employees can create only self tasks" });
+    }
+
+    if (["employee", "admin"].includes(req.user.role)) {
+      const today = new Date().toISOString().slice(0, 10);
+      const alreadySubmittedToday = await hasReceivedDailyReport({
+        userId: req.user.id,
+        date: today
+      });
+
+      if (alreadySubmittedToday) {
+        return res.status(400).json({
+          message: "You already submitted today's report. New tasks can be created tomorrow."
+        });
+      }
     }
 
     const assignee = await findUserById(assignedTo);

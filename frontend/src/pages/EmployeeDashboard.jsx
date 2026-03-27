@@ -408,6 +408,16 @@ const EmployeeDashboard = () => {
     );
   }, [reports, selectedReportDate]);
 
+  const alreadySubmittedToday = useMemo(
+    () =>
+      reports.some(
+        (entry) =>
+          String(entry.date).slice(0, 10) === todayText &&
+          entry.received_status === "Received"
+      ),
+    [reports, todayText]
+  );
+
   const handleSubmitReport = async () => {
     if (!canSubmitReport) {
       setSubmitMessage("Select a single day (Today, Yesterday, or Custom Date) to submit report.");
@@ -608,6 +618,7 @@ const EmployeeDashboard = () => {
               <input
                 className="input"
                 value={form.client}
+                disabled={alreadySubmittedToday}
                 onChange={(event) => setForm((prev) => ({ ...prev, client: event.target.value }))}
               />
             </div>
@@ -616,6 +627,7 @@ const EmployeeDashboard = () => {
               <input
                 className="input"
                 value={form.task}
+                disabled={alreadySubmittedToday}
                 onChange={(event) => setForm((prev) => ({ ...prev, task: event.target.value }))}
                 required
               />
@@ -625,13 +637,19 @@ const EmployeeDashboard = () => {
               className="input md:col-span-2"
               rows={3}
               value={form.action}
+              disabled={alreadySubmittedToday}
               onChange={(event) => setForm((prev) => ({ ...prev, action: event.target.value }))}
               required
             />
             
-            <button className="btn-primary md:col-span-2" type="submit">
-              Add Task
+            <button className="btn-primary md:col-span-2" type="submit" disabled={alreadySubmittedToday}>
+              {alreadySubmittedToday ? "Available Tomorrow" : "Add Task"}
             </button>
+            {alreadySubmittedToday && (
+              <p className="md:col-span-2 text-sm text-rose-600">
+                You already submitted today's report. New tasks can be created tomorrow.
+              </p>
+            )}
             {error && <p className="md:col-span-2 text-sm text-rose-600">{error}</p>}
           </form>
         )}

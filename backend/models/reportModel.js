@@ -656,6 +656,24 @@ export const updateDailyReportCellStatus = async (id, status) => {
   );
 };
 
+export const hasReceivedDailyReport = async ({ userId, date }) => {
+  await ensureDailyReportTable();
+
+  const rows = await query(
+    `
+      SELECT id
+      FROM daily_employee_reports
+      WHERE user_id = ?
+        AND report_date = ?
+        AND status = 'Received'
+      LIMIT 1
+    `,
+    [userId, date]
+  );
+
+  return rows.length > 0;
+};
+
 export const submitEmployeeDailyReport = async ({ employeeId, date, onlySelfAssigned = false }) => {
   await ensureDailyReportTable();
   await ensureTaskSubmissionColumns();
