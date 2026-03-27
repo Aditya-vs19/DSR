@@ -57,6 +57,10 @@ const SuperAdminDashboard = () => {
   const [newUserMessage, setNewUserMessage] = useState("");
   const [newUserError, setNewUserError] = useState("");
   const [creatingUser, setCreatingUser] = useState(false);
+  const [managedPasswordDrafts, setManagedPasswordDrafts] = useState({});
+  const [managedPasswordBusyId, setManagedPasswordBusyId] = useState(null);
+  const [managedPasswordError, setManagedPasswordError] = useState("");
+  const [managedPasswordToast, setManagedPasswordToast] = useState("");
   const [passwordMessage, setPasswordMessage] = useState("");
   const [passwordError, setPasswordError] = useState("");
   const [focusedTaskId, setFocusedTaskId] = useState(null);
@@ -115,6 +119,18 @@ const SuperAdminDashboard = () => {
     }));
   }, [activeTab]);
 
+  useEffect(() => {
+    if (!managedPasswordToast) {
+      return undefined;
+    }
+
+    const timer = setTimeout(() => {
+      setManagedPasswordToast("");
+    }, 2200);
+
+    return () => clearTimeout(timer);
+  }, [managedPasswordToast]);
+
   const filteredTasks = useMemo(() => {
     return tasks.filter((item) => {
       const statusMatch = filters.status === "all" || item.status === filters.status;
@@ -171,19 +187,6 @@ const SuperAdminDashboard = () => {
       return roleMatch && teamMatch && searchMatch;
     });
   }, [users, usersFilter, filters.team]);
-
-  const dailyReportByEmployee = useMemo(() => {
-    const selectedDate = reportDate || new Date().toISOString().slice(0, 10);
-    const map = new Map();
-
-    reports
-      .filter((entry) => String(entry.date).slice(0, 10) === selectedDate)
-      .forEach((entry) => {
-        map.set(entry.employee_name, entry);
-      });
-
-    return map;
-  }, [reports, reportDate]);
 
   const unreadCount = useMemo(
     () => notifications.filter((entry) => !entry.is_read).length,
@@ -473,6 +476,39 @@ const SuperAdminDashboard = () => {
       setNewUserError(error?.response?.data?.message || "Failed to create employee");
     } finally {
       setCreatingUser(false);
+    }
+  };
+
+  const handleManagedPasswordReset = async (targetUser) => {
+    setManagedPasswordError("");
+    setManagedPasswordToast("");
+
+    const nextPassword = String(managedPasswordDrafts[targetUser.id] || "");
+    if (!nextPassword) {
+      setManagedPasswordError("Please enter a new password before updating");
+      return;
+    }
+
+    if (nextPassword.length < 3) {
+      setManagedPasswordError("New password must be at least 3 characters");
+      return;
+    }
+
+    setManagedPasswordBusyId(targetUser.id);
+    try {
+      await authApi.resetManagedPassword({
+        targetUserId: targetUser.id,
+        newPassword: nextPassword
+      });
+      setManagedPasswordToast("Password saved");
+      setManagedPasswordDrafts((prev) => ({
+        ...prev,
+        [targetUser.id]: ""
+      }));
+    } catch (error) {
+      setManagedPasswordError(error?.response?.data?.message || "Failed to update password");
+    } finally {
+      setManagedPasswordBusyId(null);
     }
   };
 
@@ -848,31 +884,59 @@ const SuperAdminDashboard = () => {
                   <th className="p-3">Email</th>
                   <th className="p-3">Role</th>
                   <th className="p-3">Department</th>
-                  <th className="p-3">Daily Total</th>
-                  <th className="p-3">Daily Completed</th>
-                  <th className="p-3">Daily Pending</th>
-                  <th className="p-3">Daily Status</th>
+                  <th className="p-3">Reset Password</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredUsers.map((entry) => {
-                  const report = dailyReportByEmployee.get(entry.name);
+                  const canResetPassword = entry.role === "employee" || entry.role === "admin";
                   return (
                     <tr key={entry.id} className="border-b border-dsr-border/70">
                       <td className="p-3 font-semibold">{entry.name}</td>
                       <td className="p-3">{entry.email}</td>
                       <td className="p-3 uppercase">{entry.role}</td>
                       <td className="p-3">{entry.team || "-"}</td>
-                      <td className="p-3">{report?.total_tasks ?? "-"}</td>
-                      <td className="p-3 text-emerald-700">{report?.completed_tasks ?? "-"}</td>
-                      <td className="p-3 text-amber-700">{report?.pending_tasks ?? "-"}</td>
-                      <td className="p-3">{report?.received_status ?? "-"}</td>
+                      <td className="p-3">
+                        {canResetPassword ? (
+                          <div className="flex min-w-[260px] items-center gap-2">
+                            <input
+                              type="password"
+                              className="input"
+                              placeholder="New password"
+                              value={managedPasswordDrafts[entry.id] || ""}
+                              onChange={(event) =>
+                                setManagedPasswordDrafts((prev) => ({
+                                  ...prev,
+                                  [entry.id]: event.target.value
+                                }))
+                              }
+                            />
+                            <button
+                              type="button"
+                              className="btn-primary whitespace-nowrap"
+                              disabled={managedPasswordBusyId === entry.id}
+                              onClick={() => handleManagedPasswordReset(entry)}
+                            >
+                              {managedPasswordBusyId === entry.id ? "Saving..." : "Save"}
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="text-dsr-muted">-</span>
+                        )}
+                      </td>
                     </tr>
                   );
                 })}
+                {managedPasswordError && (
+                  <tr>
+                    <td colSpan={5} className="p-3 text-sm text-rose-600">
+                      {managedPasswordError}
+                    </td>
+                  </tr>
+                )}
                 {filteredUsers.length === 0 && (
                   <tr>
-                    <td colSpan={8} className="p-4 text-center text-dsr-muted">
+                    <td colSpan={5} className="p-4 text-center text-dsr-muted">
                       No employees found for current filters
                     </td>
                   </tr>
@@ -999,6 +1063,11 @@ const SuperAdminDashboard = () => {
 
         {busy && <p className="text-sm text-dsr-muted">Refreshing dashboard data...</p>}
       </main>
+      {managedPasswordToast && (
+        <div className="fixed bottom-6 right-6 z-50 rounded-xl border border-dsr-border bg-white px-4 py-3 text-sm font-semibold text-emerald-700 shadow-lg">
+          {managedPasswordToast}
+        </div>
+      )}
     </div>
   );
 };

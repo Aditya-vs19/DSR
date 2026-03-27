@@ -2,6 +2,7 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import {
   createUser,
+  findUserById,
   findUserAuthById,
   findUserByEmail,
   findUserByUsername,
@@ -187,5 +188,53 @@ export const changePassword = async (req, res) => {
     return res.status(200).json({ message: "Password changed successfully" });
   } catch (error) {
     return res.status(500).json({ message: "Failed to change password", error: error.message });
+  }
+};
+
+export const resetManagedUserPassword = async (req, res) => {
+  try {
+    const { targetUserId, newPassword } = req.body;
+
+    if (!targetUserId || !newPassword) {
+      return res.status(400).json({ message: "targetUserId and newPassword are required" });
+    }
+
+    const normalizedTargetId = Number(targetUserId);
+    const normalizedNewPassword = String(newPassword);
+
+    if (!Number.isInteger(normalizedTargetId) || normalizedTargetId <= 0) {
+      return res.status(400).json({ message: "targetUserId must be a valid positive integer" });
+    }
+
+    if (normalizedTargetId === Number(req.user.id)) {
+      return res.status(400).json({ message: "Use change password to update your own password" });
+    }
+
+    if (normalizedNewPassword.length < 3) {
+      return res.status(400).json({ message: "New password must be at least 3 characters" });
+    }
+
+    const targetUser = await findUserById(normalizedTargetId);
+    if (!targetUser) {
+      return res.status(404).json({ message: "Target employee not found" });
+    }
+
+    if (![
+      "employee",
+      "admin"
+    ].includes(String(targetUser.role || "").toLowerCase())) {
+      return res.status(403).json({ message: "You can only reset passwords for employee/admin accounts" });
+    }
+
+    const nextHash = await bcrypt.hash(normalizedNewPassword, 10);
+    const result = await updateUserPasswordById(normalizedTargetId, nextHash);
+
+    if (!result?.affectedRows) {
+      return res.status(500).json({ message: "Password reset was not persisted" });
+    }
+
+    return res.status(200).json({ message: `Password updated for ${targetUser.name}` });
+  } catch (error) {
+    return res.status(500).json({ message: "Failed to reset password", error: error.message });
   }
 };

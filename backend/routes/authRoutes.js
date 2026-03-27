@@ -4,6 +4,7 @@ import {
   getDepartmentEmployees,
   getEmployees,
   login,
+  resetManagedUserPassword,
   register
 } from "../controllers/authController.js";
 import { authenticate, authorizeRoles } from "../middleware/authMiddleware.js";
@@ -12,6 +13,7 @@ const router = express.Router();
 
 router.post("/login", login);
 router.post("/change-password", authenticate, changePassword);
+router.post("/reset-managed-password", authenticate, authorizeRoles("superadmin"), resetManagedUserPassword);
 router.post("/register", authenticateOptional, registerProtected, register);
 router.get("/employees", authenticate, authorizeRoles("superadmin", "hr"), getEmployees);
 router.get("/employees/team", authenticate, authorizeRoles("admin", "hr", "superadmin"), getDepartmentEmployees);
