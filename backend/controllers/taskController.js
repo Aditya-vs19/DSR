@@ -118,11 +118,21 @@ export const getTasksController = async (req, res) => {
 export const updateTaskStatusController = async (req, res) => {
   try {
     const { id } = req.params;
-    const { status, dependency = null } = req.body;
+    const { status, dependency = null, action = "", taskTitle = "" } = req.body;
     const normalizedStatus = normalizeTaskStatus(status);
+    const normalizedAction = String(action || "").trim();
+    const normalizedTaskTitle = String(taskTitle || "").trim();
 
     if (!normalizedStatus) {
       return res.status(400).json({ message: "Invalid status. Use Pending, In Progress, or Completed." });
+    }
+
+    if (!normalizedAction) {
+      return res.status(400).json({ message: "Action is required" });
+    }
+
+    if (!normalizedTaskTitle) {
+      return res.status(400).json({ message: "Task title is required" });
     }
 
     const task = await getTaskById(id);
@@ -130,8 +140,8 @@ export const updateTaskStatusController = async (req, res) => {
       return res.status(404).json({ message: "Task not found" });
     }
 
-    if (task.status === "Completed" && normalizedStatus !== "Completed") {
-      return res.status(400).json({ message: "Completed tasks cannot be moved back to Pending or In Progress" });
+    if (Number(task.submitted_to_hr) === 1) {
+      return res.status(400).json({ message: "Submitted tasks cannot be edited" });
     }
 
     let assignee = null;
@@ -156,7 +166,13 @@ export const updateTaskStatusController = async (req, res) => {
       return res.status(403).json({ message: "Not allowed to update this task" });
     }
 
-    await updateTaskStatus({ id, status: normalizedStatus, dependency });
+    await updateTaskStatus({
+      id,
+      status: normalizedStatus,
+      dependency,
+      action: normalizedAction,
+      taskTitle: normalizedTaskTitle
+    });
 
     const recipientIds = await getTaskUpdateNotificationRecipients({
       assignedBy: task.assigned_by,
@@ -168,7 +184,7 @@ export const updateTaskStatusController = async (req, res) => {
         recipientIds.map((recipientId) =>
           createNotification({
             userId: recipientId,
-            message: `${req.user.name} updated task "${task.task}" to ${normalizedStatus}`,
+            message: `${req.user.name} updated task "${task.task}"`,
             type: "task_status_updated",
             refId: task.id
           })
@@ -258,6 +274,7 @@ export const reassignTaskController = async (req, res) => {
         assigned_by: req.user.id,
         assigned_to_name: nextAssignee.name,
         assigned_by_name: req.user.name,
+        reassigned_at: new Date().toISOString().slice(0, 19).replace("T", " "),
         submitted_to_hr: 0,
         submitted_to_hr_at: null
       }

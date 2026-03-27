@@ -21,6 +21,18 @@ const normalizeDateText = (value) => {
   return String(value).slice(0, 10);
 };
 
+const normalizeEmployeeIds = (value) => {
+  if (!value) {
+    return [];
+  }
+
+  const rawList = Array.isArray(value) ? value : String(value).split(",");
+
+  return rawList
+    .map((entry) => Number(String(entry).trim()))
+    .filter((entry) => Number.isInteger(entry) && entry > 0);
+};
+
 export const getReportsController = async (req, res) => {
   try {
     const { role, id: userId, team } = req.user;
@@ -39,7 +51,8 @@ export const getReportsController = async (req, res) => {
         dateRange: req.query.dateRange,
         date: req.query.date,
         teamFilter: req.query.team,
-        employeeId: req.query.employeeId
+        employeeId: req.query.employeeId,
+        employeeIds: normalizeEmployeeIds(req.query.employeeIds)
       });
 
       return res.status(200).json(grid);
@@ -125,15 +138,24 @@ export const updateDailyReportCellController = async (req, res) => {
 
 export const submitReportToHrController = async (req, res) => {
   try {
-    if (req.user.role !== "employee") {
-      return res.status(403).json({ message: "Only employees can submit reports" });
+    if (!["employee", "admin"].includes(req.user.role)) {
+      return res.status(403).json({ message: "Only employees/admins can submit reports" });
     }
 
     const date = req.body.date || new Date().toISOString().slice(0, 10);
-    const result = await submitEmployeeDailyReport({ employeeId: req.user.id, date });
+    const isAdminSubmission = req.user.role === "admin";
+    const result = await submitEmployeeDailyReport({
+      employeeId: req.user.id,
+      date,
+      onlySelfAssigned: isAdminSubmission
+    });
 
     if (!result.submitted) {
-      return res.status(400).json({ message: "No tasks found for selected day" });
+      return res.status(400).json({
+        message: isAdminSubmission
+          ? "No self-assigned tasks found for selected day"
+          : "No tasks found for selected day"
+      });
     }
 
     const hrIds = await getHrUserIds();
@@ -151,7 +173,7 @@ export const submitReportToHrController = async (req, res) => {
     }
 
     return res.status(200).json({
-      message: "Report submitted to HR",
+      message: isAdminSubmission ? "Self-task report submitted to HR" : "Report submitted to HR",
       date,
       totalTasks: Number(result.total_tasks || 0),
       completedTasks: Number(result.completed_tasks || 0),

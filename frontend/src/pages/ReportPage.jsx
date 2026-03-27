@@ -225,7 +225,13 @@ function ReportPage({
   const [date, setDate] = useState(initialDate || new Date().toISOString().slice(0, 10));
   const [reportType, setReportType] = useState("received");
   const [team, setTeam] = useState(initialTeam);
-  const [employeeId, setEmployeeId] = useState(initialEmployeeId);
+  const [selectedEmployeeIds, setSelectedEmployeeIds] = useState(() => {
+    if (!initialEmployeeId || initialEmployeeId === "all") {
+      return [];
+    }
+
+    return [String(initialEmployeeId)];
+  });
   const [gridData, setGridData] = useState({ employees: [], rows: [], summary: { received: 0, notReceived: 0, leave: 0 } });
   const [detailedTasks, setDetailedTasks] = useState([]);
   const [detailedSummary, setDetailedSummary] = useState({ total: 0, completed: 0, inProgress: 0, pending: 0 });
@@ -283,13 +289,17 @@ function ReportPage({
   }, [role]);
 
   useEffect(() => {
-    if (employeeId === "all") return;
-
-    const exists = employeeOptions.some((entry) => String(entry.id) === String(employeeId));
-    if (!exists) {
-      setEmployeeId("all");
+    if (!selectedEmployeeIds.length) {
+      return;
     }
-  }, [employeeId, employeeOptions]);
+
+    const employeeSet = new Set(employeeOptions.map((entry) => String(entry.id)));
+    const scopedSelection = selectedEmployeeIds.filter((entry) => employeeSet.has(String(entry)));
+
+    if (scopedSelection.length !== selectedEmployeeIds.length) {
+      setSelectedEmployeeIds(scopedSelection);
+    }
+  }, [employeeOptions, selectedEmployeeIds]);
 
   const loadHolidays = useCallback(async () => {
     if (role !== "superadmin") return;
@@ -330,8 +340,8 @@ function ReportPage({
           return teamByUserId.get(String(entry.assigned_to)) === team;
         })
         .filter((entry) => {
-          if (employeeId === "all") return true;
-          return String(entry.assigned_to) === String(employeeId);
+          if (!selectedEmployeeIds.length) return true;
+          return selectedEmployeeIds.includes(String(entry.assigned_to));
         })
         .sort((left, right) => {
           const leftTime = new Date(left.created_at).getTime();
@@ -380,7 +390,7 @@ function ReportPage({
       const reportParams = {
         dateRange,
         date,
-        employeeId
+        employeeIds: selectedEmployeeIds.join(",")
       };
 
       if (role !== "admin") {
@@ -403,7 +413,7 @@ function ReportPage({
     } finally {
       setLoading(false);
     }
-  }, [date, dateRange, employeeId, reportType, role, team]);
+  }, [date, dateRange, reportType, role, selectedEmployeeIds, team]);
 
   const handleCellChange = useCallback(
     async (reportId, status) => {
@@ -773,7 +783,12 @@ function ReportPage({
   }, [initialTeam]);
 
   useEffect(() => {
-    setEmployeeId(initialEmployeeId || "all");
+    if (!initialEmployeeId || initialEmployeeId === "all") {
+      setSelectedEmployeeIds([]);
+      return;
+    }
+
+    setSelectedEmployeeIds([String(initialEmployeeId)]);
   }, [initialEmployeeId]);
 
   useEffect(() => {
@@ -794,8 +809,8 @@ function ReportPage({
         team={team}
         onTeamChange={setTeam}
         teamOptions={teamOptions}
-        employeeId={employeeId}
-        onEmployeeChange={setEmployeeId}
+        selectedEmployeeIds={selectedEmployeeIds}
+        onEmployeeSelectionChange={setSelectedEmployeeIds}
         employeeOptions={employeeOptions}
         onGenerate={handleGenerate}
         onExportXlsx={handleExportXlsx}
