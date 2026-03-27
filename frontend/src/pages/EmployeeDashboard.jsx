@@ -5,6 +5,7 @@ import logo from "../assets/logo.png";
 import { useAuth } from "../context/AuthContext";
 import useScrollHeader from "../hooks/useScrollHeader";
 import { authApi, reportApi, taskApi } from "../services/api";
+import { toTeamLabel } from "../utils/teamLabel";
 
 const TABS = ["Overview", "Tasks", "Profile"];
 const PERIOD_OPTIONS = [
@@ -500,7 +501,7 @@ const EmployeeDashboard = () => {
           <div className="flex items-center gap-3">
             <div className="text-right">
               <p className="text-sm font-bold capitalize">{user?.name}</p>
-              <p className="text-xs uppercase tracking-wide text-dsr-muted">{user?.team || "Employee"}</p>
+              <p className="text-xs uppercase tracking-wide text-dsr-muted">{toTeamLabel(user?.team) || "Employee"}</p>
             </div>
             <button
               type="button"
@@ -795,7 +796,7 @@ const EmployeeDashboard = () => {
                 <p><span className="font-semibold">Name:</span> {user?.name}</p>
                 <p><span className="font-semibold">Role:</span> {String(user?.role || "").toUpperCase()}</p>
                 <p><span className="font-semibold">Email:</span> {user?.email}</p>
-                <p><span className="font-semibold">Department:</span> {user?.team || "-"}</p>
+                <p><span className="font-semibold">Department:</span> {toTeamLabel(user?.team) || "-"}</p>
               </div>
             </div>
 

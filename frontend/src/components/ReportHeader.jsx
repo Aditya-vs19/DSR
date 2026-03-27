@@ -1,4 +1,5 @@
 import React from "react";
+import { toTeamLabel } from "../utils/teamLabel";
 
 function ReportHeader({
   reportType,
@@ -99,7 +100,7 @@ function ReportHeader({
             <option value="all">All Departments (Company-Wide)</option>
             {teamOptions.map((entry) => (
               <option key={entry} value={entry}>
-                {entry}
+                {toTeamLabel(entry)}
               </option>
             ))}
           </select>
@@ -115,7 +116,7 @@ function ReportHeader({
             <option value="all">All Employees</option>
             {employeeOptions.map((entry) => (
               <option key={entry.id} value={entry.id}>
-                {entry.name} ({entry.team})
+                {entry.name} ({toTeamLabel(entry.team)})
               </option>
             ))}
           </select>

@@ -6,6 +6,7 @@ import logo from "../assets/logo.png";
 import { useAuth } from "../context/AuthContext";
 import useScrollHeader from "../hooks/useScrollHeader";
 import { authApi, reportApi, taskApi } from "../services/api";
+import { toTeamLabel } from "../utils/teamLabel";
 
 const TABS = ["Overview", "Tasks", "Employees", "Reports", "Profile"];
 
@@ -17,7 +18,7 @@ const getManagedDepartmentLabel = (currentUser) => {
     return "Sales & Logistics";
   }
 
-  return team || "-";
+  return toTeamLabel(team) || "-";
 };
 
 const AdminDashboard = () => {
@@ -626,7 +627,7 @@ const AdminDashboard = () => {
                     <td className="p-3 font-semibold">{entry.name}</td>
                     <td className="p-3">{entry.email}</td>
                     <td className="p-3 uppercase">{entry.role}</td>
-                    <td className="p-3">{entry.team || "-"}</td>
+                    <td className="p-3">{toTeamLabel(entry.team) || "-"}</td>
                   </tr>
                 ))}
                 {employees.length === 0 && (

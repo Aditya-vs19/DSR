@@ -4,6 +4,7 @@ import ReportHeader from "../components/ReportHeader";
 import ReportGrid from "../components/ReportGrid";
 import ReportTaskDetailTable from "../components/ReportTaskDetailTable";
 import { authApi, reportApi, taskApi } from "../services/api";
+import { toTeamLabel } from "../utils/teamLabel";
 
 const COLOR = {
   white: "FFFFFFFF",
@@ -251,7 +252,7 @@ function ReportPage({
     return scoped.map((entry) => ({
       id: entry.id,
       name: entry.name,
-      team: entry.team
+      team: toTeamLabel(entry.team)
     }));
   }, [directoryUsers, role, team]);
 
@@ -345,7 +346,7 @@ function ReportPage({
         })
         .map((entry) => ({
           ...entry,
-          assigned_to_team: teamByUserId.get(String(entry.assigned_to)) || "-",
+          assigned_to_team: toTeamLabel(teamByUserId.get(String(entry.assigned_to))) || "-",
           day: formatDayText(entry.created_at),
           groupLabel:
             dateRange === "month"
