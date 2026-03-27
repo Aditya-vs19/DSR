@@ -6,8 +6,6 @@ function ReportHeader({
   onReportTypeChange,
   dateRange,
   onDateRangeChange,
-  date,
-  onDateChange,
   team,
   onTeamChange,
   teamOptions,
@@ -97,7 +95,7 @@ function ReportHeader({
 
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="grid gap-3 md:grid-cols-7">
+      <div className="grid gap-3 md:grid-cols-6">
         <label className="md:col-span-1">
           <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Report Type</span>
           <select
@@ -121,16 +119,6 @@ function ReportHeader({
             <option value="week">Week</option>
             <option value="month">Month</option>
           </select>
-        </label>
-
-        <label className="md:col-span-1">
-          <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Anchor Date</span>
-          <input
-            type="date"
-            value={date}
-            onChange={(event) => onDateChange(event.target.value)}
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300"
-          />
         </label>
 
         <label className="md:col-span-1">
@@ -213,22 +201,25 @@ function ReportHeader({
           </span>
         </div>
 
-        <div className="md:col-span-2 flex items-center gap-2 md:self-start md:pt-6">
-          <button
-            type="button"
-            onClick={onGenerate}
-            disabled={loading}
-            className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-70"
-          >
-            {loading ? "Loading..." : reportType === "detailed" ? "Generate Detailed Report" : "Generate Report"}
-          </button>
-          <button
-            type="button"
-            onClick={onExportXlsx}
-            className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-          >
-            {reportType === "detailed" ? "Download Task XLSX" : "Download XLSX"}
-          </button>
+        <div className="md:col-span-2">
+          <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Actions</span>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onGenerate}
+              disabled={loading}
+              className="rounded-lg bg-emerald-600 px-3.5 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-70"
+            >
+              {loading ? "Loading..." : reportType === "detailed" ? "Generate Detailed Report" : "Generate Report"}
+            </button>
+            <button
+              type="button"
+              onClick={onExportXlsx}
+              className="rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+            >
+              {reportType === "detailed" ? "Download Task XLSX" : "Download XLSX"}
+            </button>
+          </div>
         </div>
       </div>
 

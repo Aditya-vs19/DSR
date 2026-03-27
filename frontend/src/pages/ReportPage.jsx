@@ -803,8 +803,6 @@ function ReportPage({
         onReportTypeChange={setReportType}
         dateRange={dateRange}
         onDateRangeChange={setDateRange}
-        date={date}
-        onDateChange={setDate}
         team={team}
         onTeamChange={setTeam}
         teamOptions={teamOptions}

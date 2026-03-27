@@ -453,21 +453,21 @@ const TaskTable = ({
 
   return (
     <div className="card overflow-x-auto">
-      <table className="min-w-full border-collapse text-sm">
+      <table className="w-full table-fixed border-collapse text-[13px]">
         <thead>
-          <tr className="border-b border-slate-200 bg-slate-50 text-left text-slate-700">
-            <th className="p-3">Sr No</th>
-            <th className="p-3">Client</th>
-            <th className="p-3">Task</th>
-            <th className="p-3">Action</th>
-            <th className="p-3">Status</th>
-            <th className="p-3">Dependancy / Remark</th>
-            {showAssignee && <th className="p-3">Assigned To</th>}
-            {showAssigner && <th className="p-3">Assigned By</th>}
-            {showSubmitToHr && <th className="p-3">HR Submit</th>}
-            {showReassign && <th className="p-3">Reassign</th>}
-            <th className="p-3">Assigned Time</th>
-            <th className="p-3">Completed Time</th>
+          <tr className="border-b border-slate-300 bg-slate-50 text-left text-slate-700">
+            <th className="w-14 px-2.5 py-2">Sr No</th>
+            <th className="w-28 px-2.5 py-2">Client</th>
+            <th className="w-[17%] px-2.5 py-2">Task</th>
+            <th className="w-[18%] px-2.5 py-2">Action</th>
+            <th className="w-32 px-2.5 py-2">Status</th>
+            <th className="w-[17%] px-2.5 py-2">Dependency / Remark</th>
+            {showAssignee && <th className="w-28 px-2.5 py-2">Assigned To</th>}
+            {showAssigner && <th className="w-28 px-2.5 py-2">Assigned By</th>}
+            {showSubmitToHr && <th className="w-28 px-2.5 py-2">HR Submit</th>}
+            {showReassign && <th className="w-28 px-2.5 py-2">Reassign</th>}
+            <th className="w-32 px-2.5 py-2">Assigned Time</th>
+            <th className="w-32 px-2.5 py-2">Completed Time</th>
           </tr>
         </thead>
         <tbody>
@@ -482,7 +482,7 @@ const TaskTable = ({
               <tr
                 key={item.id}
                 data-task-id={item.id}
-                className={`border-b border-slate-100 ${
+                className={`border-b border-slate-300 ${
                   Number(focusedTaskId) === Number(item.id)
                     ? "bg-emerald-50"
                     : overdue
@@ -496,13 +496,13 @@ const TaskTable = ({
                         : ""
                 }`}
               >
-                <td className="p-3">{(currentPage - 1) * TASKS_PER_PAGE + index + 1}</td>
-                <td className="p-3 font-medium">{item.client}</td>
-                <td className="p-3">
+                <td className="px-2.5 py-2 align-top">{(currentPage - 1) * TASKS_PER_PAGE + index + 1}</td>
+                <td className="px-2.5 py-2 align-top font-medium break-words">{item.client}</td>
+                <td className="px-2.5 py-2 align-top">
                   {editableStatus && Number(item.submitted_to_hr) !== 1 ? (
-                    <div className="min-w-[220px]">
+                    <div className="max-w-[220px]">
                       <input
-                        className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-700 outline-none focus:border-emerald-500"
+                        className="w-full rounded-md border border-slate-200 px-2.5 py-1.5 text-[13px] text-slate-700 outline-none focus:border-emerald-500"
                         type="text"
                         placeholder="Update task title"
                         value={getTaskTitleValue(item)}
@@ -543,14 +543,14 @@ const TaskTable = ({
                       )}
                     </div>
                   ) : (
-                    item.task || "-"
+                    <span className="break-words">{item.task || "-"}</span>
                   )}
                 </td>
-                <td className="p-3">
+                <td className="px-2.5 py-2 align-top">
                   {editableStatus && Number(item.submitted_to_hr) !== 1 ? (
-                    <div className="min-w-[220px]">
+                    <div className="max-w-[220px]">
                       <input
-                        className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-700 outline-none focus:border-emerald-500"
+                        className="w-full rounded-md border border-slate-200 px-2.5 py-1.5 text-[13px] text-slate-700 outline-none focus:border-emerald-500"
                         type="text"
                         placeholder="Update action"
                         value={getActionValue(item)}
@@ -591,13 +591,13 @@ const TaskTable = ({
                       )}
                     </div>
                   ) : (
-                    item.action || "-"
+                    <span className="break-words">{item.action || "-"}</span>
                   )}
                 </td>
-                <td className="p-3">
+                <td className="px-2.5 py-2 align-top">
                   {editableStatus && Number(item.submitted_to_hr) !== 1 ? (
                     <select
-                      className={`rounded-md px-2 py-1 text-xs font-semibold ${statusClass[item.status] || "bg-slate-100 text-slate-700"}`}
+                      className={`rounded-md px-2 py-1 text-[12px] font-semibold ${statusClass[item.status] || "bg-slate-100 text-slate-700"}`}
                       value={item.status}
                       onChange={(event) =>
                         onStatusChange(
@@ -614,18 +614,18 @@ const TaskTable = ({
                       <option value="Completed">Completed</option>
                     </select>
                   ) : (
-                    <span className={`inline-flex whitespace-nowrap rounded-md px-2 py-1 text-xs font-semibold ${statusClass[item.status]}`}>
+                    <span className={`inline-flex whitespace-nowrap rounded-md px-2 py-1 text-[12px] font-semibold ${statusClass[item.status]}`}>
                       {item.status}
                     </span>
                   )}
                 </td>
-                <td className="p-3">
+                <td className="px-2.5 py-2 align-top">
                   {editableStatus && Number(item.submitted_to_hr) !== 1 ? (
-                    <div className="min-w-[220px]">
+                    <div className="max-w-[220px]">
                       <input
-                        className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-700 outline-none focus:border-emerald-500"
+                        className="w-full rounded-md border border-slate-200 px-2.5 py-1.5 text-[13px] text-slate-700 outline-none focus:border-emerald-500"
                         type="text"
-                        placeholder="Add dependancy / remark"
+                        placeholder="Add dependency / remark"
                         value={getDependencyValue(item)}
                         onFocus={() => setDependencyActive(item.id, true)}
                         onChange={(event) => {
@@ -664,13 +664,13 @@ const TaskTable = ({
                       )}
                     </div>
                   ) : (
-                    item.dependency || "-"
+                    <span className="break-words">{item.dependency || "-"}</span>
                   )}
                 </td>
-                {showAssignee && <td className="p-3">{item.assigned_to_name || "-"}</td>}
-                {showAssigner && <td className="p-3">{item.assigned_by_name || "-"}</td>}
+                {showAssignee && <td className="px-2.5 py-2 align-top">{item.assigned_to_name || "-"}</td>}
+                {showAssigner && <td className="px-2.5 py-2 align-top">{item.assigned_by_name || "-"}</td>}
                 {showSubmitToHr && (
-                  <td className="p-3">
+                  <td className="px-2.5 py-2 align-top">
                     {Number(item.submitted_to_hr) === 1 ? (
                       <span className="rounded-md bg-rose-100 px-2 py-1 text-xs font-semibold text-rose-800">
                         Submitted
@@ -678,7 +678,7 @@ const TaskTable = ({
                     ) : (
                       <button
                         type="button"
-                        className="btn-primary"
+                        className="btn-primary px-2.5 py-1.5 text-[13px]"
                         disabled={!onSubmitToHr || submittingTaskId === item.id}
                         onClick={() => onSubmitToHr?.(item)}
                       >
@@ -688,13 +688,13 @@ const TaskTable = ({
                   </td>
                 )}
                 {showReassign && (
-                  <td className="p-3">
+                  <td className="px-2.5 py-2 align-top">
                     {isCompletedTask ? (
                       <span className="text-xs text-slate-500">-</span>
                     ) : (
                       <button
                         type="button"
-                        className="btn-secondary whitespace-nowrap"
+                        className="btn-secondary whitespace-nowrap px-2.5 py-1.5 text-[13px]"
                         disabled={!onReassign || reassigningTaskId === item.id}
                         onClick={() => openReassignModal(item)}
                       >
@@ -703,7 +703,7 @@ const TaskTable = ({
                     )}
                   </td>
                 )}
-                <td className="p-3 whitespace-nowrap align-top">
+                <td className="px-2.5 py-2 whitespace-nowrap align-top text-[12px] leading-tight">
                   {assignedAt ? (
                     <div>
                       <p>{assignedAt.date}</p>
@@ -719,7 +719,7 @@ const TaskTable = ({
                     </div>
                   )}
                 </td>
-                <td className="p-3 whitespace-nowrap align-top">
+                <td className="px-2.5 py-2 whitespace-nowrap align-top text-[12px] leading-tight">
                   {item.status === "Completed" && completedAt ? (
                     <div>
                       <p>{completedAt.date}</p>
