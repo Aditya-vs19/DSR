@@ -461,7 +461,7 @@ const TaskTable = ({
             <th className="p-3">Task</th>
             <th className="p-3">Action</th>
             <th className="p-3">Status</th>
-            <th className="p-3">Dependency</th>
+            <th className="p-3">Dependancy / Remark</th>
             {showAssignee && <th className="p-3">Assigned To</th>}
             {showAssigner && <th className="p-3">Assigned By</th>}
             {showSubmitToHr && <th className="p-3">HR Submit</th>}
@@ -625,7 +625,7 @@ const TaskTable = ({
                       <input
                         className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-700 outline-none focus:border-emerald-500"
                         type="text"
-                        placeholder="Add dependency"
+                        placeholder="Add dependancy / remark"
                         value={getDependencyValue(item)}
                         onFocus={() => setDependencyActive(item.id, true)}
                         onChange={(event) => {
@@ -660,7 +660,7 @@ const TaskTable = ({
                         <p className="mt-1 text-xs text-emerald-600">Saved</p>
                       )}
                       {dependencyMeta[item.id]?.state === "error" && (
-                        <p className="mt-1 text-xs text-rose-600">Could not save dependency</p>
+                        <p className="mt-1 text-xs text-rose-600">Could not save dependancy / remark</p>
                       )}
                     </div>
                   ) : (
