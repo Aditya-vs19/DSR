@@ -169,7 +169,7 @@ const EmployeeDashboard = () => {
     });
   }, [tasks, filters, todayText]);
 
-  const pendingTasksFromYesterday = useMemo(() => {
+  const yesterdayTaskSummary = useMemo(() => {
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
     const yesterdayText = getLocalDateText(yesterday);
@@ -180,12 +180,26 @@ const EmployeeDashboard = () => {
         .map((value) => Number(value))
     );
 
-    return tasks.filter(
-      (item) =>
-        item.status === "Pending" &&
-        ((item.assigned_at || item.created_at || "").slice(0, 10) === yesterdayText) &&
-        !carriedForwardSourceIds.has(Number(item.id))
-    ).length;
+    return tasks.reduce(
+      (acc, item) => {
+        const isYesterday = (item.assigned_at || item.created_at || "").slice(0, 10) === yesterdayText;
+        const isCarriedForwardSource = carriedForwardSourceIds.has(Number(item.id));
+
+        if (!isYesterday || isCarriedForwardSource) {
+          return acc;
+        }
+
+        const normalizedStatus = String(item.status || "").toLowerCase();
+        if (normalizedStatus === "pending") {
+          acc.pending += 1;
+        } else if (normalizedStatus === "in progress") {
+          acc.inProgress += 1;
+        }
+
+        return acc;
+      },
+      { pending: 0, inProgress: 0 }
+    );
   }, [tasks]);
 
   const visibleNotifications = useMemo(() => {
@@ -293,18 +307,26 @@ const EmployeeDashboard = () => {
     }
   };
 
-  const handleStatusChange = async (task, status, dependency = task.dependency) => {
+  const handleStatusChange = async (
+    task,
+    status,
+    dependency = task.dependency,
+    action = task.action,
+    taskTitle = task.task
+  ) => {
     setError("");
 
     try {
-      await taskApi.updateTask(task.id, { status, dependency });
+      await taskApi.updateTask(task.id, { status, dependency, action, taskTitle });
       setTasks((prev) =>
         prev.map((entry) =>
           entry.id === task.id
             ? {
                 ...entry,
+                task: taskTitle,
                 status,
-                dependency
+                dependency,
+                action
               }
             : entry
         )
@@ -387,6 +409,11 @@ const EmployeeDashboard = () => {
   const handleSubmitReport = async () => {
     if (!canSubmitReport) {
       setSubmitMessage("Select a single day (Today, Yesterday, or Custom Date) to submit report.");
+      return;
+    }
+
+    const confirmed = window.confirm(`Do you want to submit your report for ${selectedReportDate}?`);
+    if (!confirmed) {
       return;
     }
 
@@ -631,9 +658,14 @@ const EmployeeDashboard = () => {
                   }}
                 />
               </div>
-              {pendingTasksFromYesterday > 0 && (
+              {(yesterdayTaskSummary.pending > 0 || yesterdayTaskSummary.inProgress > 0) && (
                 <div className="rounded-xl border border-rose-300 bg-rose-100 p-3 text-sm font-semibold text-rose-800 md:col-start-4">
-                  You have {pendingTasksFromYesterday} pending {pendingTasksFromYesterday === 1 ? "task" : "tasks"} from yesterday.
+                  <p>
+                    You have {yesterdayTaskSummary.pending} pending {yesterdayTaskSummary.pending === 1 ? "task" : "tasks"} from yesterday.
+                  </p>
+                  <p className="mt-1">
+                    You have {yesterdayTaskSummary.inProgress} in-progress {yesterdayTaskSummary.inProgress === 1 ? "task" : "tasks"} from yesterday.
+                  </p>
                 </div>
               )}
             </div>
@@ -704,7 +736,7 @@ const EmployeeDashboard = () => {
               </p>
               <button
                 type="button"
-                className="btn-primary"
+                className={alreadySubmittedForDate ? "rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white" : "btn-primary"}
                 disabled={!canSubmitReport || submittingReport || alreadySubmittedForDate}
                 onClick={handleSubmitReport}
               >

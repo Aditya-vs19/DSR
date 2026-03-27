@@ -895,6 +895,7 @@ const SuperAdminDashboard = () => {
                     <tr key={entry.id} className="border-b border-dsr-border/70">
                       <td className="p-3 font-semibold">{entry.name}</td>
                       <td className="p-3">{entry.email}</td>
+                      
                       <td className="p-3 uppercase">{entry.role}</td>
                       <td className="p-3">{toTeamLabel(entry.team) || "-"}</td>
                       <td className="p-3">

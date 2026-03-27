@@ -51,6 +51,8 @@ const AdminDashboard = () => {
   const [passwordMessage, setPasswordMessage] = useState("");
   const [passwordError, setPasswordError] = useState("");
   const [reassigningTaskId, setReassigningTaskId] = useState(null);
+  const [submittingOwnReport, setSubmittingOwnReport] = useState(false);
+  const [ownSubmitMessage, setOwnSubmitMessage] = useState("");
   const [focusedTaskId, setFocusedTaskId] = useState(null);
   const [comparisonFilter, setComparisonFilter] = useState({ mode: "overall", date: todayText });
   const managedDepartmentLabel = useMemo(() => getManagedDepartmentLabel(user), [user]);
@@ -119,6 +121,7 @@ const AdminDashboard = () => {
       employeeStatusMap.set(Number(item.id), {
         name: item.name,
         completed: 0,
+        inProgress: 0,
         pending: 0
       });
     });
@@ -135,6 +138,8 @@ const AdminDashboard = () => {
 
       if (statusValue === "completed") {
         target.completed += 1;
+      } else if (statusValue === "in progress") {
+        target.inProgress += 1;
       } else if (statusValue === "pending") {
         target.pending += 1;
       }
@@ -158,12 +163,19 @@ const AdminDashboard = () => {
           backgroundColor: "rgba(220, 38, 38, 0.8)",
           borderColor: "rgba(220, 38, 38, 1)",
           borderWidth: 1
+        },
+        {
+          label: "In Progress",
+          data: rows.map((item) => Number(item.inProgress || 0)),
+          backgroundColor: "rgba(37, 99, 235, 0.8)",
+          borderColor: "rgba(37, 99, 235, 1)",
+          borderWidth: 1
         }
       ]
     };
   }, [employees, tasks, comparisonFilter]);
 
-  const pendingTasksFromYesterday = useMemo(() => {
+  const yesterdayTaskSummary = useMemo(() => {
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
     const yesterdayText = new Date(yesterday.getTime() - yesterday.getTimezoneOffset() * 60000)
@@ -176,18 +188,48 @@ const AdminDashboard = () => {
         .map((value) => Number(value))
     );
 
-    return tasks.filter(
-      (item) =>
-        item.status === "Pending" &&
-        ((item.assigned_at || item.created_at || "").slice(0, 10) === yesterdayText) &&
-        !carriedForwardSourceIds.has(Number(item.id))
-    ).length;
-  }, [tasks]);
+    return tasks.reduce(
+      (acc, item) => {
+        const isYesterday = (item.assigned_at || item.created_at || "").slice(0, 10) === yesterdayText;
+        const isOwnTask = Number(item.assigned_to) === Number(user?.id);
+        const isCarriedForwardSource = carriedForwardSourceIds.has(Number(item.id));
+
+        if (!isYesterday || !isOwnTask || isCarriedForwardSource) {
+          return acc;
+        }
+
+        const normalizedStatus = String(item.status || "").toLowerCase();
+        if (normalizedStatus === "pending") {
+          acc.pending += 1;
+        } else if (normalizedStatus === "in progress") {
+          acc.inProgress += 1;
+        }
+
+        return acc;
+      },
+      { pending: 0, inProgress: 0 }
+    );
+  }, [tasks, user?.id]);
 
   const unreadCount = useMemo(
     () => notifications.filter((item) => !item.is_read).length,
     [notifications]
   );
+
+  const adminReportDate = useMemo(() => filters.date || todayText, [filters.date, todayText]);
+
+  const alreadySubmittedOwnForDate = useMemo(() => {
+    if (!adminReportDate) {
+      return false;
+    }
+
+    return reports.some(
+      (entry) =>
+        String(entry.date).slice(0, 10) === adminReportDate &&
+        Number(entry.employee_id) === Number(user?.id) &&
+        entry.received_status === "Received"
+    );
+  }, [adminReportDate, reports, user?.id]);
 
   const handleAssign = async (event) => {
     event.preventDefault();
@@ -211,18 +253,26 @@ const AdminDashboard = () => {
     }
   };
 
-  const handleStatusChange = async (task, status, dependency = task.dependency) => {
+  const handleStatusChange = async (
+    task,
+    status,
+    dependency = task.dependency,
+    action = task.action,
+    taskTitle = task.task
+  ) => {
     setError("");
 
     try {
-      await taskApi.updateTask(task.id, { status, dependency });
+      await taskApi.updateTask(task.id, { status, dependency, action, taskTitle });
       setTasks((prev) =>
         prev.map((entry) =>
           entry.id === task.id
             ? {
                 ...entry,
+                task: taskTitle,
                 status,
-                dependency
+                dependency,
+                action
               }
             : entry
         )
@@ -251,6 +301,25 @@ const AdminDashboard = () => {
       setError(apiError.response?.data?.message || "Failed to reassign task");
     } finally {
       setReassigningTaskId(null);
+    }
+  };
+
+  const handleSubmitOwnReport = async () => {
+    const confirmed = window.confirm(`Do you want to submit your self-task report for ${adminReportDate}?`);
+    if (!confirmed) {
+      return;
+    }
+
+    setSubmittingOwnReport(true);
+    setOwnSubmitMessage("");
+    try {
+      const response = await reportApi.submitReportToHr(adminReportDate);
+      setOwnSubmitMessage(response.data?.message || "Self-task report submitted to HR.");
+      await loadData();
+    } catch (apiError) {
+      setOwnSubmitMessage(apiError.response?.data?.message || "Failed to submit self-task report to HR");
+    } finally {
+      setSubmittingOwnReport(false);
     }
   };
 
@@ -505,9 +574,14 @@ const AdminDashboard = () => {
                   onChange={(event) => setFilters((prev) => ({ ...prev, date: event.target.value }))}
                 />
               </div>
-              {pendingTasksFromYesterday > 0 && (
+              {(yesterdayTaskSummary.pending > 0 || yesterdayTaskSummary.inProgress > 0) && (
                 <div className="rounded-xl border border-rose-300 bg-rose-100 p-3 text-sm font-semibold text-rose-800 md:col-start-4">
-                  You have {pendingTasksFromYesterday} pending {pendingTasksFromYesterday === 1 ? "task" : "tasks"} from yesterday.
+                  <p>
+                    You have {yesterdayTaskSummary.pending} pending {yesterdayTaskSummary.pending === 1 ? "task" : "tasks"} from yesterday.
+                  </p>
+                  <p className="mt-1">
+                    You have {yesterdayTaskSummary.inProgress} in-progress {yesterdayTaskSummary.inProgress === 1 ? "task" : "tasks"} from yesterday.
+                  </p>
                 </div>
               )}
             </div>
@@ -556,8 +630,8 @@ const AdminDashboard = () => {
                 </div>
                 <div className="rounded-xl border border-dsr-border bg-dsr-soft p-3 text-sm text-dsr-muted">
                   {comparisonFilter.mode === "overall"
-                    ? "Showing overall completed vs pending tasks for all department employees."
-                    : `Showing completed vs pending tasks for ${comparisonFilter.date || "selected date"}.`}
+                    ? "Showing overall completed, in-progress and pending tasks for all department employees."
+                    : `Showing completed, in-progress and pending tasks for ${comparisonFilter.date || "selected date"}.`}
                 </div>
               </div>
             </section>
@@ -574,8 +648,8 @@ const AdminDashboard = () => {
                 type="bar"
                 title={
                   comparisonFilter.mode === "overall"
-                    ? "Employee Tasks (Completed vs Pending) - Overall"
-                    : `Employee Tasks (Completed vs Pending) - ${comparisonFilter.date}`
+                    ? "Employee Tasks (Completed vs In Progress vs Pending) - Overall"
+                    : `Employee Tasks (Completed vs In Progress vs Pending) - ${comparisonFilter.date}`
                 }
                 labels={employeeTaskStatusChart.labels}
                 datasets={employeeTaskStatusChart.datasets}
@@ -592,21 +666,51 @@ const AdminDashboard = () => {
               reassigningTaskId={reassigningTaskId}
               focusedTaskId={focusedTaskId}
             />
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-dsr-border bg-dsr-soft p-3">
+              <p className="text-sm text-dsr-muted">
+                Submit self-task report for: <span className="font-semibold text-dsr-ink">{adminReportDate}</span>
+              </p>
+              <button
+                type="button"
+                className={alreadySubmittedOwnForDate ? "rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white" : "btn-primary"}
+                disabled={submittingOwnReport || alreadySubmittedOwnForDate}
+                onClick={handleSubmitOwnReport}
+              >
+                {alreadySubmittedOwnForDate ? "Submitted" : submittingOwnReport ? "Submitting..." : "Submit Report"}
+              </button>
+            </div>
+            {ownSubmitMessage && <p className="mt-2 text-sm text-dsr-brand">{ownSubmitMessage}</p>}
           </>
         )}
 
         {activeTab === "Tasks" && (
-          <TaskTable
-            tasks={filteredTasks}
-            onStatusChange={handleStatusChange}
-            editableStatus
-            showAssignee
-            showReassign
-            reassignOptions={employees}
-            onReassign={handleReassign}
-            reassigningTaskId={reassigningTaskId}
-            focusedTaskId={focusedTaskId}
-          />
+          <>
+            <TaskTable
+              tasks={filteredTasks}
+              onStatusChange={handleStatusChange}
+              editableStatus
+              showAssignee
+              showReassign
+              reassignOptions={employees}
+              onReassign={handleReassign}
+              reassigningTaskId={reassigningTaskId}
+              focusedTaskId={focusedTaskId}
+            />
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-dsr-border bg-dsr-soft p-3">
+              <p className="text-sm text-dsr-muted">
+                Submit self-task report for: <span className="font-semibold text-dsr-ink">{adminReportDate}</span>
+              </p>
+              <button
+                type="button"
+                className={alreadySubmittedOwnForDate ? "rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white" : "btn-primary"}
+                disabled={submittingOwnReport || alreadySubmittedOwnForDate}
+                onClick={handleSubmitOwnReport}
+              >
+                {alreadySubmittedOwnForDate ? "Submitted" : submittingOwnReport ? "Submitting..." : "Submit Report"}
+              </button>
+            </div>
+            {ownSubmitMessage && <p className="mt-2 text-sm text-dsr-brand">{ownSubmitMessage}</p>}
+          </>
         )}
 
         {activeTab === "Employees" && (
