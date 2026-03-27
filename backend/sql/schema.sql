@@ -25,6 +25,7 @@ CREATE TABLE tasks (
   submitted_to_hr_at TIMESTAMP NULL,
   carried_forward_from_id INT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  reassigned_at TIMESTAMP NULL,
   completed_at TIMESTAMP NULL,
   deadline DATETIME NULL,
   FOREIGN KEY (assigned_to) REFERENCES users(id) ON DELETE CASCADE,

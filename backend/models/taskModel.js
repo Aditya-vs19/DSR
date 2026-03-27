@@ -3,6 +3,7 @@ import { query } from "../config/db.js";
 let taskSubmissionColumnsEnsured = false;
 let dailyReportTableEnsured = false;
 let taskCarryForwardColumnsEnsured = false;
+let taskReassignmentColumnsEnsured = false;
 
 const ensureTaskSubmissionColumns = async () => {
   if (taskSubmissionColumnsEnsured) return;
@@ -52,6 +53,28 @@ const ensureTaskCarryForwardColumns = async () => {
   taskCarryForwardColumnsEnsured = true;
 };
 
+const ensureTaskReassignmentColumns = async () => {
+  if (taskReassignmentColumnsEnsured) return;
+
+  const existingColumns = await query(
+    `
+      SELECT COLUMN_NAME
+      FROM information_schema.COLUMNS
+      WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = 'tasks'
+        AND COLUMN_NAME IN ('reassigned_at')
+    `
+  );
+
+  const columnSet = new Set(existingColumns.map((entry) => entry.COLUMN_NAME));
+
+  if (!columnSet.has("reassigned_at")) {
+    await query("ALTER TABLE tasks ADD COLUMN reassigned_at TIMESTAMP NULL");
+  }
+
+  taskReassignmentColumnsEnsured = true;
+};
+
 const ensureDailyReportTable = async () => {
   if (dailyReportTableEnsured) return;
 
@@ -85,6 +108,7 @@ export const createTask = async ({
 }) => {
   await ensureTaskSubmissionColumns();
   await ensureTaskCarryForwardColumns();
+  await ensureTaskReassignmentColumns();
 
   const sql = `
     INSERT INTO tasks (
@@ -113,6 +137,7 @@ export const createTask = async ({
 export const getTasksByRole = async ({ role, userId, team, managedTeams = [] }) => {
   await ensureTaskSubmissionColumns();
   await ensureTaskCarryForwardColumns();
+  await ensureTaskReassignmentColumns();
 
   const baseSql = `
     SELECT
@@ -130,6 +155,7 @@ export const getTasksByRole = async ({ role, userId, team, managedTeams = [] }) 
       t.submitted_to_hr,
       t.submitted_to_hr_at,
       DATE_FORMAT(COALESCE(sourceTask.created_at, t.created_at), '%Y-%m-%d %H:%i:%s') AS assigned_at,
+      DATE_FORMAT(t.reassigned_at, '%Y-%m-%d %H:%i:%s') AS reassigned_at,
       DATE_FORMAT(t.created_at, '%Y-%m-%d %H:%i:%s') AS created_at,
       DATE_FORMAT(t.completed_at, '%Y-%m-%d %H:%i:%s') AS completed_at,
       t.deadline,
@@ -161,39 +187,46 @@ export const getTasksByRole = async ({ role, userId, team, managedTeams = [] }) 
 export const getTaskById = async (id) => {
   await ensureTaskSubmissionColumns();
   await ensureTaskCarryForwardColumns();
+  await ensureTaskReassignmentColumns();
 
   const rows = await query("SELECT * FROM tasks WHERE id = ? LIMIT 1", [id]);
   return rows[0] || null;
 };
 
-export const updateTaskStatus = async ({ id, status, dependency }) => {
+export const updateTaskStatus = async ({ id, status, dependency, action, taskTitle }) => {
   await ensureTaskSubmissionColumns();
 
   const completedAt = status === "Completed" ? new Date() : null;
-  const resolvedDependency = status === "Completed" ? null : dependency || null;
+  const resolvedDependency = dependency || null;
+  const normalizedAction = String(action || "").trim();
+  const normalizedTaskTitle = String(taskTitle || "").trim();
 
   const sql = `
     UPDATE tasks
-    SET status = ?,
+    SET task = ?,
+        status = ?,
+        action = ?,
         dependency = ?,
         completed_at = CASE
           WHEN ? = 'Completed' THEN ?
-          ELSE completed_at
+          ELSE NULL
         END
     WHERE id = ?
   `;
 
-  await query(sql, [status, resolvedDependency, status, completedAt, id]);
+  await query(sql, [normalizedTaskTitle, status, normalizedAction, resolvedDependency, status, completedAt, id]);
 };
 
 export const reassignTask = async ({ id, assignedTo, assignedBy }) => {
   await ensureTaskSubmissionColumns();
+  await ensureTaskReassignmentColumns();
 
   const sql = `
     UPDATE tasks
     SET assigned_to = ?,
         assigned_by = ?,
         created_at = CURRENT_TIMESTAMP,
+      reassigned_at = CURRENT_TIMESTAMP,
         submitted_to_hr = 0,
         submitted_to_hr_at = NULL
     WHERE id = ?

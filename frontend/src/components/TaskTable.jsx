@@ -8,9 +8,9 @@ const statusClass = {
   Completed: "bg-green-100 text-green-800"
 };
 
-const formatLocalDateTime = (value) => {
+const formatLocalDateTimeParts = (value) => {
   if (!value) {
-    return "-";
+    return null;
   }
 
   const rawValue = String(value).trim();
@@ -20,23 +20,27 @@ const formatLocalDateTime = (value) => {
 
   const parsed = new Date(normalizedValue);
   if (Number.isNaN(parsed.getTime())) {
-    return "-";
+    return null;
   }
 
-  return parsed.toLocaleString([], {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: true
-  });
+  return {
+    date: parsed.toLocaleDateString([], {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit"
+    }),
+    time: parsed.toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: true
+    })
+  };
 };
 
-const formatUtcDateTime = (value) => {
+const formatUtcDateTimeParts = (value) => {
   if (!value) {
-    return "-";
+    return null;
   }
 
   const rawValue = String(value).trim();
@@ -46,18 +50,22 @@ const formatUtcDateTime = (value) => {
 
   const parsed = new Date(normalizedValue);
   if (Number.isNaN(parsed.getTime())) {
-    return "-";
+    return null;
   }
 
-  return parsed.toLocaleString([], {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: true
-  });
+  return {
+    date: parsed.toLocaleDateString([], {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit"
+    }),
+    time: parsed.toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: true
+    })
+  };
 };
 
 const TaskTable = ({
@@ -77,7 +85,16 @@ const TaskTable = ({
 }) => {
   const [dependencyDrafts, setDependencyDrafts] = useState({});
   const [dependencyMeta, setDependencyMeta] = useState({});
+  const [activeDependencyIds, setActiveDependencyIds] = useState({});
   const [skipPersistIds, setSkipPersistIds] = useState({});
+  const [actionDrafts, setActionDrafts] = useState({});
+  const [actionMeta, setActionMeta] = useState({});
+  const [activeActionIds, setActiveActionIds] = useState({});
+  const [skipActionPersistIds, setSkipActionPersistIds] = useState({});
+  const [taskTitleDrafts, setTaskTitleDrafts] = useState({});
+  const [taskTitleMeta, setTaskTitleMeta] = useState({});
+  const [activeTaskTitleIds, setActiveTaskTitleIds] = useState({});
+  const [skipTaskTitlePersistIds, setSkipTaskTitlePersistIds] = useState({});
   const [reassignModalTask, setReassignModalTask] = useState(null);
   const [reassignSelectionId, setReassignSelectionId] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
@@ -99,11 +116,39 @@ const TaskTable = ({
       const next = {};
       tasks.forEach((task) => {
         const taskDependency = task.dependency ?? "";
-        next[task.id] = dependencyMeta[task.id]?.state === "saving" ? prev[task.id] ?? taskDependency : taskDependency;
+        const isActive = Boolean(activeDependencyIds[task.id]);
+        const isSaving = dependencyMeta[task.id]?.state === "saving";
+        next[task.id] = isActive || isSaving ? prev[task.id] ?? taskDependency : taskDependency;
       });
       return next;
     });
-  }, [tasks, dependencyMeta]);
+  }, [tasks, dependencyMeta, activeDependencyIds]);
+
+  useEffect(() => {
+    setActionDrafts((prev) => {
+      const next = {};
+      tasks.forEach((task) => {
+        const taskAction = task.action ?? "";
+        const isActive = Boolean(activeActionIds[task.id]);
+        const isSaving = actionMeta[task.id]?.state === "saving";
+        next[task.id] = isActive || isSaving ? prev[task.id] ?? taskAction : taskAction;
+      });
+      return next;
+    });
+  }, [tasks, actionMeta, activeActionIds]);
+
+  useEffect(() => {
+    setTaskTitleDrafts((prev) => {
+      const next = {};
+      tasks.forEach((task) => {
+        const taskTitle = task.task ?? "";
+        const isActive = Boolean(activeTaskTitleIds[task.id]);
+        const isSaving = taskTitleMeta[task.id]?.state === "saving";
+        next[task.id] = isActive || isSaving ? prev[task.id] ?? taskTitle : taskTitle;
+      });
+      return next;
+    });
+  }, [tasks, taskTitleMeta, activeTaskTitleIds]);
 
   useEffect(() => {
     if (!focusedTaskId) {
@@ -126,6 +171,59 @@ const TaskTable = ({
   }, [focusedTaskId, tasks, currentPage]);
 
   const getDependencyValue = (item) => dependencyDrafts[item.id] ?? item.dependency ?? "";
+  const getActionValue = (item) => actionDrafts[item.id] ?? item.action ?? "";
+  const getTaskTitleValue = (item) => taskTitleDrafts[item.id] ?? item.task ?? "";
+  const setDependencyActive = (taskId, isActive) => {
+    setActiveDependencyIds((prev) => {
+      const currentlyActive = Boolean(prev[taskId]);
+      if (currentlyActive === isActive) {
+        return prev;
+      }
+
+      const next = { ...prev };
+      if (isActive) {
+        next[taskId] = true;
+      } else {
+        delete next[taskId];
+      }
+      return next;
+    });
+  };
+
+  const setActionActive = (taskId, isActive) => {
+    setActiveActionIds((prev) => {
+      const currentlyActive = Boolean(prev[taskId]);
+      if (currentlyActive === isActive) {
+        return prev;
+      }
+
+      const next = { ...prev };
+      if (isActive) {
+        next[taskId] = true;
+      } else {
+        delete next[taskId];
+      }
+      return next;
+    });
+  };
+
+  const setTaskTitleActive = (taskId, isActive) => {
+    setActiveTaskTitleIds((prev) => {
+      const currentlyActive = Boolean(prev[taskId]);
+      if (currentlyActive === isActive) {
+        return prev;
+      }
+
+      const next = { ...prev };
+      if (isActive) {
+        next[taskId] = true;
+      } else {
+        delete next[taskId];
+      }
+      return next;
+    });
+  };
+
   const clearDependencyMeta = (taskId) => {
     setDependencyMeta((prev) => {
       if (!prev[taskId]) {
@@ -141,6 +239,58 @@ const TaskTable = ({
   const resetDependencyMeta = (taskId) => {
     setTimeout(() => {
       setDependencyMeta((prev) => {
+        if (!prev[taskId] || prev[taskId].state !== "saved") {
+          return prev;
+        }
+
+        const next = { ...prev };
+        delete next[taskId];
+        return next;
+      });
+    }, 1200);
+  };
+
+  const clearActionMeta = (taskId) => {
+    setActionMeta((prev) => {
+      if (!prev[taskId]) {
+        return prev;
+      }
+
+      const next = { ...prev };
+      delete next[taskId];
+      return next;
+    });
+  };
+
+  const resetActionMeta = (taskId) => {
+    setTimeout(() => {
+      setActionMeta((prev) => {
+        if (!prev[taskId] || prev[taskId].state !== "saved") {
+          return prev;
+        }
+
+        const next = { ...prev };
+        delete next[taskId];
+        return next;
+      });
+    }, 1200);
+  };
+
+  const clearTaskTitleMeta = (taskId) => {
+    setTaskTitleMeta((prev) => {
+      if (!prev[taskId]) {
+        return prev;
+      }
+
+      const next = { ...prev };
+      delete next[taskId];
+      return next;
+    });
+  };
+
+  const resetTaskTitleMeta = (taskId) => {
+    setTimeout(() => {
+      setTaskTitleMeta((prev) => {
         if (!prev[taskId] || prev[taskId].state !== "saved") {
           return prev;
         }
@@ -179,7 +329,7 @@ const TaskTable = ({
     }));
 
     try {
-      await onStatusChange(item, item.status, nextDependency);
+      await onStatusChange(item, item.status, nextDependency, getActionValue(item), getTaskTitleValue(item));
       setDependencyMeta((prev) => ({
         ...prev,
         [item.id]: { state: "saved" }
@@ -188,6 +338,90 @@ const TaskTable = ({
     } catch {
       setDependencyDrafts((prev) => ({ ...prev, [item.id]: item.dependency ?? "" }));
       setDependencyMeta((prev) => ({
+        ...prev,
+        [item.id]: { state: "error" }
+      }));
+    }
+  };
+
+  const persistAction = async (item, value = undefined) => {
+    if (!onStatusChange) {
+      return;
+    }
+
+    if (skipActionPersistIds[item.id]) {
+      setSkipActionPersistIds((prev) => {
+        const next = { ...prev };
+        delete next[item.id];
+        return next;
+      });
+      return;
+    }
+
+    const nextAction = String(value ?? getActionValue(item)).trim();
+    const currentAction = String(item.action ?? "").trim();
+
+    if (nextAction === currentAction) {
+      return;
+    }
+
+    setActionMeta((prev) => ({
+      ...prev,
+      [item.id]: { state: "saving" }
+    }));
+
+    try {
+      await onStatusChange(item, item.status, getDependencyValue(item), nextAction, getTaskTitleValue(item));
+      setActionMeta((prev) => ({
+        ...prev,
+        [item.id]: { state: "saved" }
+      }));
+      resetActionMeta(item.id);
+    } catch {
+      setActionDrafts((prev) => ({ ...prev, [item.id]: item.action ?? "" }));
+      setActionMeta((prev) => ({
+        ...prev,
+        [item.id]: { state: "error" }
+      }));
+    }
+  };
+
+  const persistTaskTitle = async (item, value = undefined) => {
+    if (!onStatusChange) {
+      return;
+    }
+
+    if (skipTaskTitlePersistIds[item.id]) {
+      setSkipTaskTitlePersistIds((prev) => {
+        const next = { ...prev };
+        delete next[item.id];
+        return next;
+      });
+      return;
+    }
+
+    const nextTaskTitle = String(value ?? getTaskTitleValue(item)).trim();
+    const currentTaskTitle = String(item.task ?? "").trim();
+
+    if (nextTaskTitle === currentTaskTitle) {
+      return;
+    }
+
+    setTaskTitleMeta((prev) => ({
+      ...prev,
+      [item.id]: { state: "saving" }
+    }));
+
+    try {
+      await onStatusChange(item, item.status, getDependencyValue(item), getActionValue(item), nextTaskTitle);
+      setTaskTitleMeta((prev) => ({
+        ...prev,
+        [item.id]: { state: "saved" }
+      }));
+      resetTaskTitleMeta(item.id);
+    } catch {
+      setTaskTitleDrafts((prev) => ({ ...prev, [item.id]: item.task ?? "" }));
+      setTaskTitleMeta((prev) => ({
         ...prev,
         [item.id]: { state: "error" }
       }));
@@ -227,19 +461,22 @@ const TaskTable = ({
             <th className="p-3">Task</th>
             <th className="p-3">Action</th>
             <th className="p-3">Status</th>
-            <th className="p-3">Assigned Time</th>
-            <th className="p-3">Completed Time</th>
             <th className="p-3">Dependency</th>
             {showAssignee && <th className="p-3">Assigned To</th>}
             {showAssigner && <th className="p-3">Assigned By</th>}
             {showSubmitToHr && <th className="p-3">HR Submit</th>}
             {showReassign && <th className="p-3">Reassign</th>}
+            <th className="p-3">Assigned Time</th>
+            <th className="p-3">Completed Time</th>
           </tr>
         </thead>
         <tbody>
           {paginatedTasks.map((item, index) => {
             const overdue = item.deadline && item.status !== "Completed" && new Date(item.deadline) < new Date();
             const isCompletedTask = item.status === "Completed";
+            const assignedAt = formatLocalDateTimeParts(item.assigned_at || item.created_at);
+            const reassignedAt = formatLocalDateTimeParts(item.reassigned_at);
+            const completedAt = formatUtcDateTimeParts(item.completed_at);
 
             return (
               <tr
@@ -261,14 +498,116 @@ const TaskTable = ({
               >
                 <td className="p-3">{(currentPage - 1) * TASKS_PER_PAGE + index + 1}</td>
                 <td className="p-3 font-medium">{item.client}</td>
-                <td className="p-3">{item.task}</td>
-                <td className="p-3">{item.action}</td>
                 <td className="p-3">
-                  {editableStatus && item.status !== "Completed" ? (
+                  {editableStatus && Number(item.submitted_to_hr) !== 1 ? (
+                    <div className="min-w-[220px]">
+                      <input
+                        className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-700 outline-none focus:border-emerald-500"
+                        type="text"
+                        placeholder="Update task title"
+                        value={getTaskTitleValue(item)}
+                        onFocus={() => setTaskTitleActive(item.id, true)}
+                        onChange={(event) => {
+                          setTaskTitleDrafts((prev) => ({ ...prev, [item.id]: event.target.value }));
+                          clearTaskTitleMeta(item.id);
+                        }}
+                        onBlur={(event) => {
+                          setTaskTitleActive(item.id, false);
+                          void persistTaskTitle(item, event.target.value);
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") {
+                            event.preventDefault();
+                            event.currentTarget.blur();
+                          }
+
+                          if (event.key === "Escape") {
+                            setSkipTaskTitlePersistIds((prev) => ({ ...prev, [item.id]: true }));
+                            setTaskTitleDrafts((prev) => ({
+                              ...prev,
+                              [item.id]: item.task ?? ""
+                            }));
+                            clearTaskTitleMeta(item.id);
+                            event.currentTarget.blur();
+                          }
+                        }}
+                      />
+                      {taskTitleMeta[item.id]?.state === "saving" && (
+                        <p className="mt-1 text-xs text-dsr-muted">Saving...</p>
+                      )}
+                      {taskTitleMeta[item.id]?.state === "saved" && (
+                        <p className="mt-1 text-xs text-emerald-600">Saved</p>
+                      )}
+                      {taskTitleMeta[item.id]?.state === "error" && (
+                        <p className="mt-1 text-xs text-rose-600">Could not save task title</p>
+                      )}
+                    </div>
+                  ) : (
+                    item.task || "-"
+                  )}
+                </td>
+                <td className="p-3">
+                  {editableStatus && Number(item.submitted_to_hr) !== 1 ? (
+                    <div className="min-w-[220px]">
+                      <input
+                        className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-700 outline-none focus:border-emerald-500"
+                        type="text"
+                        placeholder="Update action"
+                        value={getActionValue(item)}
+                        onFocus={() => setActionActive(item.id, true)}
+                        onChange={(event) => {
+                          setActionDrafts((prev) => ({ ...prev, [item.id]: event.target.value }));
+                          clearActionMeta(item.id);
+                        }}
+                        onBlur={(event) => {
+                          setActionActive(item.id, false);
+                          void persistAction(item, event.target.value);
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") {
+                            event.preventDefault();
+                            event.currentTarget.blur();
+                          }
+
+                          if (event.key === "Escape") {
+                            setSkipActionPersistIds((prev) => ({ ...prev, [item.id]: true }));
+                            setActionDrafts((prev) => ({
+                              ...prev,
+                              [item.id]: item.action ?? ""
+                            }));
+                            clearActionMeta(item.id);
+                            event.currentTarget.blur();
+                          }
+                        }}
+                      />
+                      {actionMeta[item.id]?.state === "saving" && (
+                        <p className="mt-1 text-xs text-dsr-muted">Saving...</p>
+                      )}
+                      {actionMeta[item.id]?.state === "saved" && (
+                        <p className="mt-1 text-xs text-emerald-600">Saved</p>
+                      )}
+                      {actionMeta[item.id]?.state === "error" && (
+                        <p className="mt-1 text-xs text-rose-600">Could not save action</p>
+                      )}
+                    </div>
+                  ) : (
+                    item.action || "-"
+                  )}
+                </td>
+                <td className="p-3">
+                  {editableStatus && Number(item.submitted_to_hr) !== 1 ? (
                     <select
                       className={`rounded-md px-2 py-1 text-xs font-semibold ${statusClass[item.status] || "bg-slate-100 text-slate-700"}`}
                       value={item.status}
-                      onChange={(event) => onStatusChange(item, event.target.value, getDependencyValue(item))}
+                      onChange={(event) =>
+                        onStatusChange(
+                          item,
+                          event.target.value,
+                          getDependencyValue(item),
+                          getActionValue(item),
+                          getTaskTitleValue(item)
+                        )
+                      }
                     >
                       <option value="Pending">Pending</option>
                       <option value="In Progress">In Progress</option>
@@ -280,21 +619,23 @@ const TaskTable = ({
                     </span>
                   )}
                 </td>
-                <td className="p-3 whitespace-nowrap">{formatLocalDateTime(item.assigned_at || item.created_at)}</td>
-                <td className="p-3 whitespace-nowrap">{item.status === "Completed" ? formatUtcDateTime(item.completed_at) : ""}</td>
                 <td className="p-3">
-                  {item.status !== "Completed" && editableStatus ? (
+                  {editableStatus && Number(item.submitted_to_hr) !== 1 ? (
                     <div className="min-w-[220px]">
                       <input
                         className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-700 outline-none focus:border-emerald-500"
                         type="text"
                         placeholder="Add dependency"
                         value={getDependencyValue(item)}
+                        onFocus={() => setDependencyActive(item.id, true)}
                         onChange={(event) => {
                           setDependencyDrafts((prev) => ({ ...prev, [item.id]: event.target.value }));
                           clearDependencyMeta(item.id);
                         }}
-                        onBlur={(event) => void persistDependency(item, event.target.value)}
+                        onBlur={(event) => {
+                          setDependencyActive(item.id, false);
+                          void persistDependency(item, event.target.value);
+                        }}
                         onKeyDown={(event) => {
                           if (event.key === "Enter") {
                             event.preventDefault();
@@ -331,7 +672,7 @@ const TaskTable = ({
                 {showSubmitToHr && (
                   <td className="p-3">
                     {Number(item.submitted_to_hr) === 1 ? (
-                      <span className="rounded-md bg-emerald-100 px-2 py-1 text-xs font-semibold text-emerald-800">
+                      <span className="rounded-md bg-rose-100 px-2 py-1 text-xs font-semibold text-rose-800">
                         Submitted
                       </span>
                     ) : (
@@ -362,6 +703,32 @@ const TaskTable = ({
                     )}
                   </td>
                 )}
+                <td className="p-3 whitespace-nowrap align-top">
+                  {assignedAt ? (
+                    <div>
+                      <p>{assignedAt.date}</p>
+                      <p>{assignedAt.time}</p>
+                    </div>
+                  ) : (
+                    <span>-</span>
+                  )}
+                  {reassignedAt && (
+                    <div className="mt-1 border-t border-slate-200 pt-1 text-xs text-slate-600">
+                      <p>Reassigned: {reassignedAt.date}</p>
+                      <p>{reassignedAt.time}</p>
+                    </div>
+                  )}
+                </td>
+                <td className="p-3 whitespace-nowrap align-top">
+                  {item.status === "Completed" && completedAt ? (
+                    <div>
+                      <p>{completedAt.date}</p>
+                      <p>{completedAt.time}</p>
+                    </div>
+                  ) : (
+                    ""
+                  )}
+                </td>
               </tr>
             );
           })}

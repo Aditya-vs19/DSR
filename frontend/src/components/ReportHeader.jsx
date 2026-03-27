@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 
 function ReportHeader({
   reportType,
@@ -10,8 +10,8 @@ function ReportHeader({
   team,
   onTeamChange,
   teamOptions,
-  employeeId,
-  onEmployeeChange,
+  selectedEmployeeIds,
+  onEmployeeSelectionChange,
   employeeOptions,
   onGenerate,
   onExportXlsx,
@@ -20,6 +20,49 @@ function ReportHeader({
   totalTasks,
   detailedSummary
 }) {
+  const [isEmployeeMenuOpen, setIsEmployeeMenuOpen] = useState(false);
+  const employeeMenuRef = useRef(null);
+
+  useEffect(() => {
+    if (!isEmployeeMenuOpen) {
+      return undefined;
+    }
+
+    const handleClickOutside = (event) => {
+      if (employeeMenuRef.current && !employeeMenuRef.current.contains(event.target)) {
+        setIsEmployeeMenuOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [isEmployeeMenuOpen]);
+
+  const selectedEmployeeSummary = useMemo(() => {
+    if (!selectedEmployeeIds.length) {
+      return "All Employees";
+    }
+
+    if (selectedEmployeeIds.length === 1) {
+      const selected = employeeOptions.find((entry) => String(entry.id) === String(selectedEmployeeIds[0]));
+      return selected ? `${selected.name} (${selected.team})` : "1 employee selected";
+    }
+
+    return `${selectedEmployeeIds.length} employees selected`;
+  }, [employeeOptions, selectedEmployeeIds]);
+
+  const toggleEmployeeSelection = (id) => {
+    const normalizedId = String(id);
+    const alreadySelected = selectedEmployeeIds.includes(normalizedId);
+
+    if (alreadySelected) {
+      onEmployeeSelectionChange(selectedEmployeeIds.filter((entry) => String(entry) !== normalizedId));
+      return;
+    }
+
+    onEmployeeSelectionChange([...selectedEmployeeIds, normalizedId]);
+  };
+
   const stats =
     reportType === "detailed"
       ? [
@@ -105,21 +148,69 @@ function ReportHeader({
           </select>
         </label>
 
-        <label className="md:col-span-1">
-          <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Employee</span>
-          <select
-            value={employeeId}
-            onChange={(event) => onEmployeeChange(event.target.value)}
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300"
+        <div className="md:col-span-1" ref={employeeMenuRef}>
+          <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Employees</span>
+          <button
+            type="button"
+            onClick={() => setIsEmployeeMenuOpen((prev) => !prev)}
+            className="flex w-full items-center justify-between rounded-lg border border-slate-300 px-3 py-2 text-left text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300"
           >
-            <option value="all">All Employees</option>
-            {employeeOptions.map((entry) => (
-              <option key={entry.id} value={entry.id}>
-                {entry.name} ({entry.team})
-              </option>
-            ))}
-          </select>
-        </label>
+            <span className="truncate text-slate-700">{selectedEmployeeSummary}</span>
+            <span className="ml-2 text-slate-500">▾</span>
+          </button>
+
+          {isEmployeeMenuOpen && (
+            <div className="absolute z-20 mt-1 max-h-60 w-[220px] overflow-y-auto rounded-lg border border-slate-300 bg-white p-2 shadow-lg">
+              <div className="mb-2 flex items-center justify-between border-b border-slate-200 pb-2">
+                <button
+                  type="button"
+                  onClick={() => onEmployeeSelectionChange(employeeOptions.map((entry) => String(entry.id)))}
+                  className="text-xs font-semibold text-emerald-700 hover:text-emerald-800"
+                >
+                  Select All
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onEmployeeSelectionChange([])}
+                  className="text-xs font-semibold text-slate-600 hover:text-slate-800"
+                >
+                  Clear
+                </button>
+              </div>
+
+              {employeeOptions.length === 0 ? (
+                <p className="px-1 py-2 text-xs text-slate-500">No employees found</p>
+              ) : (
+                employeeOptions.map((entry) => {
+                  const isChecked = selectedEmployeeIds.includes(String(entry.id));
+
+                  return (
+                    <label
+                      key={entry.id}
+                      className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1 text-sm hover:bg-slate-50"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={() => toggleEmployeeSelection(entry.id)}
+                        className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-300"
+                      />
+                      <span className="truncate text-slate-700">
+                        {entry.name} ({entry.team})
+                      </span>
+                    </label>
+                  );
+                })
+              )}
+            </div>
+          )}
+
+          <span className="mt-1 block text-[11px] text-slate-500">
+            {selectedEmployeeIds.length > 0
+              ? `${selectedEmployeeIds.length} selected`
+              : "No selection = all employees"}
+          </span>
+        </div>
 
         <div className="md:col-span-2 flex items-end gap-2">
           <button
