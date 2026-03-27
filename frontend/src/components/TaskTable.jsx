@@ -77,6 +77,7 @@ const TaskTable = ({
 }) => {
   const [dependencyDrafts, setDependencyDrafts] = useState({});
   const [dependencyMeta, setDependencyMeta] = useState({});
+  const [activeDependencyIds, setActiveDependencyIds] = useState({});
   const [skipPersistIds, setSkipPersistIds] = useState({});
   const [reassignModalTask, setReassignModalTask] = useState(null);
   const [reassignSelectionId, setReassignSelectionId] = useState("");
@@ -99,11 +100,13 @@ const TaskTable = ({
       const next = {};
       tasks.forEach((task) => {
         const taskDependency = task.dependency ?? "";
-        next[task.id] = dependencyMeta[task.id]?.state === "saving" ? prev[task.id] ?? taskDependency : taskDependency;
+        const isActive = Boolean(activeDependencyIds[task.id]);
+        const isSaving = dependencyMeta[task.id]?.state === "saving";
+        next[task.id] = isActive || isSaving ? prev[task.id] ?? taskDependency : taskDependency;
       });
       return next;
     });
-  }, [tasks, dependencyMeta]);
+  }, [tasks, dependencyMeta, activeDependencyIds]);
 
   useEffect(() => {
     if (!focusedTaskId) {
@@ -126,6 +129,23 @@ const TaskTable = ({
   }, [focusedTaskId, tasks, currentPage]);
 
   const getDependencyValue = (item) => dependencyDrafts[item.id] ?? item.dependency ?? "";
+  const setDependencyActive = (taskId, isActive) => {
+    setActiveDependencyIds((prev) => {
+      const currentlyActive = Boolean(prev[taskId]);
+      if (currentlyActive === isActive) {
+        return prev;
+      }
+
+      const next = { ...prev };
+      if (isActive) {
+        next[taskId] = true;
+      } else {
+        delete next[taskId];
+      }
+      return next;
+    });
+  };
+
   const clearDependencyMeta = (taskId) => {
     setDependencyMeta((prev) => {
       if (!prev[taskId]) {
@@ -284,11 +304,15 @@ const TaskTable = ({
                         type="text"
                         placeholder="Add dependency"
                         value={getDependencyValue(item)}
+                        onFocus={() => setDependencyActive(item.id, true)}
                         onChange={(event) => {
                           setDependencyDrafts((prev) => ({ ...prev, [item.id]: event.target.value }));
                           clearDependencyMeta(item.id);
                         }}
-                        onBlur={(event) => void persistDependency(item, event.target.value)}
+                        onBlur={(event) => {
+                          setDependencyActive(item.id, false);
+                          void persistDependency(item, event.target.value);
+                        }}
                         onKeyDown={(event) => {
                           if (event.key === "Enter") {
                             event.preventDefault();
