@@ -213,7 +213,7 @@ function ReportHeader({
           </span>
         </div>
 
-        <div className="md:col-span-2 flex items-end gap-2">
+        <div className="md:col-span-2 flex items-center gap-2 md:self-start md:pt-6">
           <button
             type="button"
             onClick={onGenerate}

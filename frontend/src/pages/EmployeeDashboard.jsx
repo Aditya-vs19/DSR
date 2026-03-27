@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Charts from "../components/Charts";
+import ConfirmDialog from "../components/ConfirmDialog";
 import TaskTable from "../components/TaskTable";
 import logo from "../assets/logo.png";
 import { useAuth } from "../context/AuthContext";
@@ -75,6 +76,7 @@ const EmployeeDashboard = () => {
   const [loading, setLoading] = useState(false);
   const [filters, setFilters] = useState({ status: "all", period: "today", date: todayText });
   const [submittingReport, setSubmittingReport] = useState(false);
+  const [isSubmitConfirmOpen, setIsSubmitConfirmOpen] = useState(false);
   const [submitMessage, setSubmitMessage] = useState("");
   const [form, setForm] = useState({
     client: "",
@@ -412,11 +414,11 @@ const EmployeeDashboard = () => {
       return;
     }
 
-    const confirmed = window.confirm(`Do you want to submit your report for ${selectedReportDate}?`);
-    if (!confirmed) {
-      return;
-    }
+    setIsSubmitConfirmOpen(true);
+  };
 
+  const handleConfirmSubmitReport = async () => {
+    setIsSubmitConfirmOpen(false);
     setSubmittingReport(true);
     setSubmitMessage("");
     try {
@@ -494,6 +496,17 @@ const EmployeeDashboard = () => {
 
   return (
     <div className="min-h-screen bg-dsr-page text-dsr-ink">
+      <ConfirmDialog
+        open={isSubmitConfirmOpen}
+        title="Submit Report"
+        message={`Do you want to submit your report for ${selectedReportDate}?`}
+        confirmText="Submit"
+        cancelText="Cancel"
+        loading={submittingReport}
+        onCancel={() => setIsSubmitConfirmOpen(false)}
+        onConfirm={() => void handleConfirmSubmitReport()}
+      />
+
       <header
         className={`sticky top-0 z-30 border-b border-dsr-border bg-[#f3f3f3] transition-transform duration-300 ${
           isHeaderVisible ? "translate-y-0" : "-translate-y-full"

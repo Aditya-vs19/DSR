@@ -18,6 +18,16 @@ body {
   background: radial-gradient(circle at top right, #f8fbf8, var(--dsr-page));
 }
 
+*:not(input):not(textarea):not([contenteditable="true"]) {
+  caret-color: transparent;
+}
+
+input,
+textarea,
+[contenteditable="true"] {
+  caret-color: auto;
+}
+
 .card {
   @apply rounded-2xl p-4 shadow-sm;
   background: var(--dsr-card);
