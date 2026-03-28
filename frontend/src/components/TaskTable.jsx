@@ -465,8 +465,8 @@ const TaskTable = ({
         <thead>
           <tr className="border-b border-slate-300 bg-slate-50 text-left text-slate-700">
             <th className="w-14 px-2.5 py-2">Sr No</th>
-            <th className="w-28 px-2.5 py-2">Client</th>
-            <th className="w-[8%] pl-2.5 pr-2 py-2">Task</th>
+            <th className="w-24 pl-2.5 pr-0 py-2">Client</th>
+            <th className="w-[8%] pl-0 pr-2 py-2">Task</th>
             <th className="w-[30%] pl-2 pr-0 py-2">Action</th>
             <th className="w-32 pl-0 pr-2.5 py-2">Status</th>
             <th className="w-[17%] px-2.5 py-2">Dependency / Remark</th>
@@ -508,8 +508,8 @@ const TaskTable = ({
                 }`}
               >
                 <td className="px-2.5 py-2 align-top">{(currentPage - 1) * TASKS_PER_PAGE + index + 1}</td>
-                <td className="px-2.5 py-2 align-top font-medium break-words">{item.client}</td>
-                <td className="pl-2.5 pr-2 py-2 align-top">
+                <td className="pl-2.5 pr-0 py-2 align-top font-medium break-words">{item.client}</td>
+                <td className="pl-0 pr-2 py-2 align-top">
                   {editableStatus && Number(item.submitted_to_hr) !== 1 ? (
                     <div className={`max-w-[220px] ${isTaskTitleEditing ? "relative min-h-[110px] pt-[84px]" : ""}`}>
                       {isTaskTitleEditing ? (
@@ -830,15 +830,15 @@ const TaskTable = ({
             <p className="mt-1 text-sm text-dsr-muted">Current assignee: {reassignModalTask.assigned_to_name || "-"}</p>
 
             <div className="mt-4">
-              <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-dsr-muted">
-                Select employee
-              </label>
-              <select
-                className="input"
-                value={reassignSelectionId}
-                onChange={(event) => setReassignSelectionId(event.target.value)}
-              >
-                <option value="">Choose employee</option>
+                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-dsr-muted">
+                  Select assignee
+                </label>
+                <select
+                  className="input"
+                  value={reassignSelectionId}
+                  onChange={(event) => setReassignSelectionId(event.target.value)}
+                >
+                  <option value="">Choose assignee</option>
                 {availableReassignOptions.map((member) => (
                   <option key={member.id} value={String(member.id)}>
                     {member.name}

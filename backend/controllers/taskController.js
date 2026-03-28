@@ -252,12 +252,15 @@ export const reassignTaskController = async (req, res) => {
     }
 
     const nextAssignee = await findUserById(nextAssigneeId);
-    if (!nextAssignee || nextAssignee.role !== "employee") {
-      return res.status(400).json({ message: "Task can be reassigned only to an employee" });
+    if (!nextAssignee) {
+      return res.status(404).json({ message: "Assignee not found" });
     }
 
-    if (!managedTeams.includes(nextAssignee.team)) {
-      return res.status(403).json({ message: "You can reassign only within your managed teams" });
+    const isSelfReassign = Number(nextAssignee.id) === Number(req.user.id);
+    const isAssignableEmployee = nextAssignee.role === "employee" && managedTeams.includes(nextAssignee.team);
+
+    if (!isSelfReassign && !isAssignableEmployee) {
+      return res.status(400).json({ message: "Task can be reassigned only to your team employees or yourself" });
     }
 
     await reassignTask({
@@ -266,12 +269,14 @@ export const reassignTaskController = async (req, res) => {
       assignedBy: req.user.id
     });
 
-    await createNotification({
-      userId: nextAssignee.id,
-      message: `${req.user.name} reassigned task "${task.task}" to you`,
-      type: "task_assigned",
-      refId: Number(id)
-    });
+    if (Number(nextAssignee.id) !== Number(req.user.id)) {
+      await createNotification({
+        userId: nextAssignee.id,
+        message: `${req.user.name} reassigned task "${task.task}" to you`,
+        type: "task_assigned",
+        refId: Number(id)
+      });
+    }
 
     if (currentAssignee && Number(currentAssignee.id) !== nextAssigneeId) {
       await createNotification({
