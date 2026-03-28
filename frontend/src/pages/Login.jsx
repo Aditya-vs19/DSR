@@ -86,7 +86,7 @@ const Login = () => {
                     type="text"
                     value={form.email}
                     onChange={(event) => setForm((prev) => ({ ...prev, email: event.target.value }))}
-                    placeholder="Enter your username or email"
+                    placeholder="Enter your username"
                     autoComplete="username"
                     required
                   />

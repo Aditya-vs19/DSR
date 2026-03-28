@@ -317,36 +317,42 @@ const HRDashboard = () => {
             <form className="card" onSubmit={handlePasswordChange}>
               <h2 className="mb-4 text-2xl font-bold">Settings - Change Password</h2>
               <div className="grid gap-3 md:grid-cols-2">
-                <input
-                  className="input md:col-span-2"
-                  type="password"
-                  placeholder="Current password"
-                  value={passwordForm.currentPassword}
-                  onChange={(event) =>
-                    setPasswordForm((prev) => ({ ...prev, currentPassword: event.target.value }))
-                  }
-                  required
-                />
-                <input
-                  className="input"
-                  type="password"
-                  placeholder="New password"
-                  value={passwordForm.newPassword}
-                  onChange={(event) =>
-                    setPasswordForm((prev) => ({ ...prev, newPassword: event.target.value }))
-                  }
-                  required
-                />
-                <input
-                  className="input"
-                  type="password"
-                  placeholder="Confirm new password"
-                  value={passwordForm.confirmPassword}
-                  onChange={(event) =>
-                    setPasswordForm((prev) => ({ ...prev, confirmPassword: event.target.value }))
-                  }
-                  required
-                />
+                <div className="md:col-span-2">
+                  <label className="mb-1 block text-sm font-semibold text-slate-900">Current Password</label>
+                  <input
+                    className="input"
+                    type="password"
+                    value={passwordForm.currentPassword}
+                    onChange={(event) =>
+                      setPasswordForm((prev) => ({ ...prev, currentPassword: event.target.value }))
+                    }
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-semibold text-slate-900">New Password</label>
+                  <input
+                    className="input"
+                    type="password"
+                    value={passwordForm.newPassword}
+                    onChange={(event) =>
+                      setPasswordForm((prev) => ({ ...prev, newPassword: event.target.value }))
+                    }
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-semibold text-slate-900">Confirm Password</label>
+                  <input
+                    className="input"
+                    type="password"
+                    value={passwordForm.confirmPassword}
+                    onChange={(event) =>
+                      setPasswordForm((prev) => ({ ...prev, confirmPassword: event.target.value }))
+                    }
+                    required
+                  />
+                </div>
 
                 {passwordError && <p className="md:col-span-2 text-sm text-rose-600">{passwordError}</p>}
                 {passwordMessage && <p className="md:col-span-2 text-sm text-emerald-700">{passwordMessage}</p>}
