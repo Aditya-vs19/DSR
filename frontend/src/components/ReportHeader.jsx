@@ -97,7 +97,7 @@ function ReportHeader({
     <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="grid gap-3 md:grid-cols-6">
         <label className="md:col-span-1">
-          <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Report Type</span>
+          <span className="mb-1 block text-xs font-bold uppercase tracking-wide text-black">Report Type</span>
           <select
             value={reportType}
             onChange={(event) => onReportTypeChange(event.target.value)}
@@ -109,7 +109,7 @@ function ReportHeader({
         </label>
 
         <label className="md:col-span-1">
-          <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Range</span>
+          <span className="mb-1 block text-xs font-bold uppercase tracking-wide text-black">Range</span>
           <select
             value={dateRange}
             onChange={(event) => onDateRangeChange(event.target.value)}
@@ -122,7 +122,7 @@ function ReportHeader({
         </label>
 
         <label className="md:col-span-1">
-          <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Team</span>
+          <span className="mb-1 block text-xs font-bold uppercase tracking-wide text-black">Team</span>
           <select
             value={team}
             onChange={(event) => onTeamChange(event.target.value)}
@@ -138,7 +138,7 @@ function ReportHeader({
         </label>
 
         <div className="md:col-span-1" ref={employeeMenuRef}>
-          <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Employees</span>
+          <span className="mb-1 block text-xs font-bold uppercase tracking-wide text-black">Employees</span>
           <button
             type="button"
             onClick={() => setIsEmployeeMenuOpen((prev) => !prev)}
@@ -202,7 +202,7 @@ function ReportHeader({
         </div>
 
         <div className="md:col-span-2">
-          <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Actions</span>
+          <span className="mb-1 block text-xs font-bold uppercase tracking-wide text-black">Actions</span>
           <div className="flex items-center gap-2">
             <button
               type="button"
