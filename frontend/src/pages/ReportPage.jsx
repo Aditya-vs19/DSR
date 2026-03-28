@@ -826,7 +826,7 @@ function ReportPage({
 
           <div className="mt-3 grid gap-3 md:grid-cols-4">
             <label className="md:col-span-1">
-              <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Holiday Date</span>
+              <span className="mb-1 block text-xs font-bold uppercase tracking-wide text-black">Holiday Date</span>
               <input
                 type="date"
                 value={holidayForm.date}
@@ -841,7 +841,7 @@ function ReportPage({
             </label>
 
             <label className="md:col-span-2">
-              <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Holiday Title / Reason</span>
+              <span className="mb-1 block text-xs font-bold uppercase tracking-wide text-black">Holiday Title / Reason</span>
               <input
                 type="text"
                 maxLength={140}
