@@ -555,7 +555,7 @@ const AdminDashboard = () => {
         )}
 
         {activeTab === "Tasks" && (
-          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_340px] xl:items-start">
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_280px] xl:items-start">
             <section className="card">
               <AdminTaskFilters
                 filters={filters}
@@ -571,6 +571,7 @@ const AdminDashboard = () => {
             <PendingTasksSummary
               pending={yesterdayTaskSummary.pending}
               inProgress={yesterdayTaskSummary.inProgress}
+              className="xl:justify-self-end xl:self-start"
             />
           </div>
         )}

@@ -644,74 +644,75 @@ const EmployeeDashboard = () => {
         )}
 
         {(activeTab === "Overview" || activeTab === "Tasks") && (
-          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px] xl:items-start">
-            <section className="card">
-              <EmployeeTaskFilters
-                filters={filters}
-                onStatusChange={(value) => setFilters((prev) => ({ ...prev, status: value }))}
-                onPeriodMenuToggle={() => setIsPeriodMenuOpen((prev) => !prev)}
-                isPeriodMenuOpen={isPeriodMenuOpen}
-                periodFieldLabel={periodFieldLabel}
-                periodOptions={PERIOD_OPTIONS}
-                onPeriodSelect={handlePeriodSelect}
-                periodMenuRef={periodMenuRef}
-                customDateInputRef={customDateInputRef}
-                onCustomDateChange={(value) => {
-                  setFilters((prev) => ({
-                    ...prev,
-                    period: "custom",
-                    date: value
-                  }));
-                  setIsPeriodMenuOpen(false);
-                }}
-                formatDateOptionLabel={formatDateOptionLabel}
+          <div className="space-y-2">
+            <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_280px] xl:items-start">
+              <section className="card">
+                <EmployeeTaskFilters
+                  filters={filters}
+                  onStatusChange={(value) => setFilters((prev) => ({ ...prev, status: value }))}
+                  onPeriodMenuToggle={() => setIsPeriodMenuOpen((prev) => !prev)}
+                  isPeriodMenuOpen={isPeriodMenuOpen}
+                  periodFieldLabel={periodFieldLabel}
+                  periodOptions={PERIOD_OPTIONS}
+                  onPeriodSelect={handlePeriodSelect}
+                  periodMenuRef={periodMenuRef}
+                  customDateInputRef={customDateInputRef}
+                  onCustomDateChange={(value) => {
+                    setFilters((prev) => ({
+                      ...prev,
+                      period: "custom",
+                      date: value
+                    }));
+                    setIsPeriodMenuOpen(false);
+                  }}
+                  formatDateOptionLabel={formatDateOptionLabel}
+                />
+              </section>
+
+              <PendingTasksSummary
+                pending={yesterdayTaskSummary.pending}
+                inProgress={yesterdayTaskSummary.inProgress}
+                className="xl:justify-self-end xl:self-start"
               />
-            </section>
+            </div>
 
-            <PendingTasksSummary
-              pending={yesterdayTaskSummary.pending}
-              inProgress={yesterdayTaskSummary.inProgress}
-            />
-          </div>
-        )}
-
-        {(activeTab === "Overview" || activeTab === "Tasks") && (
-          <section>
-            <h2 className="mb-2 text-lg font-semibold">Task List</h2>
-            <TaskTable
-              tasks={filteredTasks}
-              onStatusChange={handleStatusChange}
-              editableStatus
-              showAssigner
-              focusedTaskId={focusedTaskId}
-            />
-            {tasks.length > 0 && filteredTasks.length === 0 && filters.period !== "all" && (
-              <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-                No tasks in current day filter. 
+            <section>
+              <h2 className="mb-2 text-lg font-semibold">Task List</h2>
+              <TaskTable
+                tasks={filteredTasks}
+                onStatusChange={handleStatusChange}
+                editableStatus
+                showAssigner
+                focusedTaskId={focusedTaskId}
+              />
+              {tasks.length > 0 && filteredTasks.length === 0 && filters.period !== "all" && (
+                <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                  No tasks in current day filter. 
+                  <button
+                    type="button"
+                    className="ml-1 font-semibold underline"
+                    onClick={() => setFilters((prev) => ({ ...prev, period: "all" }))}
+                  >
+                    Show all tasks
+                  </button>
+                </div>
+              )}
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-dsr-border bg-dsr-soft p-3">
+                <p className="text-sm text-dsr-muted">
+                  Submit report for: <span className="font-semibold text-dsr-ink">{selectedReportDate || "Select a single day"}</span>
+                </p>
                 <button
                   type="button"
-                  className="ml-1 font-semibold underline"
-                  onClick={() => setFilters((prev) => ({ ...prev, period: "all" }))}
+                  className={alreadySubmittedForDate ? "rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white" : "btn-primary"}
+                  disabled={!canSubmitReport || submittingReport}
+                  onClick={handleSubmitReport}
                 >
-                  Show all tasks
+                  {alreadySubmittedForDate ? "Submitted" : submittingReport ? "Submitting..." : "Submit Report"}
                 </button>
               </div>
-            )}
-            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-dsr-border bg-dsr-soft p-3">
-              <p className="text-sm text-dsr-muted">
-                Submit report for: <span className="font-semibold text-dsr-ink">{selectedReportDate || "Select a single day"}</span>
-              </p>
-              <button
-                type="button"
-                className={alreadySubmittedForDate ? "rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white" : "btn-primary"}
-                disabled={!canSubmitReport || submittingReport}
-                onClick={handleSubmitReport}
-              >
-                {alreadySubmittedForDate ? "Submitted" : submittingReport ? "Submitting..." : "Submit Report"}
-              </button>
-            </div>
-            {submitMessage && <p className="mt-2 text-sm text-dsr-brand">{submitMessage}</p>}
-          </section>
+              {submitMessage && <p className="mt-2 text-sm text-dsr-brand">{submitMessage}</p>}
+            </section>
+          </div>
         )}
 
         {activeTab === "Overview" && (
