@@ -60,6 +60,23 @@ const AdminDashboard = () => {
   const [focusedTaskId, setFocusedTaskId] = useState(null);
   const [comparisonFilter, setComparisonFilter] = useState({ mode: "overall", date: todayText });
   const managedDepartmentLabel = useMemo(() => getManagedDepartmentLabel(user), [user]);
+  const reassignOptions = useMemo(() => {
+    const teamEmployees = employees.filter((item) => item.role === "employee");
+    const adminSelfOption =
+      user?.id && !teamEmployees.some((item) => Number(item.id) === Number(user.id))
+        ? [
+            {
+              id: user.id,
+              name: `${user.name} (Me)`,
+              email: user.email,
+              role: user.role,
+              team: user.team
+            }
+          ]
+        : [];
+
+    return [...adminSelfOption, ...teamEmployees];
+  }, [employees, user]);
 
   const loadData = async () => {
     setLoading(true);
@@ -667,7 +684,7 @@ const AdminDashboard = () => {
               editableStatus
               showAssignee
               showReassign
-              reassignOptions={employees}
+              reassignOptions={reassignOptions}
               onReassign={handleReassign}
               reassigningTaskId={reassigningTaskId}
               focusedTaskId={focusedTaskId}
@@ -698,7 +715,7 @@ const AdminDashboard = () => {
               editableStatus
               showAssignee
               showReassign
-              reassignOptions={employees}
+              reassignOptions={reassignOptions}
               onReassign={handleReassign}
               reassigningTaskId={reassigningTaskId}
               focusedTaskId={focusedTaskId}
