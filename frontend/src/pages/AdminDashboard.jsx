@@ -318,6 +318,11 @@ const AdminDashboard = () => {
   };
 
   const handleSubmitOwnReport = async () => {
+    if (alreadySubmittedOwnForDate) {
+      setOwnSubmitMessage("You can only submit the report once in a day.");
+      return;
+    }
+
     setIsOwnSubmitConfirmOpen(true);
   };
 
@@ -707,7 +712,7 @@ const AdminDashboard = () => {
               <button
                 type="button"
                 className={alreadySubmittedOwnForDate ? "rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white" : "btn-primary"}
-                disabled={submittingOwnReport || alreadySubmittedOwnForDate}
+                disabled={submittingOwnReport}
                 onClick={handleSubmitOwnReport}
               >
                 {alreadySubmittedOwnForDate ? "Submitted" : submittingOwnReport ? "Submitting..." : "Submit Report"}
@@ -737,7 +742,7 @@ const AdminDashboard = () => {
               <button
                 type="button"
                 className={alreadySubmittedOwnForDate ? "rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white" : "btn-primary"}
-                disabled={submittingOwnReport || alreadySubmittedOwnForDate}
+                disabled={submittingOwnReport}
                 onClick={handleSubmitOwnReport}
               >
                 {alreadySubmittedOwnForDate ? "Submitted" : submittingOwnReport ? "Submitting..." : "Submit Report"}

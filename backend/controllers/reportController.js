@@ -84,11 +84,15 @@ export const validateReportController = async (req, res) => {
       return res.status(400).json({ message: "Status must be approved or rejected" });
     }
 
-    await validateReport({
+    const result = await validateReport({
       reportId: id,
       status,
       validatedBy: req.user.id
     });
+
+    if (!result?.affectedRows) {
+      return res.status(404).json({ message: "Report not found" });
+    }
 
     return res.status(200).json({ message: "Report validated" });
   } catch (error) {

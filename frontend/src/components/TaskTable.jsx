@@ -474,6 +474,9 @@ const TaskTable = ({
           {paginatedTasks.map((item, index) => {
             const overdue = item.deadline && item.status !== "Completed" && new Date(item.deadline) < new Date();
             const isCompletedTask = item.status === "Completed";
+            const isTaskTitleEditing = Boolean(activeTaskTitleIds[item.id]);
+            const isActionEditing = Boolean(activeActionIds[item.id]);
+            const isDependencyEditing = Boolean(activeDependencyIds[item.id]);
             const assignedAt = formatLocalDateTimeParts(item.assigned_at || item.created_at);
             const reassignedAt = formatLocalDateTimeParts(item.reassigned_at);
             const completedAt = formatUtcDateTimeParts(item.completed_at);
@@ -501,37 +504,47 @@ const TaskTable = ({
                 <td className="px-2.5 py-2 align-top">
                   {editableStatus && Number(item.submitted_to_hr) !== 1 ? (
                     <div className="max-w-[220px]">
-                      <input
-                        className="w-full rounded-md border border-slate-200 px-2.5 py-1.5 text-[13px] text-slate-700 outline-none focus:border-emerald-500"
-                        type="text"
-                        placeholder="Update task title"
-                        value={getTaskTitleValue(item)}
-                        onFocus={() => setTaskTitleActive(item.id, true)}
-                        onChange={(event) => {
-                          setTaskTitleDrafts((prev) => ({ ...prev, [item.id]: event.target.value }));
-                          clearTaskTitleMeta(item.id);
-                        }}
-                        onBlur={(event) => {
-                          setTaskTitleActive(item.id, false);
-                          void persistTaskTitle(item, event.target.value);
-                        }}
-                        onKeyDown={(event) => {
-                          if (event.key === "Enter") {
-                            event.preventDefault();
-                            event.currentTarget.blur();
-                          }
-
-                          if (event.key === "Escape") {
-                            setSkipTaskTitlePersistIds((prev) => ({ ...prev, [item.id]: true }));
-                            setTaskTitleDrafts((prev) => ({
-                              ...prev,
-                              [item.id]: item.task ?? ""
-                            }));
+                      {isTaskTitleEditing ? (
+                        <input
+                          autoFocus
+                          className="w-full rounded-md border border-slate-200 px-2.5 py-1.5 text-[13px] text-slate-700 outline-none focus:border-emerald-500"
+                          type="text"
+                          placeholder="Update task title"
+                          value={getTaskTitleValue(item)}
+                          onChange={(event) => {
+                            setTaskTitleDrafts((prev) => ({ ...prev, [item.id]: event.target.value }));
                             clearTaskTitleMeta(item.id);
-                            event.currentTarget.blur();
-                          }
-                        }}
-                      />
+                          }}
+                          onBlur={(event) => {
+                            setTaskTitleActive(item.id, false);
+                            void persistTaskTitle(item, event.target.value);
+                          }}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter") {
+                              event.preventDefault();
+                              event.currentTarget.blur();
+                            }
+
+                            if (event.key === "Escape") {
+                              setSkipTaskTitlePersistIds((prev) => ({ ...prev, [item.id]: true }));
+                              setTaskTitleDrafts((prev) => ({
+                                ...prev,
+                                [item.id]: item.task ?? ""
+                              }));
+                              clearTaskTitleMeta(item.id);
+                              event.currentTarget.blur();
+                            }
+                          }}
+                        />
+                      ) : (
+                        <button
+                          type="button"
+                          className="w-full rounded-md px-2.5 py-1.5 text-left text-[13px] text-slate-700"
+                          onClick={() => setTaskTitleActive(item.id, true)}
+                        >
+                          {getTaskTitleValue(item) || "-"}
+                        </button>
+                      )}
                       {taskTitleMeta[item.id]?.state === "saving" && (
                         <p className="mt-1 text-xs text-dsr-muted">Saving...</p>
                       )}
@@ -549,37 +562,47 @@ const TaskTable = ({
                 <td className="px-2.5 py-2 align-top">
                   {editableStatus && Number(item.submitted_to_hr) !== 1 ? (
                     <div className="max-w-[220px]">
-                      <input
-                        className="w-full rounded-md border border-slate-200 px-2.5 py-1.5 text-[13px] text-slate-700 outline-none focus:border-emerald-500"
-                        type="text"
-                        placeholder="Update action"
-                        value={getActionValue(item)}
-                        onFocus={() => setActionActive(item.id, true)}
-                        onChange={(event) => {
-                          setActionDrafts((prev) => ({ ...prev, [item.id]: event.target.value }));
-                          clearActionMeta(item.id);
-                        }}
-                        onBlur={(event) => {
-                          setActionActive(item.id, false);
-                          void persistAction(item, event.target.value);
-                        }}
-                        onKeyDown={(event) => {
-                          if (event.key === "Enter") {
-                            event.preventDefault();
-                            event.currentTarget.blur();
-                          }
-
-                          if (event.key === "Escape") {
-                            setSkipActionPersistIds((prev) => ({ ...prev, [item.id]: true }));
-                            setActionDrafts((prev) => ({
-                              ...prev,
-                              [item.id]: item.action ?? ""
-                            }));
+                      {isActionEditing ? (
+                        <input
+                          autoFocus
+                          className="w-full rounded-md border border-slate-200 px-2.5 py-1.5 text-[13px] text-slate-700 outline-none focus:border-emerald-500"
+                          type="text"
+                          placeholder="Update action"
+                          value={getActionValue(item)}
+                          onChange={(event) => {
+                            setActionDrafts((prev) => ({ ...prev, [item.id]: event.target.value }));
                             clearActionMeta(item.id);
-                            event.currentTarget.blur();
-                          }
-                        }}
-                      />
+                          }}
+                          onBlur={(event) => {
+                            setActionActive(item.id, false);
+                            void persistAction(item, event.target.value);
+                          }}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter") {
+                              event.preventDefault();
+                              event.currentTarget.blur();
+                            }
+
+                            if (event.key === "Escape") {
+                              setSkipActionPersistIds((prev) => ({ ...prev, [item.id]: true }));
+                              setActionDrafts((prev) => ({
+                                ...prev,
+                                [item.id]: item.action ?? ""
+                              }));
+                              clearActionMeta(item.id);
+                              event.currentTarget.blur();
+                            }
+                          }}
+                        />
+                      ) : (
+                        <button
+                          type="button"
+                          className="w-full rounded-md px-2.5 py-1.5 text-left text-[13px] text-slate-700"
+                          onClick={() => setActionActive(item.id, true)}
+                        >
+                          {getActionValue(item) || "-"}
+                        </button>
+                      )}
                       {actionMeta[item.id]?.state === "saving" && (
                         <p className="mt-1 text-xs text-dsr-muted">Saving...</p>
                       )}
@@ -622,37 +645,47 @@ const TaskTable = ({
                 <td className="px-2.5 py-2 align-top">
                   {editableStatus && Number(item.submitted_to_hr) !== 1 ? (
                     <div className="max-w-[220px]">
-                      <input
-                        className="w-full rounded-md border border-slate-200 px-2.5 py-1.5 text-[13px] text-slate-700 outline-none focus:border-emerald-500"
-                        type="text"
-                        placeholder="Add dependency / remark"
-                        value={getDependencyValue(item)}
-                        onFocus={() => setDependencyActive(item.id, true)}
-                        onChange={(event) => {
-                          setDependencyDrafts((prev) => ({ ...prev, [item.id]: event.target.value }));
-                          clearDependencyMeta(item.id);
-                        }}
-                        onBlur={(event) => {
-                          setDependencyActive(item.id, false);
-                          void persistDependency(item, event.target.value);
-                        }}
-                        onKeyDown={(event) => {
-                          if (event.key === "Enter") {
-                            event.preventDefault();
-                            event.currentTarget.blur();
-                          }
-
-                          if (event.key === "Escape") {
-                            setSkipPersistIds((prev) => ({ ...prev, [item.id]: true }));
-                            setDependencyDrafts((prev) => ({
-                              ...prev,
-                              [item.id]: item.dependency ?? ""
-                            }));
+                      {isDependencyEditing ? (
+                        <input
+                          autoFocus
+                          className="w-full rounded-md border border-slate-200 px-2.5 py-1.5 text-[13px] text-slate-700 outline-none focus:border-emerald-500"
+                          type="text"
+                          placeholder="Add dependency / remark"
+                          value={getDependencyValue(item)}
+                          onChange={(event) => {
+                            setDependencyDrafts((prev) => ({ ...prev, [item.id]: event.target.value }));
                             clearDependencyMeta(item.id);
-                            event.currentTarget.blur();
-                          }
-                        }}
-                      />
+                          }}
+                          onBlur={(event) => {
+                            setDependencyActive(item.id, false);
+                            void persistDependency(item, event.target.value);
+                          }}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter") {
+                              event.preventDefault();
+                              event.currentTarget.blur();
+                            }
+
+                            if (event.key === "Escape") {
+                              setSkipPersistIds((prev) => ({ ...prev, [item.id]: true }));
+                              setDependencyDrafts((prev) => ({
+                                ...prev,
+                                [item.id]: item.dependency ?? ""
+                              }));
+                              clearDependencyMeta(item.id);
+                              event.currentTarget.blur();
+                            }
+                          }}
+                        />
+                      ) : (
+                        <button
+                          type="button"
+                          className="w-full rounded-md px-2.5 py-1.5 text-left text-[13px] text-slate-700"
+                          onClick={() => setDependencyActive(item.id, true)}
+                        >
+                          {getDependencyValue(item) || "-"}
+                        </button>
+                      )}
                       {dependencyMeta[item.id]?.state === "saving" && (
                         <p className="mt-1 text-xs text-dsr-muted">Saving...</p>
                       )}

@@ -424,6 +424,11 @@ const EmployeeDashboard = () => {
       return;
     }
 
+    if (alreadySubmittedForDate) {
+      setSubmitMessage("You can only submit the report once in a day.");
+      return;
+    }
+
     setIsSubmitConfirmOpen(true);
   };
 
@@ -768,7 +773,7 @@ const EmployeeDashboard = () => {
               <button
                 type="button"
                 className={alreadySubmittedForDate ? "rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white" : "btn-primary"}
-                disabled={!canSubmitReport || submittingReport || alreadySubmittedForDate}
+                disabled={!canSubmitReport || submittingReport}
                 onClick={handleSubmitReport}
               >
                 {alreadySubmittedForDate ? "Submitted" : submittingReport ? "Submitting..." : "Submit Report"}
