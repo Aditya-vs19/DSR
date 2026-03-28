@@ -14,35 +14,12 @@ const router = express.Router();
 router.post("/login", login);
 router.post("/change-password", authenticate, changePassword);
 router.post("/reset-managed-password", authenticate, authorizeRoles("superadmin"), resetManagedUserPassword);
-router.post("/register", authenticateOptional, registerProtected, register);
+router.post("/register", authenticate, authorizeRoles("superadmin", "hr"), register);
 router.get("/employees", authenticate, authorizeRoles("superadmin", "hr"), getEmployees);
 router.get("/employees/team", authenticate, authorizeRoles("admin", "hr", "superadmin"), getDepartmentEmployees);
 
 // Backward-compatible aliases
 router.get("/users", authenticate, authorizeRoles("superadmin", "hr"), getEmployees);
 router.get("/users/team", authenticate, authorizeRoles("admin", "hr", "superadmin"), getDepartmentEmployees);
-
-function authenticateOptional(req, _res, next) {
-  const authHeader = req.headers.authorization || "";
-  if (!authHeader.startsWith("Bearer ")) {
-    return next();
-  }
-
-  return authenticate(req, _res, next);
-}
-
-function registerProtected(req, res, next) {
-  const { role = "employee" } = req.body;
-
-  if (["superadmin", "hr", "admin"].includes(role)) {
-    if (!req.user) {
-      return res.status(401).json({ message: "Token required to create privileged employees" });
-    }
-
-    return authorizeRoles("superadmin", "hr")(req, res, next);
-  }
-
-  return next();
-}
 
 export default router;

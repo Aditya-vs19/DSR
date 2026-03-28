@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Charts from "../components/Charts";
 import ConfirmDialog from "../components/ConfirmDialog";
+import EmployeeTaskFilters from "../components/EmployeeTaskFilters";
+import PendingTasksSummary from "../components/PendingTasksSummary";
 import TaskTable from "../components/TaskTable";
 import logo from "../assets/logo.png";
 import { useAuth } from "../context/AuthContext";
@@ -424,6 +426,11 @@ const EmployeeDashboard = () => {
       return;
     }
 
+    if (alreadySubmittedForDate) {
+      setSubmitMessage("You can only submit the report once in a day.");
+      return;
+    }
+
     setIsSubmitConfirmOpen(true);
   };
 
@@ -655,127 +662,75 @@ const EmployeeDashboard = () => {
         )}
 
         {(activeTab === "Overview" || activeTab === "Tasks") && (
-          <section className="card">
-            <div className="grid gap-3 md:grid-cols-4">
-              <div>
-                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-dsr-muted">Status</label>
-                <select
-                  className="input"
-                  value={filters.status}
-                  onChange={(event) => setFilters((prev) => ({ ...prev, status: event.target.value }))}
-                >
-                  <option value="all">All</option>
-                  <option value="Pending">Pending</option>
-                  <option value="In Progress">In Progress</option>
-                  <option value="Completed">Completed</option>
-                </select>
-              </div>
-              <div className="relative" ref={periodMenuRef}>
-                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-dsr-muted">Task Period</label>
-                <button
-                  type="button"
-                  className="input flex w-full items-center justify-between text-left"
-                  onClick={() => setIsPeriodMenuOpen((prev) => !prev)}
-                >
-                  <span>{periodFieldLabel}</span>
-                  <svg
-                    viewBox="0 0 20 20"
-                    className={`h-4 w-4 shrink-0 transition-transform ${isPeriodMenuOpen ? "rotate-180" : ""}`}
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.8"
-                  >
-                    <path d="M5 7.5 10 12.5 15 7.5" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </button>
-                {isPeriodMenuOpen && (
-                  <div className="absolute left-0 right-0 top-full z-20 mt-2 rounded-xl border border-dsr-border bg-white p-2 shadow-lg">
-                    {PERIOD_OPTIONS.map((option) => (
-                      <button
-                        key={option.value}
-                        type="button"
-                        className={`block w-full rounded-lg px-3 py-2 text-left text-sm transition ${
-                          filters.period === option.value
-                            ? "bg-dsr-soft font-semibold text-dsr-ink"
-                            : "text-dsr-ink hover:bg-dsr-soft"
-                        }`}
-                        onClick={() => handlePeriodSelect(option.value)}
-                      >
-                        {option.value === "custom" && filters.period === "custom"
-                          ? formatDateOptionLabel(filters.date)
-                          : option.label}
-                      </button>
-                    ))}
-                  </div>
-                )}
-                <input
-                  ref={customDateInputRef}
-                  className="pointer-events-none absolute h-0 w-0 opacity-0"
-                  type="date"
-                  tabIndex={-1}
-                  aria-hidden="true"
-                  value={filters.date}
-                  onChange={(event) => {
+          <div className="space-y-2">
+            <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_280px] xl:items-start">
+              <section className="card">
+                <EmployeeTaskFilters
+                  filters={filters}
+                  onStatusChange={(value) => setFilters((prev) => ({ ...prev, status: value }))}
+                  onPeriodMenuToggle={() => setIsPeriodMenuOpen((prev) => !prev)}
+                  isPeriodMenuOpen={isPeriodMenuOpen}
+                  periodFieldLabel={periodFieldLabel}
+                  periodOptions={PERIOD_OPTIONS}
+                  onPeriodSelect={handlePeriodSelect}
+                  periodMenuRef={periodMenuRef}
+                  customDateInputRef={customDateInputRef}
+                  onCustomDateChange={(value) => {
                     setFilters((prev) => ({
                       ...prev,
                       period: "custom",
-                      date: event.target.value
+                      date: value
                     }));
                     setIsPeriodMenuOpen(false);
                   }}
+                  formatDateOptionLabel={formatDateOptionLabel}
                 />
-              </div>
-              {(yesterdayTaskSummary.pending > 0 || yesterdayTaskSummary.inProgress > 0) && (
-                <div className="rounded-xl border border-rose-300 bg-rose-100 p-3 text-sm font-semibold text-rose-800 md:col-start-4">
-                  <p>
-                    You have {yesterdayTaskSummary.pending} pending {yesterdayTaskSummary.pending === 1 ? "task" : "tasks"} from yesterday.
-                  </p>
-                  <p className="mt-1">
-                    You have {yesterdayTaskSummary.inProgress} in-progress {yesterdayTaskSummary.inProgress === 1 ? "task" : "tasks"} from yesterday.
-                  </p>
+              </section>
+
+              <PendingTasksSummary
+                pending={yesterdayTaskSummary.pending}
+                inProgress={yesterdayTaskSummary.inProgress}
+                className="xl:justify-self-end xl:self-start"
+              />
+            </div>
+
+            <section>
+              <h2 className="mb-2 text-lg font-semibold">Task List</h2>
+              <TaskTable
+                tasks={filteredTasks}
+                onStatusChange={handleStatusChange}
+                editableStatus
+                showAssigner
+                focusedTaskId={focusedTaskId}
+              />
+              {tasks.length > 0 && filteredTasks.length === 0 && filters.period !== "all" && (
+                <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                  No tasks in current day filter. 
+                  <button
+                    type="button"
+                    className="ml-1 font-semibold underline"
+                    onClick={() => setFilters((prev) => ({ ...prev, period: "all" }))}
+                  >
+                    Show all tasks
+                  </button>
                 </div>
               )}
-            </div>
-          </section>
-        )}
-
-        {(activeTab === "Overview" || activeTab === "Tasks") && (
-          <section>
-            <h2 className="mb-2 text-lg font-semibold">Task List</h2>
-            <TaskTable
-              tasks={filteredTasks}
-              onStatusChange={handleStatusChange}
-              editableStatus
-              showAssigner
-              focusedTaskId={focusedTaskId}
-            />
-            {tasks.length > 0 && filteredTasks.length === 0 && filters.period !== "all" && (
-              <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-                No tasks in current day filter. 
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-dsr-border bg-dsr-soft p-3">
+                <p className="text-sm text-dsr-muted">
+                  Submit report for: <span className="font-semibold text-dsr-ink">{selectedReportDate || "Select a single day"}</span>
+                </p>
                 <button
                   type="button"
-                  className="ml-1 font-semibold underline"
-                  onClick={() => setFilters((prev) => ({ ...prev, period: "all" }))}
+                  className={alreadySubmittedForDate ? "rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white" : "btn-primary"}
+                  disabled={!canSubmitReport || submittingReport}
+                  onClick={handleSubmitReport}
                 >
-                  Show all tasks
+                  {alreadySubmittedForDate ? "Submitted" : submittingReport ? "Submitting..." : "Submit Report"}
                 </button>
               </div>
-            )}
-            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-dsr-border bg-dsr-soft p-3">
-              <p className="text-sm text-dsr-muted">
-                Submit report for: <span className="font-semibold text-dsr-ink">{selectedReportDate || "Select a single day"}</span>
-              </p>
-              <button
-                type="button"
-                className={alreadySubmittedForDate ? "rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white" : "btn-primary"}
-                disabled={!canSubmitReport || submittingReport || alreadySubmittedForDate}
-                onClick={handleSubmitReport}
-              >
-                {alreadySubmittedForDate ? "Submitted" : submittingReport ? "Submitting..." : "Submit Report"}
-              </button>
-            </div>
-            {submitMessage && <p className="mt-2 text-sm text-dsr-brand">{submitMessage}</p>}
-          </section>
+              {submitMessage && <p className="mt-2 text-sm text-dsr-brand">{submitMessage}</p>}
+            </section>
+          </div>
         )}
 
         {activeTab === "Overview" && (
@@ -915,3 +870,4 @@ const EmployeeDashboard = () => {
 };
 
 export default EmployeeDashboard;
+

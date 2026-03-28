@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import Charts from "../components/Charts";
+import AdminTaskFilters from "../components/AdminTaskFilters";
 import ConfirmDialog from "../components/ConfirmDialog";
+import PendingTasksSummary from "../components/PendingTasksSummary";
 import ReportPage from "./ReportPage";
 import TaskTable from "../components/TaskTable";
 import logo from "../assets/logo.png";
@@ -318,6 +320,11 @@ const AdminDashboard = () => {
   };
 
   const handleSubmitOwnReport = async () => {
+    if (alreadySubmittedOwnForDate) {
+      setOwnSubmitMessage("You can only submit the report once in a day.");
+      return;
+    }
+
     setIsOwnSubmitConfirmOpen(true);
   };
 
@@ -568,59 +575,25 @@ const AdminDashboard = () => {
         )}
 
         {activeTab === "Tasks" && (
-          <section className="card">
-            <div className="grid gap-3 md:grid-cols-4">
-              <div>
-                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-dsr-muted">Status</label>
-                <select
-                  className="input"
-                  value={filters.status}
-                  onChange={(event) => setFilters((prev) => ({ ...prev, status: event.target.value }))}
-                >
-                  <option value="all">All</option>
-                  <option value="Pending">Pending</option>
-                  <option value="In Progress">In Progress</option>
-                  <option value="Completed">Completed</option>
-                </select>
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-dsr-muted">Employee</label>
-                <select
-                  className="input"
-                  value={filters.employeeId}
-                  onChange={(event) => setFilters((prev) => ({ ...prev, employeeId: event.target.value }))}
-                >
-                  <option value="all">All Team Members</option>
-                  {employees.map((employee) => (
-                    <option key={employee.id} value={String(employee.id)}>
-                      {employee.name}
-                    </option>
-                  ))}
-                  <option value={String(user?.id || "")}>Self ({user?.name})</option>
-                </select>
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-dsr-muted">Date</label>
-                <input
-                  className="input"
-                  type="date"
-                  value={filters.date}
-                  onChange={(event) => setFilters((prev) => ({ ...prev, date: event.target.value }))}
-                />
-              </div>
-              {(yesterdayTaskSummary.pending > 0 || yesterdayTaskSummary.inProgress > 0) && (
-                <div className="rounded-xl border border-rose-300 bg-rose-100 p-3 text-sm font-semibold text-rose-800 md:col-start-4">
-                  <p>
-                    You have {yesterdayTaskSummary.pending} pending {yesterdayTaskSummary.pending === 1 ? "task" : "tasks"} from yesterday.
-                  </p>
-                  <p className="mt-1">
-                    You have {yesterdayTaskSummary.inProgress} in-progress {yesterdayTaskSummary.inProgress === 1 ? "task" : "tasks"} from yesterday.
-                  </p>
-                </div>
-              )}
-            </div>
-            {error && <p className="mt-3 text-sm text-rose-600">{error}</p>}
-          </section>
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_280px] xl:items-start">
+            <section className="card">
+              <AdminTaskFilters
+                filters={filters}
+                employees={employees}
+                user={user}
+                onStatusChange={(value) => setFilters((prev) => ({ ...prev, status: value }))}
+                onEmployeeChange={(value) => setFilters((prev) => ({ ...prev, employeeId: value }))}
+                onDateChange={(value) => setFilters((prev) => ({ ...prev, date: value }))}
+              />
+              {error && <p className="mt-3 text-sm text-rose-600">{error}</p>}
+            </section>
+
+            <PendingTasksSummary
+              pending={yesterdayTaskSummary.pending}
+              inProgress={yesterdayTaskSummary.inProgress}
+              className="xl:justify-self-end xl:self-start"
+            />
+          </div>
         )}
 
         {activeTab === "Overview" && (
@@ -707,7 +680,7 @@ const AdminDashboard = () => {
               <button
                 type="button"
                 className={alreadySubmittedOwnForDate ? "rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white" : "btn-primary"}
-                disabled={submittingOwnReport || alreadySubmittedOwnForDate}
+                disabled={submittingOwnReport}
                 onClick={handleSubmitOwnReport}
               >
                 {alreadySubmittedOwnForDate ? "Submitted" : submittingOwnReport ? "Submitting..." : "Submit Report"}
@@ -737,7 +710,7 @@ const AdminDashboard = () => {
               <button
                 type="button"
                 className={alreadySubmittedOwnForDate ? "rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white" : "btn-primary"}
-                disabled={submittingOwnReport || alreadySubmittedOwnForDate}
+                disabled={submittingOwnReport}
                 onClick={handleSubmitOwnReport}
               >
                 {alreadySubmittedOwnForDate ? "Submitted" : submittingOwnReport ? "Submitting..." : "Submit Report"}
