@@ -672,6 +672,7 @@ const AdminDashboard = () => {
               onReassign={handleReassign}
               reassigningTaskId={reassigningTaskId}
               focusedTaskId={focusedTaskId}
+              setFocusedTaskId={setFocusedTaskId}
             />
             <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-dsr-border bg-dsr-soft p-3">
               <p className="text-sm text-dsr-muted">
@@ -702,6 +703,7 @@ const AdminDashboard = () => {
               onReassign={handleReassign}
               reassigningTaskId={reassigningTaskId}
               focusedTaskId={focusedTaskId}
+              setFocusedTaskId={setFocusedTaskId}
             />
             <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-dsr-border bg-dsr-soft p-3">
               <p className="text-sm text-dsr-muted">

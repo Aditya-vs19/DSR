@@ -81,7 +81,8 @@ const TaskTable = ({
   reassignOptions = [],
   onReassign,
   reassigningTaskId = null,
-  focusedTaskId = null
+  focusedTaskId = null,
+  setFocusedTaskId = null
 }) => {
   const [dependencyDrafts, setDependencyDrafts] = useState({});
   const [dependencyMeta, setDependencyMeta] = useState({});
@@ -168,7 +169,14 @@ const TaskTable = ({
     if (rowElement) {
       rowElement.scrollIntoView({ behavior: "smooth", block: "center" });
     }
-  }, [focusedTaskId, tasks, currentPage]);
+
+    if (typeof setFocusedTaskId === "function") {
+      const clearTimer = window.setTimeout(() => setFocusedTaskId(null), rowElement ? 400 : 0);
+      return () => window.clearTimeout(clearTimer);
+    }
+
+    return undefined;
+  }, [focusedTaskId, tasks, currentPage, setFocusedTaskId]);
 
   const getDependencyValue = (item) => dependencyDrafts[item.id] ?? item.dependency ?? "";
   const getActionValue = (item) => actionDrafts[item.id] ?? item.action ?? "";

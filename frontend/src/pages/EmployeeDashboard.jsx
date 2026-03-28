@@ -702,6 +702,7 @@ const EmployeeDashboard = () => {
                 editableStatus
                 showAssigner
                 focusedTaskId={focusedTaskId}
+                setFocusedTaskId={setFocusedTaskId}
               />
               {tasks.length > 0 && filteredTasks.length === 0 && filters.period !== "all" && (
                 <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
