@@ -262,7 +262,7 @@ export const validateReport = async ({ reportId, status, validatedBy }) => {
     WHERE id = ?
   `;
 
-  await query(sql, [status, validatedBy, reportId]);
+  return query(sql, [status, validatedBy, reportId]);
 };
 
 export const getSuperAdminAnalytics = async ({ team = "all", date = "" } = {}) => {

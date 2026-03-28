@@ -155,7 +155,6 @@ export const updateTaskStatusController = async (req, res) => {
       getManagedTeamsForAdmin(req.user).includes(assignee.team);
 
     const canEdit =
-      req.user.role === "admin" ||
       req.user.role === "superadmin" ||
       req.user.role === "hr" ||
       task.assigned_to === req.user.id ||
