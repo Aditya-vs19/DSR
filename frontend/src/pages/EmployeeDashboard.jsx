@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Charts from "../components/Charts";
 import ConfirmDialog from "../components/ConfirmDialog";
+import EmployeeTaskFilters from "../components/EmployeeTaskFilters";
+import PendingTasksSummary from "../components/PendingTasksSummary";
 import TaskTable from "../components/TaskTable";
 import logo from "../assets/logo.png";
 import { useAuth } from "../context/AuthContext";
@@ -660,88 +662,35 @@ const EmployeeDashboard = () => {
         )}
 
         {(activeTab === "Overview" || activeTab === "Tasks") && (
-          <section className="card">
-            <div className="grid gap-3 md:grid-cols-4">
-              <div>
-                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-dsr-muted">Status</label>
-                <select
-                  className="input"
-                  value={filters.status}
-                  onChange={(event) => setFilters((prev) => ({ ...prev, status: event.target.value }))}
-                >
-                  <option value="all">All</option>
-                  <option value="Pending">Pending</option>
-                  <option value="In Progress">In Progress</option>
-                  <option value="Completed">Completed</option>
-                </select>
-              </div>
-              <div className="relative" ref={periodMenuRef}>
-                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-dsr-muted">Task Period</label>
-                <button
-                  type="button"
-                  className="input flex w-full items-center justify-between text-left"
-                  onClick={() => setIsPeriodMenuOpen((prev) => !prev)}
-                >
-                  <span>{periodFieldLabel}</span>
-                  <svg
-                    viewBox="0 0 20 20"
-                    className={`h-4 w-4 shrink-0 transition-transform ${isPeriodMenuOpen ? "rotate-180" : ""}`}
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.8"
-                  >
-                    <path d="M5 7.5 10 12.5 15 7.5" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </button>
-                {isPeriodMenuOpen && (
-                  <div className="absolute left-0 right-0 top-full z-20 mt-2 rounded-xl border border-dsr-border bg-white p-2 shadow-lg">
-                    {PERIOD_OPTIONS.map((option) => (
-                      <button
-                        key={option.value}
-                        type="button"
-                        className={`block w-full rounded-lg px-3 py-2 text-left text-sm transition ${
-                          filters.period === option.value
-                            ? "bg-dsr-soft font-semibold text-dsr-ink"
-                            : "text-dsr-ink hover:bg-dsr-soft"
-                        }`}
-                        onClick={() => handlePeriodSelect(option.value)}
-                      >
-                        {option.value === "custom" && filters.period === "custom"
-                          ? formatDateOptionLabel(filters.date)
-                          : option.label}
-                      </button>
-                    ))}
-                  </div>
-                )}
-                <input
-                  ref={customDateInputRef}
-                  className="pointer-events-none absolute h-0 w-0 opacity-0"
-                  type="date"
-                  tabIndex={-1}
-                  aria-hidden="true"
-                  value={filters.date}
-                  onChange={(event) => {
-                    setFilters((prev) => ({
-                      ...prev,
-                      period: "custom",
-                      date: event.target.value
-                    }));
-                    setIsPeriodMenuOpen(false);
-                  }}
-                />
-              </div>
-              {(yesterdayTaskSummary.pending > 0 || yesterdayTaskSummary.inProgress > 0) && (
-                <div className="rounded-xl border border-rose-300 bg-rose-100 p-3 text-sm font-semibold text-rose-800 md:col-start-4">
-                  <p>
-                    You have {yesterdayTaskSummary.pending} pending {yesterdayTaskSummary.pending === 1 ? "task" : "tasks"} from yesterday.
-                  </p>
-                  <p className="mt-1">
-                    You have {yesterdayTaskSummary.inProgress} in-progress {yesterdayTaskSummary.inProgress === 1 ? "task" : "tasks"} from yesterday.
-                  </p>
-                </div>
-              )}
-            </div>
-          </section>
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px] xl:items-start">
+            <section className="card">
+              <EmployeeTaskFilters
+                filters={filters}
+                onStatusChange={(value) => setFilters((prev) => ({ ...prev, status: value }))}
+                onPeriodMenuToggle={() => setIsPeriodMenuOpen((prev) => !prev)}
+                isPeriodMenuOpen={isPeriodMenuOpen}
+                periodFieldLabel={periodFieldLabel}
+                periodOptions={PERIOD_OPTIONS}
+                onPeriodSelect={handlePeriodSelect}
+                periodMenuRef={periodMenuRef}
+                customDateInputRef={customDateInputRef}
+                onCustomDateChange={(value) => {
+                  setFilters((prev) => ({
+                    ...prev,
+                    period: "custom",
+                    date: value
+                  }));
+                  setIsPeriodMenuOpen(false);
+                }}
+                formatDateOptionLabel={formatDateOptionLabel}
+              />
+            </section>
+
+            <PendingTasksSummary
+              pending={yesterdayTaskSummary.pending}
+              inProgress={yesterdayTaskSummary.inProgress}
+            />
+          </div>
         )}
 
         {(activeTab === "Overview" || activeTab === "Tasks") && (
@@ -920,3 +869,4 @@ const EmployeeDashboard = () => {
 };
 
 export default EmployeeDashboard;
+
