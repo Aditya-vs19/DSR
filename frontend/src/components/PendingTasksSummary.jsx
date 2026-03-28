@@ -6,7 +6,7 @@ const PendingTasksSummary = ({ pending = 0, inProgress = 0, title = "Yesterday C
 
   return (
     <aside
-      className={`w-full rounded-2xl border p-2 shadow-sm ${
+      className={`w-full rounded-2xl border px-2.5 py-2 shadow-sm ${
         hasCarryOver ? "border-rose-300 bg-rose-50" : "border-emerald-200 bg-emerald-50"
       } ${className}`}
       aria-live="polite"
@@ -14,7 +14,7 @@ const PendingTasksSummary = ({ pending = 0, inProgress = 0, title = "Yesterday C
       <div className="flex items-center justify-between gap-2">
         <p className="text-[10px] font-semibold uppercase tracking-wide text-dsr-muted">{title}</p>
         <span
-          className={`rounded-full px-1.5 py-0.5 text-[11px] font-semibold ${
+          className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none ${
             hasCarryOver ? "bg-rose-100 text-rose-700" : "bg-emerald-100 text-emerald-700"
           }`}
         >
@@ -22,18 +22,22 @@ const PendingTasksSummary = ({ pending = 0, inProgress = 0, title = "Yesterday C
         </span>
       </div>
 
-      <div className="mt-1.5 grid grid-cols-2 gap-1.5">
-        <div className="rounded-lg border border-rose-200 bg-white/70 px-2 py-1">
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-rose-600">Pending</p>
-          <p className="text-lg font-bold leading-none text-rose-700">{pendingCount}</p>
+      <div className="mt-1 grid grid-cols-2 gap-1.5">
+        <div className="rounded-lg border border-rose-200 bg-white/70 px-2 py-0.5">
+          <p className="text-[9px] font-semibold uppercase tracking-wide text-rose-600">Pending</p>
+          <p className="text-base font-bold leading-tight text-rose-700">{pendingCount}</p>
         </div>
-        <div className="rounded-lg border border-amber-200 bg-white/70 px-2 py-1">
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-700">In Progress</p>
-          <p className="text-lg font-bold leading-none text-amber-700">{inProgressCount}</p>
+        <div className="rounded-lg border border-amber-200 bg-white/70 px-2 py-0.5">
+          <p className="text-[9px] font-semibold uppercase tracking-wide text-amber-700">In Progress</p>
+          <p className="text-base font-bold leading-tight text-amber-700">{inProgressCount}</p>
         </div>
       </div>
 
-      <p className={`mt-1.5 text-[10px] font-semibold ${hasCarryOver ? "text-rose-700" : "text-emerald-700"}`}>
+      <p
+        className={`mt-1 text-[10px] font-semibold leading-tight xl:hidden ${
+          hasCarryOver ? "text-rose-700" : "text-emerald-700"
+        }`}
+      >
         {hasCarryOver ? "Carry-over from yesterday." : "No carry-over tasks."}
       </p>
     </aside>

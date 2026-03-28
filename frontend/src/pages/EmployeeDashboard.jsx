@@ -663,8 +663,8 @@ const EmployeeDashboard = () => {
 
         {(activeTab === "Overview" || activeTab === "Tasks") && (
           <div className="space-y-2">
-            <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_280px] xl:items-start">
-              <section className="card">
+            <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_280px] xl:items-stretch">
+              <section className="card h-full">
                 <EmployeeTaskFilters
                   filters={filters}
                   onStatusChange={(value) => setFilters((prev) => ({ ...prev, status: value }))}
@@ -690,7 +690,7 @@ const EmployeeDashboard = () => {
               <PendingTasksSummary
                 pending={yesterdayTaskSummary.pending}
                 inProgress={yesterdayTaskSummary.inProgress}
-                className="xl:justify-self-end xl:self-start"
+                className="h-full xl:justify-self-end xl:self-stretch"
               />
             </div>
 
