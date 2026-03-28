@@ -646,7 +646,6 @@ const EmployeeDashboard = () => {
               value={form.action}
               disabled={alreadySubmittedToday}
               onChange={(event) => setForm((prev) => ({ ...prev, action: event.target.value }))}
-              required
             />
             
             <button className="btn-primary md:col-span-2" type="submit" disabled={alreadySubmittedToday}>
