@@ -5,14 +5,7 @@ const resolveApiBaseURL = () => {
     return import.meta.env.VITE_API_URL;
   }
 
-  const { protocol, hostname } = window.location;
-  const devTunnelMatch = hostname.match(/^(.*)-\d+(\..*devtunnels\.ms)$/);
-
-  if (devTunnelMatch) {
-    return `${protocol}//${devTunnelMatch[1]}-5000${devTunnelMatch[2]}/api`;
-  }
-
-  return `${protocol}//${hostname}:5000/api`;
+  return "/api";
 };
 
 const apiBaseURL = resolveApiBaseURL();

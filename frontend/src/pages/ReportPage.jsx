@@ -3,6 +3,7 @@ import ExcelJS from "exceljs/dist/exceljs.min.js";
 import ReportHeader from "../components/ReportHeader";
 import ReportGrid from "../components/ReportGrid";
 import ReportTaskDetailTable from "../components/ReportTaskDetailTable";
+import { useAuth } from "../context/AuthContext";
 import { authApi, reportApi, taskApi } from "../services/api";
 import { toTeamLabel } from "../utils/teamLabel";
 
@@ -222,6 +223,7 @@ function ReportPage({
   initialEmployeeId = "all",
   autoGenerateToken = 0
 }) {
+  const { user } = useAuth();
   const [dateRange, setDateRange] = useState(initialDateRange);
   const [date, setDate] = useState(initialDate || new Date().toISOString().slice(0, 10));
   const [reportType, setReportType] = useState("received");
@@ -272,10 +274,31 @@ function ReportPage({
       try {
         const usersRes = role === "admin" ? await authApi.getDepartmentEmployees() : await authApi.getEmployees();
         const users = Array.isArray(usersRes.data) ? usersRes.data : [];
+        const adminSelfOption =
+          role === "admin" && user?.id
+            ? [
+                {
+                  id: user.id,
+                  name: user.name,
+                  email: user.email,
+                  role: user.role,
+                  team: user.team
+                }
+              ]
+            : [];
+        const combinedUsers = [...adminSelfOption, ...users].filter(
+          (entry, index, collection) =>
+            collection.findIndex((candidate) => Number(candidate.id) === Number(entry.id)) === index
+        );
+
         setDirectoryUsers(
-          users.filter((entry) => {
+          combinedUsers.filter((entry) => {
             if (role === "superadmin") {
               return ["employee", "admin"].includes(entry.role);
+            }
+
+            if (role === "admin") {
+              return entry.role === "employee" || Number(entry.id) === Number(user?.id);
             }
 
             return entry.role === "employee";
@@ -287,7 +310,7 @@ function ReportPage({
     };
 
     loadFilterOptions();
-  }, [role]);
+  }, [role, user]);
 
   useEffect(() => {
     if (!selectedEmployeeIds.length) {
@@ -329,8 +352,24 @@ function ReportPage({
 
       const allTasks = Array.isArray(tasksRes.data) ? tasksRes.data : [];
       const users = Array.isArray(usersRes.data) ? usersRes.data : [];
+      const scopedUsers =
+        role === "admin" && user?.id
+          ? [
+              {
+                id: user.id,
+                name: user.name,
+                email: user.email,
+                role: user.role,
+                team: user.team
+              },
+              ...users
+            ].filter(
+              (entry, index, collection) =>
+                collection.findIndex((candidate) => Number(candidate.id) === Number(entry.id)) === index
+            )
+          : users;
 
-      const teamByUserId = new Map(users.map((entry) => [String(entry.id), entry.team || "-"]));
+      const teamByUserId = new Map(scopedUsers.map((entry) => [String(entry.id), entry.team || "-"]));
 
       const { startDate, endDate } = getDateBounds(dateRange, date);
 
@@ -414,7 +453,7 @@ function ReportPage({
     } finally {
       setLoading(false);
     }
-  }, [date, dateRange, reportType, role, selectedEmployeeIds, team]);
+  }, [date, dateRange, reportType, role, selectedEmployeeIds, team, user]);
 
   const handleCellChange = useCallback(
     async (reportId, status) => {
@@ -474,7 +513,7 @@ function ReportPage({
         "Task",
         "Action",
         "Status",
-        "Dependency",
+        "Dependency/Remark",
         "Assigned By",
         "Created At",
         "Completed At"
@@ -501,7 +540,12 @@ function ReportPage({
       sheet.columns = headers.map((header) => ({
         header,
         key: header,
-        width: header === "Task" || header === "Action" ? 32 : 20
+        width:
+          header === "Task" || header === "Action"
+            ? 32
+            : header === "Created At" || header === "Completed At"
+              ? 24
+              : 20
       }));
 
       sheet.getRow(1).font = { name: "Calibri", size: 11, bold: true };
@@ -527,7 +571,7 @@ function ReportPage({
             Task: entry.task || "-",
             Action: entry.action || "-",
             Status: entry.status || "-",
-            Dependency: entry.dependency || "-",
+            "Dependency/Remark": entry.dependency || "-",
             "Assigned By": entry.assigned_by_name || "-",
             "Created At": formatDateTimeText(entry.created_at),
             "Completed At": formatUtcDateTimeText(entry.completed_at)

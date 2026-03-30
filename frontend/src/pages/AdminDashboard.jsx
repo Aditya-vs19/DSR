@@ -123,10 +123,21 @@ const AdminDashboard = () => {
 
   const employeeTaskStatusChart = useMemo(() => {
     const employeeRecords = employees.filter((item) => item.role === "employee");
-    const employeeIdSet = new Set(employeeRecords.map((item) => Number(item.id)));
+    const chartMembers = [...employeeRecords];
+
+    if (isSnigdhaDualAdmin && user?.id) {
+      chartMembers.push({
+        id: user.id,
+        name: `${user.name} (Admin)`,
+        role: user.role,
+        team: user.team
+      });
+    }
+
+    const memberIdSet = new Set(chartMembers.map((item) => Number(item.id)));
     const chartTaskPool = tasks.filter((item) => {
       const assigneeId = Number(item.assigned_to);
-      if (!employeeIdSet.has(assigneeId)) {
+      if (!memberIdSet.has(assigneeId)) {
         return false;
       }
 
@@ -145,7 +156,7 @@ const AdminDashboard = () => {
 
     const employeeStatusMap = new Map();
 
-    employeeRecords.forEach((item) => {
+    chartMembers.forEach((item) => {
       employeeStatusMap.set(Number(item.id), {
         name: item.name,
         completed: 0,

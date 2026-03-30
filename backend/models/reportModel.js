@@ -249,7 +249,7 @@ export const getReportsByRole = async ({ role, userId, team, managedTeams = [] }
   if (role === "admin") {
     const teams = Array.isArray(managedTeams) && managedTeams.length > 0 ? managedTeams : [team];
     const placeholders = teams.map(() => "?").join(",");
-    return query(`${baseSql} WHERE u.team IN (${placeholders}) ORDER BY r.date DESC`, teams);
+    return query(`${baseSql} WHERE u.team IN (${placeholders}) OR u.id = ? ORDER BY r.date DESC`, [...teams, userId]);
   }
 
   return query(`${baseSql} ORDER BY r.date DESC`);
@@ -382,10 +382,11 @@ export const getDailyReportGridByRole = async ({
     usersSql = `
       SELECT id, name, email, role, team
       FROM users
-      WHERE team IN (${placeholders}) AND role = 'employee'
-      ORDER BY name
+      WHERE (team IN (${placeholders}) AND role = 'employee')
+         OR id = ?
+      ORDER BY role DESC, name
     `;
-    usersParams = scopedTeams;
+    usersParams = [...scopedTeams, userId];
   } else {
     usersSql = `
       SELECT id, name, email, role, team

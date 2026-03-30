@@ -133,7 +133,8 @@ export const createTaskController = async (req, res) => {
       assignedBy,
       type,
       deadline,
-      priority: normalizedPriority
+      priority: normalizedPriority,
+      taskDepartment: resolvedTaskDepartment
     });
 
     if (Number(assignedTo) !== Number(assignedBy)) {
