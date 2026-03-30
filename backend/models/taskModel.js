@@ -177,6 +177,7 @@ export const getTasksByRole = async ({ role, userId, team, managedTeams = [] }) 
       t.action,
       t.status AS raw_status,
       t.status AS status,
+      t.priority,
       t.dependency,
       t.assigned_to,
       t.assigned_by,
@@ -459,6 +460,7 @@ export const submitTaskToHr = async ({ id, employeeId }) => {
 export const carryForwardPendingTasks = async (targetDate = null) => {
   await ensureTaskSubmissionColumns();
   await ensureTaskCarryForwardColumns();
+  await ensureTaskPriorityColumn();
 
   let effectiveTargetDate = targetDate;
 
@@ -489,6 +491,7 @@ export const carryForwardPendingTasks = async (targetDate = null) => {
         task,
         action,
         status,
+        priority,
         dependency,
         assigned_to,
         assigned_by,
@@ -525,6 +528,7 @@ export const carryForwardPendingTasks = async (targetDate = null) => {
       task: sourceTask.task,
       action: sourceTask.action,
       status: sourceTask.status,
+      priority: sourceTask.priority || "Medium",
       dependency: sourceTask.dependency,
       assignedTo: sourceTask.assigned_to,
       assignedBy: sourceTask.assigned_by,
