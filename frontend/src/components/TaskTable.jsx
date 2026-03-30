@@ -475,9 +475,9 @@ const TaskTable = ({
             <th className="w-[12%] px-2.5 py-2 whitespace-normal break-words">Client / Vendor</th>
             <th className="w-[27%] pl-2.5 pr-0.5 py-2">Task title</th>
             <th className="w-[25%] pl-0.5 pr-2.5 py-2">Action</th>
-            <th className="w-28 pl-0 pr-2.5 py-2">Status</th>
-            <th className="w-24 px-2.5 py-2">Priority</th>
-            <th className="w-[12%] px-2.5 py-2">Dependency / Remark</th>
+            <th className="w-24 px-1.5 py-2">Status</th>
+            <th className="w-20 px-1.5 py-2">Priority</th>
+            <th className="w-[16%] px-2 py-2">Dependency / Remark</th>
             {showAssignee && <th className="w-28 px-2.5 py-2">Assigned To</th>}
             {showAssigner && <th className="w-28 px-2.5 py-2">Assigned By</th>}
             {showSubmitToHr && <th className="w-28 px-2.5 py-2">HR Submit</th>}
@@ -633,10 +633,10 @@ const TaskTable = ({
                       <span className="whitespace-pre-wrap break-words">{item.action || "-"}</span>
                     )}
                   </td>
-                <td className="pl-0 pr-2.5 py-2 align-top">
+                <td className="px-1.5 py-2 align-top">
                   {editableStatus && Number(item.submitted_to_hr) !== 1 ? (
                     <select
-                      className={`rounded-md px-2 py-1 text-[12px] font-semibold ${statusClass[item.status] || "bg-slate-100 text-slate-700"}`}
+                      className={`w-full max-w-[104px] rounded-md px-2 py-1 text-[12px] font-semibold ${statusClass[item.status] || "bg-slate-100 text-slate-700"}`}
                       value={item.status}
                       onChange={(event) =>
                         onStatusChange(
@@ -658,10 +658,10 @@ const TaskTable = ({
                     </span>
                   )}
                 </td>
-                <td className="px-2.5 py-2 align-top">
+                <td className="px-1.5 py-2 align-top">
                   {editableStatus && Number(item.submitted_to_hr) !== 1 ? (
                     <select
-                      className={`rounded-md px-2 py-1 text-[12px] font-semibold ${priorityClass[item.priority] || "bg-slate-100 text-slate-700"}`}
+                      className={`w-full max-w-[96px] rounded-md px-2 py-1 text-[12px] font-semibold ${priorityClass[item.priority] || "bg-slate-100 text-slate-700"}`}
                       value={item.priority || "Medium"}
                       onChange={(event) => {
                         if (onPriorityChange) {
@@ -679,14 +679,14 @@ const TaskTable = ({
                     </span>
                   )}
                 </td>
-                <td className="px-2.5 py-2 align-top">
+                <td className="px-2 py-2 align-top">
                   {editableStatus && Number(item.submitted_to_hr) !== 1 ? (
-                    <div className="w-full max-w-[280px]">
+                    <div className="w-full">
                       {isDependencyEditing ? (
                         <textarea
                           autoFocus
-                          rows={3}
-                          className="w-full resize-y rounded-md border border-slate-200 px-2.5 py-1.5 text-[13px] leading-5 text-slate-700 outline-none focus:border-emerald-500"
+                          rows={4}
+                          className="w-full min-w-0 resize-y rounded-md border border-slate-200 px-2.5 py-1.5 text-[13px] leading-5 text-slate-700 outline-none focus:border-emerald-500"
                           placeholder="Add dependency / remark"
                           value={getDependencyValue(item)}
                           onChange={(event) => {
