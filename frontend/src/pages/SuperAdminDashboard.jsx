@@ -77,11 +77,11 @@ const SuperAdminDashboard = () => {
         taskApi.getNotifications()
       ]);
 
-      setUsers(usersRes.data || []);
-      setTasks(tasksRes.data || []);
-      setReports(reportsRes.data || []);
-      setAdminPerformance(adminPerfRes.data || []);
-      setNotifications(notificationRes.data || []);
+      setUsers(Array.isArray(usersRes.data) ? usersRes.data : []);
+      setTasks(Array.isArray(tasksRes.data) ? tasksRes.data : []);
+      setReports(Array.isArray(reportsRes.data) ? reportsRes.data : []);
+      setAdminPerformance(Array.isArray(adminPerfRes.data) ? adminPerfRes.data : []);
+      setNotifications(Array.isArray(notificationRes.data) ? notificationRes.data : []);
     } finally {
       setBusy(false);
     }

@@ -5,19 +5,14 @@ const resolveApiBaseURL = () => {
     return import.meta.env.VITE_API_URL;
   }
 
-  if (!import.meta.env.DEV) {
-    return "/api";
-  }
-
-  const { hostname } = window.location;
-  const protocol = "https"; // Always use HTTPS
+  const { protocol, hostname } = window.location;
   const devTunnelMatch = hostname.match(/^(.*)-\d+(\..*devtunnels\.ms)$/);
 
   if (devTunnelMatch) {
-    return `${protocol}//${devTunnelMatch[1]}-5173${devTunnelMatch[2]}/api`;
+    return `${protocol}//${devTunnelMatch[1]}-5000${devTunnelMatch[2]}/api`;
   }
 
-  return `${protocol}//${hostname}:5173/api`;
+  return `${protocol}//${hostname}:5000/api`;
 };
 
 const apiBaseURL = resolveApiBaseURL();
