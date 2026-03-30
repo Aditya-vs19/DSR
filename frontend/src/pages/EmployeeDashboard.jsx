@@ -85,7 +85,8 @@ const EmployeeDashboard = () => {
     task: "",
     action: "",
     dependency: "",
-    deadline: ""
+    deadline: "",
+    priority: "Medium"
   });
   const [error, setError] = useState("");
   const [passwordForm, setPasswordForm] = useState({
@@ -303,7 +304,7 @@ const EmployeeDashboard = () => {
         type: "self"
       });
 
-      setForm({ client: "", task: "", action: "", dependency: "", deadline: "" });
+      setForm({ client: "", task: "", action: "", dependency: "", deadline: "", priority: "Medium" });
       await loadData();
       setActiveTab("Tasks");
     } catch (apiError) {
@@ -339,6 +340,23 @@ const EmployeeDashboard = () => {
     } catch (apiError) {
       setError(apiError.response?.data?.message || "Failed to update task");
       throw apiError;
+    }
+  };
+
+  const handlePriorityChange = async (task, priority) => {
+    setError("");
+
+    try {
+      await taskApi.updateTaskPriority(task.id, { priority });
+      setTasks((prev) =>
+        prev.map((entry) =>
+          entry.id === task.id
+            ? { ...entry, priority }
+            : entry
+        )
+      );
+    } catch (apiError) {
+      setError(apiError.response?.data?.message || "Failed to update priority");
     }
   };
 
@@ -648,7 +666,19 @@ const EmployeeDashboard = () => {
               onChange={(event) => setForm((prev) => ({ ...prev, action: event.target.value }))}
               required
             />
-            
+            <div>
+              <h3 className="mb-1 text-sm font-semibold text-slate-900">Priority</h3>
+              <select
+                className="input"
+                value={form.priority}
+                disabled={alreadySubmittedToday}
+                onChange={(event) => setForm((prev) => ({ ...prev, priority: event.target.value }))}
+              >
+                <option value="Medium">Medium</option>
+                <option value="High">High</option>
+                <option value="Critical">Critical</option>
+              </select>
+            </div>
             <button className="btn-primary md:col-span-2" type="submit" disabled={alreadySubmittedToday}>
               {alreadySubmittedToday ? "Available Tomorrow" : "Add Task"}
             </button>
@@ -699,6 +729,7 @@ const EmployeeDashboard = () => {
               <TaskTable
                 tasks={filteredTasks}
                 onStatusChange={handleStatusChange}
+                onPriorityChange={handlePriorityChange}
                 editableStatus
                 showAssigner
                 focusedTaskId={focusedTaskId}

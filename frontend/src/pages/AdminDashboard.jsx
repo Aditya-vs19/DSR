@@ -42,7 +42,8 @@ const AdminDashboard = () => {
     action: "",
     dependency: "",
     assignedTo: "",
-    deadline: ""
+    deadline: "",
+    priority: "Medium"
   });
   const [selfAssign, setSelfAssign] = useState(false);
   const [error, setError] = useState("");
@@ -276,7 +277,7 @@ const AdminDashboard = () => {
         type: selfAssign ? "self" : "assigned"
       });
 
-      setForm({ client: "", task: "", action: "", dependency: "", assignedTo: "", deadline: "" });
+      setForm({ client: "", task: "", action: "", dependency: "", assignedTo: "", deadline: "", priority: "Medium" });
       setSelfAssign(false);
       await loadData();
       setActiveTab("Tasks");
@@ -313,6 +314,23 @@ const AdminDashboard = () => {
     } catch (apiError) {
       setError(apiError.response?.data?.message || "Failed to update task");
       throw apiError;
+    }
+  };
+
+  const handlePriorityChange = async (task, priority) => {
+    setError("");
+
+    try {
+      await taskApi.updateTaskPriority(task.id, { priority });
+      setTasks((prev) =>
+        prev.map((entry) =>
+          entry.id === task.id
+            ? { ...entry, priority }
+            : entry
+        )
+      );
+    } catch (apiError) {
+      setError(apiError.response?.data?.message || "Failed to update priority");
     }
   };
 
@@ -579,6 +597,17 @@ const AdminDashboard = () => {
               onChange={(event) => setForm((prev) => ({ ...prev, action: event.target.value }))}
               required
             />
+            <h2 className="md:col-span-2 text-sm font-semibold text-slate-900">Priority</h2>
+            <select
+              className="input md:col-span-2"
+              value={form.priority}
+              disabled={alreadySubmittedOwnToday}
+              onChange={(event) => setForm((prev) => ({ ...prev, priority: event.target.value }))}
+            >
+              <option value="Medium">Medium</option>
+              <option value="High">High</option>
+              <option value="Critical">Critical</option>
+            </select>
             <button className="btn-primary md:col-span-2" type="submit" disabled={alreadySubmittedOwnToday}>
               {alreadySubmittedOwnToday ? "Available Tomorrow" : "Add Task"}
             </button>
@@ -682,6 +711,7 @@ const AdminDashboard = () => {
             <TaskTable
               tasks={filteredTasks}
               onStatusChange={handleStatusChange}
+              onPriorityChange={handlePriorityChange}
               editableStatus
               showAssignee
               showReassign
@@ -713,6 +743,7 @@ const AdminDashboard = () => {
             <TaskTable
               tasks={filteredTasks}
               onStatusChange={handleStatusChange}
+              onPriorityChange={handlePriorityChange}
               editableStatus
               showAssignee
               showReassign

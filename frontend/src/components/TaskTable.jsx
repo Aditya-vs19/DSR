@@ -8,6 +8,12 @@ const statusClass = {
   Completed: "bg-green-100 text-green-800"
 };
 
+const priorityClass = {
+  Medium: "bg-amber-100 text-amber-800",
+  High: "bg-orange-100 text-orange-800",
+  Critical: "bg-red-100 text-red-800"
+};
+
 const formatLocalDateTimeParts = (value) => {
   if (!value) {
     return null;
@@ -72,6 +78,7 @@ const TaskTable = ({
   tasks = [],
   onStatusChange,
   editableStatus = false,
+  onPriorityChange,
   showAssignee = false,
   showAssigner = false,
   showSubmitToHr = false,
@@ -469,6 +476,7 @@ const TaskTable = ({
             <th className="w-[20%] px-2.5 py-2">Task title</th>
             <th className="w-[32%] px-2.5 py-2">Action</th>
             <th className="w-28 pl-0 pr-2.5 py-2">Status</th>
+            <th className="w-24 px-2.5 py-2">Priority</th>
             <th className="w-[14%] px-2.5 py-2">Dependency / Remark</th>
             {showAssignee && <th className="w-28 px-2.5 py-2">Assigned To</th>}
             {showAssigner && <th className="w-28 px-2.5 py-2">Assigned By</th>}
@@ -647,6 +655,27 @@ const TaskTable = ({
                   ) : (
                     <span className={`inline-flex whitespace-nowrap rounded-md px-2 py-1 text-[12px] font-semibold ${statusClass[item.status]}`}>
                       {item.status}
+                    </span>
+                  )}
+                </td>
+                <td className="px-2.5 py-2 align-top">
+                  {editableStatus && Number(item.submitted_to_hr) !== 1 ? (
+                    <select
+                      className={`rounded-md px-2 py-1 text-[12px] font-semibold ${priorityClass[item.priority] || "bg-slate-100 text-slate-700"}`}
+                      value={item.priority || "Medium"}
+                      onChange={(event) => {
+                        if (onPriorityChange) {
+                          onPriorityChange(item, event.target.value);
+                        }
+                      }}
+                    >
+                      <option value="Medium">Medium</option>
+                      <option value="High">High</option>
+                      <option value="Critical">Critical</option>
+                    </select>
+                  ) : (
+                    <span className={`inline-flex whitespace-nowrap rounded-md px-2 py-1 text-[12px] font-semibold ${priorityClass[item.priority] || "bg-slate-100 text-slate-700"}`}>
+                      {item.priority || "Medium"}
                     </span>
                   )}
                 </td>
