@@ -17,6 +17,7 @@ CREATE TABLE tasks (
   task VARCHAR(255) NOT NULL,
   action TEXT NOT NULL,
   status ENUM('Pending', 'In Progress', 'Completed') NOT NULL DEFAULT 'Pending',
+  priority ENUM('Medium', 'High', 'Critical') NOT NULL DEFAULT 'Medium',
   dependency TEXT,
   assigned_to INT NOT NULL,
   assigned_by INT NOT NULL,
