@@ -167,6 +167,7 @@ export const getTasksByRole = async ({ role, userId, team, managedTeams = [] }) 
   await ensureTaskSubmissionColumns();
   await ensureTaskCarryForwardColumns();
   await ensureTaskReassignmentColumns();
+  await ensureTaskPriorityColumn();
 
   const baseSql = `
     SELECT
@@ -180,6 +181,7 @@ export const getTasksByRole = async ({ role, userId, team, managedTeams = [] }) 
       t.assigned_to,
       t.assigned_by,
       t.type,
+      t.priority,
       t.carried_forward_from_id,
       t.submitted_to_hr,
       t.submitted_to_hr_at,
@@ -217,6 +219,7 @@ export const getTaskById = async (id) => {
   await ensureTaskSubmissionColumns();
   await ensureTaskCarryForwardColumns();
   await ensureTaskReassignmentColumns();
+  await ensureTaskPriorityColumn();
 
   const rows = await query("SELECT * FROM tasks WHERE id = ? LIMIT 1", [id]);
   return rows[0] || null;

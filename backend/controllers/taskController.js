@@ -29,12 +29,26 @@ const statusMap = {
   completed: "Completed"
 };
 
+const priorityMap = {
+  medium: "Medium",
+  high: "High",
+  critical: "Critical"
+};
+
 const normalizeTaskStatus = (value) => {
   const key = String(value || "")
     .trim()
     .toLowerCase();
 
   return statusMap[key] || null;
+};
+
+const normalizeTaskPriority = (value) => {
+  const key = String(value || "")
+    .trim()
+    .toLowerCase();
+
+  return priorityMap[key] || null;
 };
 
 export const createTaskController = async (req, res) => {
@@ -90,6 +104,8 @@ export const createTaskController = async (req, res) => {
 
     const normalizedStatus = normalizeTaskStatus(status) || "Pending";
 
+    const normalizedPriority = normalizeTaskPriority(priority) || "Medium";
+
     const taskId = await createTask({
       client: normalizedClient,
       task,
@@ -100,7 +116,7 @@ export const createTaskController = async (req, res) => {
       assignedBy,
       type,
       deadline,
-      priority: priority || "Medium"
+      priority: normalizedPriority
     });
 
     if (Number(assignedTo) !== Number(assignedBy)) {
@@ -309,8 +325,9 @@ export const updateTaskPriorityController = async (req, res) => {
   try {
     const { id } = req.params;
     const { priority } = req.body;
+    const normalizedPriority = normalizeTaskPriority(priority);
 
-    if (!priority || !["Medium", "High", "Critical"].includes(priority)) {
+    if (!normalizedPriority) {
       return res.status(400).json({ message: "Invalid priority. Use Medium, High, or Critical." });
     }
 
@@ -344,7 +361,7 @@ export const updateTaskPriorityController = async (req, res) => {
       return res.status(403).json({ message: "Not allowed to update this task" });
     }
 
-    await updateTaskPriority({ id, priority });
+    await updateTaskPriority({ id, priority: normalizedPriority });
     return res.status(200).json({ message: "Priority updated successfully" });
   } catch (error) {
     return res.status(500).json({ message: "Failed to update priority", error: error.message });
