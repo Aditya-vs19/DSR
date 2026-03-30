@@ -4,6 +4,7 @@ let taskSubmissionColumnsEnsured = false;
 let dailyReportTableEnsured = false;
 let taskCarryForwardColumnsEnsured = false;
 let taskReassignmentColumnsEnsured = false;
+const REPORT_TIMEZONE_OFFSET = "+05:30";
 
 const ensureTaskSubmissionColumns = async () => {
   if (taskSubmissionColumnsEnsured) return;
@@ -104,13 +105,14 @@ export const createTask = async ({
   assignedBy,
   type,
   deadline,
+  taskDate = null,
   carriedForwardFromId = null
 }) => {
   await ensureTaskSubmissionColumns();
   await ensureTaskCarryForwardColumns();
   await ensureTaskReassignmentColumns();
 
-  const sql = `
+  let sql = `
     INSERT INTO tasks (
       client, task, action, status, dependency,
       assigned_to, assigned_by, type, deadline, carried_forward_from_id
@@ -118,7 +120,7 @@ export const createTask = async ({
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `;
 
-  const result = await query(sql, [
+  let params = [
     client,
     task,
     action,
@@ -129,7 +131,33 @@ export const createTask = async ({
     type,
     deadline || null,
     carriedForwardFromId
-  ]);
+  ];
+
+  if (taskDate) {
+    sql = `
+      INSERT INTO tasks (
+        client, task, action, status, dependency,
+        assigned_to, assigned_by, type, deadline, carried_forward_from_id, created_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CONVERT_TZ(CONCAT(?, ' 12:00:00'), '${REPORT_TIMEZONE_OFFSET}', '+00:00'))
+    `;
+
+    params = [
+      client,
+      task,
+      action,
+      status,
+      dependency || null,
+      assignedTo,
+      assignedBy,
+      type,
+      deadline || null,
+      carriedForwardFromId,
+      taskDate
+    ];
+  }
+
+  const result = await query(sql, params);
 
   return result.insertId;
 };

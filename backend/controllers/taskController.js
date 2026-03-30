@@ -38,9 +38,20 @@ const normalizeTaskStatus = (value) => {
 
 export const createTaskController = async (req, res) => {
   try {
-    const { client, task, action, status, dependency, assignedTo, type, deadline } = req.body;
+    const { client, task, action, status, dependency, assignedTo, type, deadline, taskDate } = req.body;
     const assignedBy = req.user.id;
     const normalizedClient = String(client || "").trim();
+    const today = new Date().toISOString().slice(0, 10);
+    const normalizedTaskDate = String(taskDate || "").slice(0, 10);
+    const effectiveTaskDate = normalizedTaskDate || today;
+
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(effectiveTaskDate)) {
+      return res.status(400).json({ message: "Invalid taskDate format. Use YYYY-MM-DD." });
+    }
+
+    if (effectiveTaskDate > today) {
+      return res.status(400).json({ message: "Future task dates are not allowed." });
+    }
 
     if (!task || !action || !assignedTo || !type) {
       return res.status(400).json({ message: "Missing required task fields" });
@@ -55,15 +66,14 @@ export const createTaskController = async (req, res) => {
     }
 
     if (["employee", "admin"].includes(req.user.role)) {
-      const today = new Date().toISOString().slice(0, 10);
       const alreadySubmittedToday = await hasReceivedDailyReport({
         userId: req.user.id,
-        date: today
+        date: effectiveTaskDate
       });
 
       if (alreadySubmittedToday) {
         return res.status(400).json({
-          message: "You already submitted today's report. New tasks can be created tomorrow."
+          message: `You already submitted report for ${effectiveTaskDate}. New tasks for that date are blocked.`
         });
       }
     }
@@ -98,7 +108,8 @@ export const createTaskController = async (req, res) => {
       assignedTo,
       assignedBy,
       type,
-      deadline
+      deadline,
+      taskDate: effectiveTaskDate
     });
 
     if (Number(assignedTo) !== Number(assignedBy)) {
