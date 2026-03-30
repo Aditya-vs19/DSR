@@ -246,6 +246,18 @@ export const updateTaskStatus = async ({ id, status, dependency, action, taskTit
   await query(sql, [normalizedTaskTitle, status, normalizedAction, resolvedDependency, status, completedAt, id]);
 };
 
+export const updateTaskPriority = async ({ id, priority }) => {
+  await ensureTaskPriorityColumn();
+
+  const sql = `
+    UPDATE tasks
+    SET priority = ?
+    WHERE id = ?
+  `;
+
+  await query(sql, [priority, id]);
+};
+
 export const reassignTask = async ({ id, assignedTo, assignedBy }) => {
   await ensureTaskSubmissionColumns();
   await ensureTaskReassignmentColumns();

@@ -78,6 +78,7 @@ const TaskTable = ({
   tasks = [],
   onStatusChange,
   editableStatus = false,
+  onPriorityChange,
   showAssignee = false,
   showAssigner = false,
   showSubmitToHr = false,
@@ -658,9 +659,25 @@ const TaskTable = ({
                   )}
                 </td>
                 <td className="px-2.5 py-2 align-top">
-                  <span className={`inline-flex whitespace-nowrap rounded-md px-2 py-1 text-[12px] font-semibold ${priorityClass[item.priority] || "bg-slate-100 text-slate-700"}`}>
-                    {item.priority || "Medium"}
-                  </span>
+                  {editableStatus && Number(item.submitted_to_hr) !== 1 ? (
+                    <select
+                      className={`rounded-md px-2 py-1 text-[12px] font-semibold ${priorityClass[item.priority] || "bg-slate-100 text-slate-700"}`}
+                      value={item.priority || "Medium"}
+                      onChange={(event) => {
+                        if (onPriorityChange) {
+                          onPriorityChange(item, event.target.value);
+                        }
+                      }}
+                    >
+                      <option value="Medium">Medium</option>
+                      <option value="High">High</option>
+                      <option value="Critical">Critical</option>
+                    </select>
+                  ) : (
+                    <span className={`inline-flex whitespace-nowrap rounded-md px-2 py-1 text-[12px] font-semibold ${priorityClass[item.priority] || "bg-slate-100 text-slate-700"}`}>
+                      {item.priority || "Medium"}
+                    </span>
+                  )}
                 </td>
                 <td className="px-2.5 py-2 align-top">
                   {editableStatus && Number(item.submitted_to_hr) !== 1 ? (

@@ -9,14 +9,15 @@ const resolveApiBaseURL = () => {
     return "/api";
   }
 
-  const { protocol, hostname } = window.location;
+  const { hostname } = window.location;
+  const protocol = "https"; // Always use HTTPS
   const devTunnelMatch = hostname.match(/^(.*)-\d+(\..*devtunnels\.ms)$/);
 
   if (devTunnelMatch) {
-    return `${protocol}//${devTunnelMatch[1]}-5000${devTunnelMatch[2]}/api`;
+    return `${protocol}//${devTunnelMatch[1]}-5173${devTunnelMatch[2]}/api`;
   }
 
-  return `${protocol}//${hostname}:5000/api`;
+  return `${protocol}//${hostname}:5173/api`;
 };
 
 const apiBaseURL = resolveApiBaseURL();
@@ -49,6 +50,7 @@ export const taskApi = {
   createTask: (payload) => api.post("/tasks", payload),
   getTasks: () => api.get("/tasks"),
   updateTask: (id, payload) => api.put(`/tasks/${id}`, payload),
+  updateTaskPriority: (id, payload) => api.put(`/tasks/${id}/priority`, payload),
   reassignTask: (id, payload) => api.put(`/tasks/${id}/reassign`, payload),
   submitTaskToHr: (id) => api.put(`/tasks/${id}/submit-hr`),
   getDailySummary: (date) => api.get("/tasks/summary/daily", { params: { date } }),

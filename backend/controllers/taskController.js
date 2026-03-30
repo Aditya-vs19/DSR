@@ -15,7 +15,8 @@ import {
   markAllNotificationsAsRead,
   markNotificationAsRead,
   submitTaskToHr,
-  updateTaskStatus
+  updateTaskStatus,
+  updateTaskPriority
 } from "../models/taskModel.js";
 import { hasReceivedDailyReport } from "../models/reportModel.js";
 import { findUserById } from "../models/userModel.js";
@@ -301,6 +302,52 @@ export const reassignTaskController = async (req, res) => {
     });
   } catch (error) {
     return res.status(500).json({ message: "Failed to reassign task", error: error.message });
+  }
+};
+
+export const updateTaskPriorityController = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { priority } = req.body;
+
+    if (!priority || !["Medium", "High", "Critical"].includes(priority)) {
+      return res.status(400).json({ message: "Invalid priority. Use Medium, High, or Critical." });
+    }
+
+    const task = await getTaskById(id);
+    if (!task) {
+      return res.status(404).json({ message: "Task not found" });
+    }
+
+    if (Number(task.submitted_to_hr) === 1) {
+      return res.status(400).json({ message: "Submitted tasks cannot be edited" });
+    }
+
+    let assignee = null;
+    if (req.user.role === "admin") {
+      assignee = await findUserById(task.assigned_to);
+    }
+
+    const adminCanEditManagedTeamTask =
+      req.user.role === "admin" &&
+      assignee &&
+      getManagedTeamsForAdmin(req.user).includes(assignee.team);
+
+    const canEdit =
+      req.user.role === "superadmin" ||
+      req.user.role === "hr" ||
+      task.assigned_to === req.user.id ||
+      task.assigned_by === req.user.id ||
+      adminCanEditManagedTeamTask;
+
+    if (!canEdit) {
+      return res.status(403).json({ message: "Not allowed to update this task" });
+    }
+
+    await updateTaskPriority({ id, priority });
+    return res.status(200).json({ message: "Priority updated successfully" });
+  } catch (error) {
+    return res.status(500).json({ message: "Failed to update priority", error: error.message });
   }
 };
 

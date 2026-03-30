@@ -15,8 +15,9 @@ const __dirname = path.dirname(__filename);
 dotenv.config();
 
 const app = express();
-const port = Number(process.env.PORT || 5000);
-const allowedOriginConfig = process.env.CORS_ORIGIN || "http://localhost:5173";
+const port = Number(process.env.PORT || 5173);
+const host = process.env.HOST || "0.0.0.0";
+const allowedOriginConfig = process.env.CORS_ORIGIN || "*";
 const allowAllOrigins = allowedOriginConfig === "*";
 const allowedOrigins = allowedOriginConfig
   .split(",")
@@ -36,10 +37,8 @@ app.use(
 );
 app.use(express.json());
 
-// Serve static files from the React app build directory
 app.use(express.static(path.join(__dirname, "../frontend/dist")));
 
-// API routes
 app.get("/api/health", (_req, res) => {
   res.status(200).json({ message: "DSR backend running" });
 });
@@ -48,18 +47,17 @@ app.use("/api/auth", authRoutes);
 app.use("/api/tasks", taskRoutes);
 app.use("/api/reports", reportRoutes);
 
-// SPA fallback: serve index.html for any non-API route
-app.get("*", (req, res) => {
+app.get("*", (_req, res) => {
   res.sendFile(path.join(__dirname, "../frontend/dist", "index.html"));
 });
 
-// Error handling
 app.use((err, _req, res, _next) => {
   console.error(err);
   res.status(500).json({ message: "Unexpected server error" });
 });
 
-app.listen(port, () => {
+app.listen(port, host, () => {
   console.log(`Server started on http://localhost:${port}`);
+  console.log(`Server started on http://192.168.1.14:${port}`);
   startCronJobs();
 });

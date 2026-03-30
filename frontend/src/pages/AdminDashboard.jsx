@@ -317,6 +317,23 @@ const AdminDashboard = () => {
     }
   };
 
+  const handlePriorityChange = async (task, priority) => {
+    setError("");
+
+    try {
+      await taskApi.updateTaskPriority(task.id, { priority });
+      setTasks((prev) =>
+        prev.map((entry) =>
+          entry.id === task.id
+            ? { ...entry, priority }
+            : entry
+        )
+      );
+    } catch (apiError) {
+      setError(apiError.response?.data?.message || "Failed to update priority");
+    }
+  };
+
   const handleReassign = async (task, nextAssigneeId) => {
     setError("");
     setReassigningTaskId(task.id);
@@ -694,6 +711,7 @@ const AdminDashboard = () => {
             <TaskTable
               tasks={filteredTasks}
               onStatusChange={handleStatusChange}
+              onPriorityChange={handlePriorityChange}
               editableStatus
               showAssignee
               showReassign
@@ -725,6 +743,7 @@ const AdminDashboard = () => {
             <TaskTable
               tasks={filteredTasks}
               onStatusChange={handleStatusChange}
+              onPriorityChange={handlePriorityChange}
               editableStatus
               showAssignee
               showReassign
