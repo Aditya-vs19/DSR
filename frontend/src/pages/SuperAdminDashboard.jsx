@@ -32,6 +32,7 @@ const FALLBACK_DONUT_COLORS = [
 const SuperAdminDashboard = () => {
   const { user, logout } = useAuth();
   const isHeaderVisible = useScrollHeader();
+  const todayText = new Date().toISOString().slice(0, 10);
   const [users, setUsers] = useState([]);
   const [tasks, setTasks] = useState([]);
   const [reports, setReports] = useState([]);
@@ -40,7 +41,7 @@ const SuperAdminDashboard = () => {
   const [notifications, setNotifications] = useState([]);
   const [activeTab, setActiveTab] = useState("Overview");
   const [busy, setBusy] = useState(false);
-  const [filters, setFilters] = useState({ status: "all", team: "all", employeeId: "all", date: "" });
+  const [filters, setFilters] = useState({ status: "all", team: "all", employeeId: "all", date: todayText });
   const [usersFilter, setUsersFilter] = useState({ team: "all", role: "all", search: "" });
   const [reportDate, setReportDate] = useState("");
   const [passwordForm, setPasswordForm] = useState({
@@ -132,11 +133,21 @@ const SuperAdminDashboard = () => {
     return () => clearTimeout(timer);
   }, [managedPasswordToast]);
 
+  const resolveTaskDepartment = (task) => {
+    const explicitDepartment = String(task?.task_department || "").trim();
+    if (explicitDepartment) {
+      return explicitDepartment;
+    }
+
+    const assigneeTeam = users.find((entry) => Number(entry.id) === Number(task?.assigned_to))?.team;
+    return String(assigneeTeam || "").trim();
+  };
+
   const filteredTasks = useMemo(() => {
     return tasks.filter((item) => {
       const statusMatch = filters.status === "all" || item.status === filters.status;
-      const userTeam = users.find((entry) => entry.id === item.assigned_to)?.team;
-      const teamMatch = filters.team === "all" || userTeam === filters.team;
+      const taskDepartment = resolveTaskDepartment(item);
+      const teamMatch = filters.team === "all" || taskDepartment === filters.team;
       const employeeMatch =
         filters.employeeId === "all" || String(item.assigned_to) === String(filters.employeeId);
       const dateMatch = !filters.date || (item.created_at || "").slice(0, 10) === filters.date;
@@ -146,7 +157,7 @@ const SuperAdminDashboard = () => {
 
   const taskEmployeeOptions = useMemo(() => {
     const scopedUsers = users.filter((entry) => {
-      if (entry.role !== "employee") {
+      if (!["employee", "admin"].includes(entry.role)) {
         return false;
       }
 
@@ -196,7 +207,8 @@ const SuperAdminDashboard = () => {
 
   const completedTasksPieData = useMemo(() => {
     const filteredCompletedTasks = tasks.filter((item) => {
-      if (item.status !== "Completed") {
+      const statusValue = String(item.raw_status || item.status || "").toLowerCase();
+      if (statusValue !== "completed") {
         return false;
       }
 
@@ -212,14 +224,15 @@ const SuperAdminDashboard = () => {
       const employeeTotals = new Map();
 
       users
-        .filter((item) => item.role === "employee" && item.team === filters.team)
+        .filter((item) => ["employee", "admin"].includes(item.role) && item.team === filters.team)
         .forEach((item) => {
           employeeTotals.set(item.name, 0);
         });
 
       filteredCompletedTasks.forEach((task) => {
         const employee = users.find((item) => Number(item.id) === Number(task.assigned_to));
-        if (!employee || employee.team !== filters.team || employee.role !== "employee") {
+        const taskDepartment = resolveTaskDepartment(task);
+        if (!employee || taskDepartment !== filters.team || !["employee", "admin"].includes(employee.role)) {
           return;
         }
 
@@ -227,10 +240,10 @@ const SuperAdminDashboard = () => {
       });
 
       return {
-        title: `Completed Tasks by Employee (${toTeamLabel(filters.team)})`,
+        title: `Completed Tasks by Team Members (${toTeamLabel(filters.team)})`,
         labels: Array.from(employeeTotals.keys()),
         values: Array.from(employeeTotals.values()),
-        chartValues: Array.from(employeeTotals.values()).map((value) => (value === 0 ? 0.05 : value)),
+        chartValues: Array.from(employeeTotals.values()),
         colors: FALLBACK_DONUT_COLORS
       };
     }
@@ -239,11 +252,11 @@ const SuperAdminDashboard = () => {
 
     filteredCompletedTasks.forEach((task) => {
       const employee = users.find((item) => Number(item.id) === Number(task.assigned_to));
-      if (!employee || employee.role !== "employee") {
+      if (!employee || !["employee", "admin"].includes(employee.role)) {
         return;
       }
 
-      const teamName = employee.team || "Unknown";
+      const teamName = resolveTaskDepartment(task) || "Unknown";
       teamTotals.set(teamName, (teamTotals.get(teamName) || 0) + 1);
     });
 
@@ -294,7 +307,7 @@ const SuperAdminDashboard = () => {
       const teamMap = new Map();
 
       users
-        .filter((entry) => entry.role === "employee")
+        .filter((entry) => ["employee", "admin"].includes(entry.role))
         .forEach((entry) => {
           const teamName = entry.team || "Unknown";
           if (!teamMap.has(teamName)) {
@@ -304,11 +317,11 @@ const SuperAdminDashboard = () => {
 
       scopeTasks.forEach((task) => {
         const employee = users.find((entry) => Number(entry.id) === Number(task.assigned_to));
-        if (!employee || employee.role !== "employee") {
+        if (!employee || !["employee", "admin"].includes(employee.role)) {
           return;
         }
 
-        const teamName = employee.team || "Unknown";
+        const teamName = resolveTaskDepartment(task) || "Unknown";
         if (!teamMap.has(teamName)) {
           teamMap.set(teamName, { pending: 0, inProgress: 0, completed: 0 });
         }
@@ -344,14 +357,15 @@ const SuperAdminDashboard = () => {
     const employeeMap = new Map();
 
     users
-      .filter((entry) => entry.role === "employee" && entry.team === filters.team)
+      .filter((entry) => ["employee", "admin"].includes(entry.role) && entry.team === filters.team)
       .forEach((entry) => {
         employeeMap.set(entry.name, { pending: 0, inProgress: 0, completed: 0 });
       });
 
     scopeTasks.forEach((task) => {
       const employee = users.find((entry) => Number(entry.id) === Number(task.assigned_to));
-      if (!employee || employee.role !== "employee" || employee.team !== filters.team) {
+      const taskDepartment = resolveTaskDepartment(task);
+      if (!employee || !["employee", "admin"].includes(employee.role) || taskDepartment !== filters.team) {
         return;
       }
 
@@ -408,7 +422,7 @@ const SuperAdminDashboard = () => {
 
     await taskApi.markNotificationRead(notification.id);
     setActiveTab("Tasks");
-    setFilters((prev) => ({ ...prev, status: "all", team: "all", employeeId: "all", date: "" }));
+    setFilters((prev) => ({ ...prev, status: "all", team: "all", employeeId: "all", date: todayText }));
     setFocusedTaskId(Number(notification.reference_id));
     await loadData();
   };
@@ -687,7 +701,7 @@ const SuperAdminDashboard = () => {
                   value={filters.employeeId}
                   onChange={(event) => setFilters((prev) => ({ ...prev, employeeId: event.target.value }))}
                 >
-                  <option value="all">All Employees</option>
+                  <option value="all">All Team Members</option>
                   {taskEmployeeOptions.map((employee) => (
                     <option key={employee.id} value={String(employee.id)}>
                       {employee.name}

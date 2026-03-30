@@ -43,7 +43,8 @@ const AdminDashboard = () => {
     dependency: "",
     assignedTo: "",
     deadline: "",
-    priority: "Medium"
+    priority: "Medium",
+    taskDepartment: ""
   });
   const [selfAssign, setSelfAssign] = useState(false);
   const [error, setError] = useState("");
@@ -61,6 +62,11 @@ const AdminDashboard = () => {
   const [focusedTaskId, setFocusedTaskId] = useState(null);
   const [comparisonFilter, setComparisonFilter] = useState({ mode: "overall", date: todayText });
   const managedDepartmentLabel = useMemo(() => getManagedDepartmentLabel(user), [user]);
+  const isSnigdhaDualAdmin = useMemo(
+    () => String(user?.name || "").trim().toLowerCase() === "snigdha" && String(user?.role || "") === "admin",
+    [user]
+  );
+  const snigdhaDepartmentOptions = ["Sales", "Logistics"];
   const reassignOptions = useMemo(() => {
     const teamEmployees = employees.filter((item) => item.role === "employee");
     const adminSelfOption =
@@ -270,14 +276,32 @@ const AdminDashboard = () => {
 
     try {
       const assignedToId = selfAssign ? Number(user.id) : Number(form.assignedTo);
+      const selectedTaskDepartment = selfAssign && isSnigdhaDualAdmin
+        ? String(form.taskDepartment || "").trim()
+        : "";
+
+      if (selfAssign && isSnigdhaDualAdmin && !selectedTaskDepartment) {
+        setError("Select task department (Sales or Logistics)");
+        return;
+      }
 
       await taskApi.createTask({
         ...form,
+        taskDepartment: selectedTaskDepartment || undefined,
         assignedTo: assignedToId,
         type: selfAssign ? "self" : "assigned"
       });
 
-      setForm({ client: "", task: "", action: "", dependency: "", assignedTo: "", deadline: "", priority: "Medium" });
+      setForm({
+        client: "",
+        task: "",
+        action: "",
+        dependency: "",
+        assignedTo: "",
+        deadline: "",
+        priority: "Medium",
+        taskDepartment: ""
+      });
       setSelfAssign(false);
       await loadData();
       setActiveTab("Tasks");
@@ -580,14 +604,35 @@ const AdminDashboard = () => {
                   const checked = event.target.checked;
                   setSelfAssign(checked);
                   if (checked) {
-                    setForm((prev) => ({ ...prev, assignedTo: String(user?.id || "") }));
+                    setForm((prev) => ({
+                      ...prev,
+                      assignedTo: String(user?.id || ""),
+                      taskDepartment: isSnigdhaDualAdmin ? prev.taskDepartment : ""
+                    }));
                   } else {
-                    setForm((prev) => ({ ...prev, assignedTo: "" }));
+                    setForm((prev) => ({ ...prev, assignedTo: "", taskDepartment: "" }));
                   }
                 }}
               />
               Self assign (assign to me)
             </label>
+            {selfAssign && isSnigdhaDualAdmin && (
+              <>
+                <h2 className="md:col-span-2 text-sm font-semibold text-slate-900">Task Department</h2>
+                <select
+                  className="input md:col-span-2"
+                  value={form.taskDepartment}
+                  disabled={alreadySubmittedOwnToday}
+                  onChange={(event) => setForm((prev) => ({ ...prev, taskDepartment: event.target.value }))}
+                  required
+                >
+                  <option value="">Select department for this self-task</option>
+                  {snigdhaDepartmentOptions.map((department) => (
+                    <option key={department} value={department}>{department}</option>
+                  ))}
+                </select>
+              </>
+            )}
             <h2 className="md:col-span-2 text-sm font-semibold text-slate-900">Action</h2>
             <textarea
               className="input md:col-span-2"

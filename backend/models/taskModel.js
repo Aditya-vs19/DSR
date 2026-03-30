@@ -5,6 +5,7 @@ let dailyReportTableEnsured = false;
 let taskCarryForwardColumnsEnsured = false;
 let taskReassignmentColumnsEnsured = false;
 let taskPriorityColumnEnsured = false;
+let taskDepartmentColumnEnsured = false;
 
 const ensureTaskSubmissionColumns = async () => {
   if (taskSubmissionColumnsEnsured) return;
@@ -101,6 +102,28 @@ const ensureTaskPriorityColumn = async () => {
   taskPriorityColumnEnsured = true;
 };
 
+const ensureTaskDepartmentColumn = async () => {
+  if (taskDepartmentColumnEnsured) return;
+
+  const existingColumns = await query(
+    `
+      SELECT COLUMN_NAME
+      FROM information_schema.COLUMNS
+      WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = 'tasks'
+        AND COLUMN_NAME = 'task_department'
+    `
+  );
+
+  const columnSet = new Set(existingColumns.map((entry) => entry.COLUMN_NAME));
+
+  if (!columnSet.has("task_department")) {
+    await query("ALTER TABLE tasks ADD COLUMN task_department VARCHAR(80) NULL");
+  }
+
+  taskDepartmentColumnEnsured = true;
+};
+
 const ensureDailyReportTable = async () => {
   if (dailyReportTableEnsured) return;
 
@@ -131,19 +154,21 @@ export const createTask = async ({
   type,
   deadline,
   carriedForwardFromId = null,
-  priority = "Medium"
+  priority = "Medium",
+  taskDepartment = null
 }) => {
   await ensureTaskSubmissionColumns();
   await ensureTaskCarryForwardColumns();
   await ensureTaskReassignmentColumns();
   await ensureTaskPriorityColumn();
+  await ensureTaskDepartmentColumn();
 
   const sql = `
     INSERT INTO tasks (
       client, task, action, status, dependency,
-      assigned_to, assigned_by, type, deadline, carried_forward_from_id, priority
+      assigned_to, assigned_by, type, deadline, carried_forward_from_id, priority, task_department
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `;
 
   const result = await query(sql, [
@@ -157,7 +182,8 @@ export const createTask = async ({
     type,
     deadline || null,
     carriedForwardFromId,
-    priority
+    priority,
+    taskDepartment || null
   ]);
 
   return result.insertId;
@@ -168,6 +194,7 @@ export const getTasksByRole = async ({ role, userId, team, managedTeams = [] }) 
   await ensureTaskCarryForwardColumns();
   await ensureTaskReassignmentColumns();
   await ensureTaskPriorityColumn();
+  await ensureTaskDepartmentColumn();
 
   const baseSql = `
     SELECT
@@ -178,6 +205,7 @@ export const getTasksByRole = async ({ role, userId, team, managedTeams = [] }) 
       t.status AS raw_status,
       t.status AS status,
       t.priority,
+      t.task_department,
       t.dependency,
       t.assigned_to,
       t.assigned_by,
@@ -220,6 +248,7 @@ export const getTaskById = async (id) => {
   await ensureTaskCarryForwardColumns();
   await ensureTaskReassignmentColumns();
   await ensureTaskPriorityColumn();
+  await ensureTaskDepartmentColumn();
 
   const rows = await query("SELECT * FROM tasks WHERE id = ? LIMIT 1", [id]);
   return rows[0] || null;
@@ -460,6 +489,7 @@ export const carryForwardPendingTasks = async (targetDate = null) => {
   await ensureTaskSubmissionColumns();
   await ensureTaskCarryForwardColumns();
   await ensureTaskPriorityColumn();
+  await ensureTaskDepartmentColumn();
 
   let effectiveTargetDate = targetDate;
 
@@ -491,6 +521,7 @@ export const carryForwardPendingTasks = async (targetDate = null) => {
         action,
         status,
         priority,
+        task_department,
         dependency,
         assigned_to,
         assigned_by,
@@ -528,6 +559,7 @@ export const carryForwardPendingTasks = async (targetDate = null) => {
       action: sourceTask.action,
       status: sourceTask.status,
       priority: sourceTask.priority || "Medium",
+      taskDepartment: sourceTask.task_department || null,
       dependency: sourceTask.dependency,
       assignedTo: sourceTask.assigned_to,
       assignedBy: sourceTask.assigned_by,
