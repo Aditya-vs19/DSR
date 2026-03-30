@@ -41,10 +41,8 @@ export const createTaskController = async (req, res) => {
     const { client, task, action, status, dependency, assignedTo, type, deadline } = req.body;
     const assignedBy = req.user.id;
     const normalizedClient = String(client || "").trim();
-    const normalizedTask = String(task || "").trim();
-    const normalizedAction = String(action || "").trim();
 
-    if (!normalizedTask || !assignedTo || !type) {
+    if (!task || !action || !assignedTo || !type) {
       return res.status(400).json({ message: "Missing required task fields" });
     }
 
@@ -93,8 +91,8 @@ export const createTaskController = async (req, res) => {
 
     const taskId = await createTask({
       client: normalizedClient,
-      task: normalizedTask,
-      action: normalizedAction,
+      task,
+      action,
       status: normalizedStatus,
       dependency,
       assignedTo,
@@ -106,7 +104,7 @@ export const createTaskController = async (req, res) => {
     if (Number(assignedTo) !== Number(assignedBy)) {
       await createNotification({
         userId: assignedTo,
-        message: `New task assigned: ${normalizedTask}`,
+        message: `New task assigned: ${task}`,
         type: "task_assigned",
         refId: taskId
       });

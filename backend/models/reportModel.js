@@ -536,30 +536,10 @@ export const getDailyReportGridByRole = async ({
     const isFutureDate = dateText > todayInReportTimezone;
 
     const employees = users.map((employee) => {
+      const cell = cellMap.get(`${dateText}-${employee.id}`);
+      const cellStatus = CELL_STATUSES.includes(cell?.status) ? cell.status : "Not Received";
       const taskActivity = taskActivityMap.get(`${dateText}-${employee.id}`);
       const workedOnDay = Number(taskActivity?.totalTasks || 0) > 0;
-      const isOffDayForEmployee = (isSunday || isHoliday) && !workedOnDay;
-
-      if (isOffDayForEmployee) {
-        return {
-          reportId: null,
-          userId: employee.id,
-          name: employee.name,
-          status: isHoliday ? "Holiday" : "Weekly Off"
-        };
-      }
-
-      if ((isSunday || isHoliday) && workedOnDay) {
-        return {
-          reportId: null,
-          userId: employee.id,
-          name: employee.name,
-          status: Number(taskActivity.pendingTasks || 0) > 0 ? "Pending" : "Completed",
-          totalTasks: Number(taskActivity.totalTasks || 0),
-          completedTasks: Number(taskActivity.completedTasks || 0),
-          pendingTasks: Number(taskActivity.pendingTasks || 0)
-        };
-      }
 
       if (isFutureDate) {
         return {
@@ -570,13 +550,41 @@ export const getDailyReportGridByRole = async ({
         };
       }
 
-      const cell = cellMap.get(`${dateText}-${employee.id}`);
+      if (isSunday || isHoliday) {
+        if (cellStatus === "Received" || cellStatus === "Leave") {
+          return {
+            reportId: cell?.id || null,
+            userId: employee.id,
+            name: employee.name,
+            status: cellStatus
+          };
+        }
+
+        if (workedOnDay) {
+          return {
+            reportId: null,
+            userId: employee.id,
+            name: employee.name,
+            status: Number(taskActivity.pendingTasks || 0) > 0 ? "Pending" : "Completed",
+            totalTasks: Number(taskActivity.totalTasks || 0),
+            completedTasks: Number(taskActivity.completedTasks || 0),
+            pendingTasks: Number(taskActivity.pendingTasks || 0)
+          };
+        }
+
+        return {
+          reportId: null,
+          userId: employee.id,
+          name: employee.name,
+          status: isHoliday ? "Holiday" : "Weekly Off"
+        };
+      }
 
       return {
         reportId: cell?.id || null,
         userId: employee.id,
         name: employee.name,
-        status: CELL_STATUSES.includes(cell?.status) ? cell.status : "Not Received"
+        status: cellStatus
       };
     });
 

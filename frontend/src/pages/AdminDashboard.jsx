@@ -577,6 +577,7 @@ const AdminDashboard = () => {
               value={form.action}
               disabled={alreadySubmittedOwnToday}
               onChange={(event) => setForm((prev) => ({ ...prev, action: event.target.value }))}
+              required
             />
             <button className="btn-primary md:col-span-2" type="submit" disabled={alreadySubmittedOwnToday}>
               {alreadySubmittedOwnToday ? "Available Tomorrow" : "Add Task"}
