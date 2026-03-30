@@ -53,7 +53,7 @@ const normalizeTaskPriority = (value) => {
 
 export const createTaskController = async (req, res) => {
   try {
-    const { client, task, action, status, dependency, assignedTo, type, deadline, priority } = req.body;
+    const { client, task, action, status, dependency, assignedTo, type, deadline, priority, taskDepartment } = req.body;
     const assignedBy = req.user.id;
     const normalizedClient = String(client || "").trim();
 
@@ -100,6 +100,23 @@ export const createTaskController = async (req, res) => {
       if (!managedTeams.includes(assignee.team)) {
         return res.status(403).json({ message: "You can assign tasks only within your managed teams" });
       }
+    }
+
+    const normalizedTaskDepartment = String(taskDepartment || "").trim();
+    let resolvedTaskDepartment = null;
+
+    if (normalizedTaskDepartment) {
+      const managedTeams = req.user.role === "admin" ? getManagedTeamsForAdmin(req.user) : [];
+
+      if (!(req.user.role === "admin" && isSelfTask)) {
+        return res.status(400).json({ message: "Task department can be set only for admin self tasks" });
+      }
+
+      if (!managedTeams.includes(normalizedTaskDepartment)) {
+        return res.status(400).json({ message: "Invalid task department for current admin" });
+      }
+
+      resolvedTaskDepartment = normalizedTaskDepartment;
     }
 
     const normalizedStatus = normalizeTaskStatus(status) || "Pending";
