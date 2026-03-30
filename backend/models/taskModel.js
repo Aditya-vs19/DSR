@@ -4,6 +4,7 @@ let taskSubmissionColumnsEnsured = false;
 let dailyReportTableEnsured = false;
 let taskCarryForwardColumnsEnsured = false;
 let taskReassignmentColumnsEnsured = false;
+let taskPriorityColumnEnsured = false;
 
 const ensureTaskSubmissionColumns = async () => {
   if (taskSubmissionColumnsEnsured) return;
@@ -75,6 +76,31 @@ const ensureTaskReassignmentColumns = async () => {
   taskReassignmentColumnsEnsured = true;
 };
 
+const ensureTaskPriorityColumn = async () => {
+  if (taskPriorityColumnEnsured) return;
+
+  const existingColumns = await query(
+    `
+      SELECT COLUMN_NAME
+      FROM information_schema.COLUMNS
+      WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = 'tasks'
+        AND COLUMN_NAME = 'priority'
+    `
+  );
+
+  const columnSet = new Set(existingColumns.map((entry) => entry.COLUMN_NAME));
+
+  if (!columnSet.has("priority")) {
+    await query("ALTER TABLE tasks ADD COLUMN priority ENUM('Medium', 'High', 'Critical') NOT NULL DEFAULT 'Medium'");
+  } else {
+    // Modify the existing column to update the ENUM values
+    await query("ALTER TABLE tasks MODIFY COLUMN priority ENUM('Medium', 'High', 'Critical') NOT NULL DEFAULT 'Medium'");
+  }
+
+  taskPriorityColumnEnsured = true;
+};
+
 const ensureDailyReportTable = async () => {
   if (dailyReportTableEnsured) return;
 
@@ -104,18 +130,20 @@ export const createTask = async ({
   assignedBy,
   type,
   deadline,
-  carriedForwardFromId = null
+  carriedForwardFromId = null,
+  priority = "Medium"
 }) => {
   await ensureTaskSubmissionColumns();
   await ensureTaskCarryForwardColumns();
   await ensureTaskReassignmentColumns();
+  await ensureTaskPriorityColumn();
 
   const sql = `
     INSERT INTO tasks (
       client, task, action, status, dependency,
-      assigned_to, assigned_by, type, deadline, carried_forward_from_id
+      assigned_to, assigned_by, type, deadline, carried_forward_from_id, priority
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `;
 
   const result = await query(sql, [
@@ -128,7 +156,8 @@ export const createTask = async ({
     assignedBy,
     type,
     deadline || null,
-    carriedForwardFromId
+    carriedForwardFromId,
+    priority
   ]);
 
   return result.insertId;

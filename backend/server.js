@@ -1,11 +1,16 @@
 import dotenv from "dotenv";
 import express from "express";
 import cors from "cors";
+import path from "path";
+import { fileURLToPath } from "url";
 
 import authRoutes from "./routes/authRoutes.js";
 import taskRoutes from "./routes/taskRoutes.js";
 import reportRoutes from "./routes/reportRoutes.js";
 import { startCronJobs } from "./utils/cronJobs.js";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 dotenv.config();
 
@@ -31,6 +36,10 @@ app.use(
 );
 app.use(express.json());
 
+// Serve static files from the React app build directory
+app.use(express.static(path.join(__dirname, "../frontend/dist")));
+
+// API routes
 app.get("/api/health", (_req, res) => {
   res.status(200).json({ message: "DSR backend running" });
 });
@@ -39,6 +48,12 @@ app.use("/api/auth", authRoutes);
 app.use("/api/tasks", taskRoutes);
 app.use("/api/reports", reportRoutes);
 
+// SPA fallback: serve index.html for any non-API route
+app.get("*", (req, res) => {
+  res.sendFile(path.join(__dirname, "../frontend/dist", "index.html"));
+});
+
+// Error handling
 app.use((err, _req, res, _next) => {
   console.error(err);
   res.status(500).json({ message: "Unexpected server error" });

@@ -38,7 +38,7 @@ const normalizeTaskStatus = (value) => {
 
 export const createTaskController = async (req, res) => {
   try {
-    const { client, task, action, status, dependency, assignedTo, type, deadline } = req.body;
+    const { client, task, action, status, dependency, assignedTo, type, deadline, priority } = req.body;
     const assignedBy = req.user.id;
     const normalizedClient = String(client || "").trim();
 
@@ -98,7 +98,8 @@ export const createTaskController = async (req, res) => {
       assignedTo,
       assignedBy,
       type,
-      deadline
+      deadline,
+      priority: priority || "Medium"
     });
 
     if (Number(assignedTo) !== Number(assignedBy)) {
