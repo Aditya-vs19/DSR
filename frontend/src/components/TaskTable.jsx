@@ -683,10 +683,10 @@ const TaskTable = ({
                   {editableStatus && Number(item.submitted_to_hr) !== 1 ? (
                     <div className="w-full max-w-[280px]">
                       {isDependencyEditing ? (
-                        <input
+                        <textarea
                           autoFocus
-                          className="w-full rounded-md border border-slate-200 px-2.5 py-1.5 text-[13px] text-slate-700 outline-none focus:border-emerald-500"
-                          type="text"
+                          rows={3}
+                          className="w-full resize-y rounded-md border border-slate-200 px-2.5 py-1.5 text-[13px] leading-5 text-slate-700 outline-none focus:border-emerald-500"
                           placeholder="Add dependency / remark"
                           value={getDependencyValue(item)}
                           onChange={(event) => {
