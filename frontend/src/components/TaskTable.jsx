@@ -465,17 +465,17 @@ const TaskTable = ({
         <thead>
           <tr className="border-b border-slate-300 bg-slate-50 text-left text-slate-700">
             <th className="w-14 px-2.5 py-2">Sr No</th>
-            <th className="w-24 pl-2.5 pr-0 py-2">Client</th>
-            <th className="w-[8%] pl-0 pr-2 py-2">Task</th>
-            <th className="w-[30%] pl-2 pr-0 py-2">Action</th>
-            <th className="w-32 pl-0 pr-2.5 py-2">Status</th>
-            <th className="w-[17%] px-2.5 py-2">Dependency / Remark</th>
+            <th className="w-[12%] px-2.5 py-2 whitespace-normal break-words">Client / Vendor</th>
+            <th className="w-[20%] px-2.5 py-2">Task</th>
+            <th className="w-[32%] px-2.5 py-2">Action</th>
+            <th className="w-28 pl-0 pr-2.5 py-2">Status</th>
+            <th className="w-[14%] px-2.5 py-2">Dependency / Remark</th>
             {showAssignee && <th className="w-28 px-2.5 py-2">Assigned To</th>}
             {showAssigner && <th className="w-28 px-2.5 py-2">Assigned By</th>}
             {showSubmitToHr && <th className="w-28 px-2.5 py-2">HR Submit</th>}
             {showReassign && <th className="w-28 px-2.5 py-2">Reassign</th>}
-            <th className="w-32 px-2.5 py-2">Assigned Time</th>
-            <th className="w-32 px-2.5 py-2">Completed Time</th>
+            <th className="w-28 px-2.5 py-2">Assigned Time</th>
+            <th className="w-28 px-2.5 py-2">Completed Time</th>
           </tr>
         </thead>
         <tbody>
@@ -508,15 +508,15 @@ const TaskTable = ({
                 }`}
               >
                 <td className="px-2.5 py-2 align-top">{(currentPage - 1) * TASKS_PER_PAGE + index + 1}</td>
-                <td className="pl-2.5 pr-0 py-2 align-top font-medium break-words">{item.client}</td>
-                <td className="pl-0 pr-2 py-2 align-top">
+                <td className="px-2.5 py-2 align-top font-medium break-words">{item.client}</td>
+                <td className="px-2.5 py-2 align-top overflow-hidden">
                   {editableStatus && Number(item.submitted_to_hr) !== 1 ? (
-                    <div className={`max-w-[220px] ${isTaskTitleEditing ? "relative min-h-[110px] pt-[84px]" : ""}`}>
+                    <div className="w-full max-w-full">
                       {isTaskTitleEditing ? (
                         <textarea
                           autoFocus
                           rows={3}
-                          className="absolute left-0 top-0 z-20 w-[95px] max-w-[14vw] resize-y rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-[13px] leading-5 text-slate-700 shadow-lg outline-none focus:border-emerald-500"
+                          className="block w-full max-w-full resize-y rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-[13px] leading-5 text-slate-700 outline-none focus:border-emerald-500"
                           placeholder="Update task title"
                           value={getTaskTitleValue(item)}
                           onChange={(event) => {
@@ -567,14 +567,14 @@ const TaskTable = ({
                     <span className="whitespace-pre-wrap break-words">{item.task || "-"}</span>
                   )}
                 </td>
-                <td className="pl-2 pr-0 py-2 align-top">
+                <td className="px-2.5 py-2 align-top overflow-hidden">
                   {editableStatus && Number(item.submitted_to_hr) !== 1 ? (
-                    <div className="max-w-[420px]">
+                    <div className="w-full max-w-full">
                       {isActionEditing ? (
                         <textarea
                           autoFocus
                           rows={4}
-                          className="min-w-[320px] w-full resize-y rounded-md border border-slate-200 px-2.5 py-1.5 text-[13px] leading-5 text-slate-700 outline-none focus:border-emerald-500"
+                          className="block w-full max-w-full resize-y rounded-md border border-slate-200 px-2.5 py-1.5 text-[13px] leading-5 text-slate-700 outline-none focus:border-emerald-500"
                           placeholder="Update action"
                           value={getActionValue(item)}
                           onChange={(event) => {
@@ -652,7 +652,7 @@ const TaskTable = ({
                 </td>
                 <td className="px-2.5 py-2 align-top">
                   {editableStatus && Number(item.submitted_to_hr) !== 1 ? (
-                    <div className="max-w-[380px]">
+                    <div className="w-full max-w-[280px]">
                       {isDependencyEditing ? (
                         <input
                           autoFocus
