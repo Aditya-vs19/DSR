@@ -1,9 +1,10 @@
 import { useMemo } from "react";
 import logo from "../assets/logo.png";
+import ProfileMenu from "./ProfileMenu";
 import { useAuth } from "../context/AuthContext";
 import useScrollHeader from "../hooks/useScrollHeader";
 
-const Navbar = ({ notifications = [], onToggleSidebar }) => {
+const Navbar = ({ notifications = [], onToggleSidebar, onOpenProfile, profileLabel }) => {
   const { user, logout } = useAuth();
   const isHeaderVisible = useScrollHeader();
 
@@ -30,15 +31,11 @@ const Navbar = ({ notifications = [], onToggleSidebar }) => {
           <img
             src={logo}
             alt="DSR Management Logo"
-            className="h-16 w-[220px] shrink-0 object-cover object-left"
+            className="h-14 w-[260px] shrink-0 object-contain object-left"
           />
         </div>
 
         <div className="flex items-center gap-4">
-          <div className="text-right">
-            <p className="text-sm font-semibold capitalize">{user?.name}</p>
-            <p className="text-xs text-slate-500 uppercase">{user?.role}</p>
-          </div>
           <button
             type="button"
             className="relative inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
@@ -50,9 +47,7 @@ const Navbar = ({ notifications = [], onToggleSidebar }) => {
             </svg>
             {unreadCount > 0 && <span className="absolute right-2 top-2 h-2.5 w-2.5 rounded-full bg-rose-500" />}
           </button>
-          <button className="btn-secondary" onClick={logout} type="button">
-            Logout
-          </button>
+          <ProfileMenu user={user} onOpenProfile={onOpenProfile} onLogout={logout} label={profileLabel} />
         </div>
       </div>
     </header>

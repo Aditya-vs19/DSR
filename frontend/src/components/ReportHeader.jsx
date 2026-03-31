@@ -6,6 +6,8 @@ function ReportHeader({
   onReportTypeChange,
   dateRange,
   onDateRangeChange,
+  date,
+  onDateChange,
   team,
   onTeamChange,
   teamOptions,
@@ -17,7 +19,11 @@ function ReportHeader({
   loading,
   summary,
   totalTasks,
-  detailedSummary
+  detailedSummary,
+  showReportType = true,
+  showDateField = true,
+  showTeamFilter = true,
+  showEmployeeFilter = true
 }) {
   const [isEmployeeMenuOpen, setIsEmployeeMenuOpen] = useState(false);
   const employeeMenuRef = useRef(null);
@@ -93,10 +99,20 @@ function ReportHeader({
           { label: "Tasks Tracked", value: totalTasks, className: "bg-slate-100 text-slate-700" }
         ];
 
+  const isEmployeeHeaderLayout =
+    !showReportType && showDateField && !showTeamFilter && !showEmployeeFilter;
+  const headerGridClassName = isEmployeeHeaderLayout
+    ? "grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,2fr)]"
+    : "grid gap-3 md:grid-cols-6";
+  const actionsClassName = isEmployeeHeaderLayout ? "md:col-span-1" : "md:col-span-2";
+  const actionButtonsClassName = isEmployeeHeaderLayout
+    ? "flex flex-wrap items-center gap-2 md:grid md:grid-cols-2"
+    : "flex items-center gap-2";
+
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="grid gap-3 md:grid-cols-6">
-        <label className="md:col-span-1">
+      <div className={headerGridClassName}>
+        {showReportType ? <label className="md:col-span-1">
           <span className="mb-1 block text-xs font-bold uppercase tracking-wide text-black">Report Type</span>
           <select
             value={reportType}
@@ -106,7 +122,7 @@ function ReportHeader({
             <option value="received">Received / Not Received</option>
             <option value="detailed">Detailed Task List</option>
           </select>
-        </label>
+        </label> : null}
 
         <label className="md:col-span-1">
           <span className="mb-1 block text-xs font-bold uppercase tracking-wide text-black">Range</span>
@@ -121,7 +137,17 @@ function ReportHeader({
           </select>
         </label>
 
-        <label className="md:col-span-1">
+        {showDateField ? <label className="md:col-span-1">
+          <span className="mb-1 block text-xs font-bold uppercase tracking-wide text-black">Date</span>
+          <input
+            type="date"
+            value={date}
+            onChange={(event) => onDateChange(event.target.value)}
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300"
+          />
+        </label> : null}
+
+        {showTeamFilter ? <label className="md:col-span-1">
           <span className="mb-1 block text-xs font-bold uppercase tracking-wide text-black">Team</span>
           <select
             value={team}
@@ -135,9 +161,9 @@ function ReportHeader({
               </option>
             ))}
           </select>
-        </label>
+        </label> : null}
 
-        <div className="md:col-span-1" ref={employeeMenuRef}>
+        {showEmployeeFilter ? <div className="md:col-span-1" ref={employeeMenuRef}>
           <span className="mb-1 block text-xs font-bold uppercase tracking-wide text-black">Employees</span>
           <button
             type="button"
@@ -199,11 +225,11 @@ function ReportHeader({
               ? `${selectedEmployeeIds.length} selected`
               : "No selection = all employees"}
           </span>
-        </div>
+        </div> : null}
 
-        <div className="md:col-span-2">
+        <div className={actionsClassName}>
           <span className="mb-1 block text-xs font-bold uppercase tracking-wide text-black">Actions</span>
-          <div className="flex items-center gap-2">
+          <div className={actionButtonsClassName}>
             <button
               type="button"
               onClick={onGenerate}

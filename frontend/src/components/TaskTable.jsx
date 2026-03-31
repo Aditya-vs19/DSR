@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 const TASKS_PER_PAGE = 10;
 
@@ -72,6 +72,73 @@ const formatUtcDateTimeParts = (value) => {
       hour12: true
     })
   };
+};
+
+const TaskCellPreview = ({ text = "", interactive = false, onEdit = null }) => {
+  const contentRef = useRef(null);
+  const [expanded, setExpanded] = useState(false);
+  const [hasOverflow, setHasOverflow] = useState(false);
+
+  useEffect(() => {
+    const element = contentRef.current;
+    if (!element) {
+      setHasOverflow(false);
+      return;
+    }
+
+    const updateOverflow = () => {
+      setHasOverflow(element.scrollHeight > element.clientHeight + 1);
+    };
+
+    updateOverflow();
+    window.addEventListener("resize", updateOverflow);
+    return () => window.removeEventListener("resize", updateOverflow);
+  }, [expanded, text]);
+
+  useEffect(() => {
+    setExpanded(false);
+  }, [text]);
+
+  const contentClassName = interactive
+    ? "w-full rounded-md px-2.5 py-1.5 text-left text-[13px] text-slate-700 whitespace-pre-wrap break-words"
+    : "block px-2.5 py-1.5 text-[13px] text-slate-700 whitespace-pre-wrap break-words";
+
+  const clampStyle = expanded
+    ? undefined
+    : {
+        display: "-webkit-box",
+        WebkitLineClamp: 2,
+        WebkitBoxOrient: "vertical",
+        overflow: "hidden"
+      };
+
+  return (
+    <div className="w-full">
+      {interactive ? (
+        <button type="button" className={contentClassName} onClick={onEdit}>
+          <span ref={contentRef} className="block" style={clampStyle}>
+            {text || "-"}
+          </span>
+        </button>
+      ) : (
+        <span className={contentClassName}>
+          <span ref={contentRef} className="block" style={clampStyle}>
+            {text || "-"}
+          </span>
+        </span>
+      )}
+
+      {hasOverflow ? (
+        <button
+          type="button"
+          className="px-2.5 pt-1 text-xs font-semibold text-dsr-brand hover:underline"
+          onClick={() => setExpanded((prev) => !prev)}
+        >
+          {expanded ? "Show less" : "Read more"}
+        </button>
+      ) : null}
+    </div>
+  );
 };
 
 const TaskTable = ({
@@ -472,18 +539,18 @@ const TaskTable = ({
         <thead>
           <tr className="border-b border-slate-300 bg-slate-50 text-left text-slate-700">
             <th className="w-14 px-2.5 py-2">Sr No</th>
-            <th className="w-[12%] px-2.5 py-2 whitespace-normal break-words">Client / Vendor</th>
-            <th className="w-[27%] pl-2.5 pr-0.5 py-2">Task title</th>
-            <th className="w-[25%] pl-0.5 pr-2.5 py-2">Action</th>
-            <th className="w-24 px-1.5 py-2">Status</th>
-            <th className="w-20 px-1.5 py-2">Priority</th>
+            <th className="w-[15%] px-2.5 py-2 whitespace-normal break-words">Client / Vendor</th>
+            <th className="w-[25%] pl-2.5 pr-0.5 py-2">Task title</th>
+            <th className="w-[23%] pl-0.5 pr-2.5 py-2">Action</th>
+            <th className="w-24 px-1.5 py-2 text-center">Status</th>
+            <th className="w-20 px-1.5 py-2 text-center">Priority</th>
             <th className="w-[16%] px-2 py-2">Dependency / Remark</th>
-            {showAssignee && <th className="w-28 px-2.5 py-2">Assigned To</th>}
-            {showAssigner && <th className="w-28 px-2.5 py-2">Assigned By</th>}
-            {showSubmitToHr && <th className="w-28 px-2.5 py-2">HR Submit</th>}
-            {showReassign && <th className="w-28 px-2.5 py-2">Reassign</th>}
-            <th className="w-28 px-2.5 py-2">Assigned Time</th>
-            <th className="w-28 px-2.5 py-2">Completed Time</th>
+            {showAssignee && <th className="w-24 px-2.5 py-2 text-center">Assigned To</th>}
+            {showAssigner && <th className="w-28 px-2.5 py-2 text-center">Assigned By</th>}
+            {showSubmitToHr && <th className="w-28 px-2.5 py-2 text-center">HR Submit</th>}
+            {showReassign && <th className="w-24 px-2.5 py-2 text-center">Reassign</th>}
+            <th className="w-28 px-2.5 py-2 text-center">Assigned Time</th>
+            <th className="w-28 px-2.5 py-2 text-center">Completed Time</th>
           </tr>
         </thead>
         <tbody>
@@ -553,13 +620,11 @@ const TaskTable = ({
                           }}
                         />
                       ) : (
-                        <button
-                          type="button"
-                          className="w-full rounded-md px-2.5 py-1.5 text-left text-[13px] text-slate-700 whitespace-pre-wrap break-words"
-                          onClick={() => setTaskTitleActive(item.id, true)}
-                        >
-                          {getTaskTitleValue(item) || "-"}
-                        </button>
+                        <TaskCellPreview
+                          text={getTaskTitleValue(item)}
+                          interactive
+                          onEdit={() => setTaskTitleActive(item.id, true)}
+                        />
                       )}
                       {taskTitleMeta[item.id]?.state === "saving" && (
                         <p className="mt-1 text-xs text-dsr-muted">Saving...</p>
@@ -572,7 +637,7 @@ const TaskTable = ({
                       )}
                     </div>
                   ) : (
-                    <span className="whitespace-pre-wrap break-words">{item.task || "-"}</span>
+                    <TaskCellPreview text={item.task || "-"} />
                   )}
                 </td>
                 <td className="pl-0.5 pr-2.5 py-2 align-top overflow-hidden">
@@ -611,13 +676,11 @@ const TaskTable = ({
                           }}
                         />
                       ) : (
-                        <button
-                          type="button"
-                          className="w-full rounded-md px-2.5 py-1.5 text-left text-[13px] text-slate-700 whitespace-pre-wrap break-words"
-                          onClick={() => setActionActive(item.id, true)}
-                        >
-                          {getActionValue(item) || "-"}
-                        </button>
+                        <TaskCellPreview
+                          text={getActionValue(item)}
+                          interactive
+                          onEdit={() => setActionActive(item.id, true)}
+                        />
                       )}
                       {actionMeta[item.id]?.state === "saving" && (
                         <p className="mt-1 text-xs text-dsr-muted">Saving...</p>
@@ -630,13 +693,13 @@ const TaskTable = ({
                       )}
                     </div>
                     ) : (
-                      <span className="whitespace-pre-wrap break-words">{item.action || "-"}</span>
+                      <TaskCellPreview text={item.action || "-"} />
                     )}
                   </td>
-                <td className="px-1.5 py-2 align-top">
+                <td className="px-1.5 py-2 align-top text-center">
                   {editableStatus && Number(item.submitted_to_hr) !== 1 ? (
                     <select
-                      className={`w-full max-w-[104px] rounded-md px-2 py-1 text-[12px] font-semibold ${statusClass[item.status] || "bg-slate-100 text-slate-700"}`}
+                      className={`mx-auto w-full max-w-[104px] rounded-md px-2 py-1 text-[12px] font-semibold ${statusClass[item.status] || "bg-slate-100 text-slate-700"}`}
                       value={item.status}
                       onChange={(event) =>
                         onStatusChange(
@@ -658,10 +721,10 @@ const TaskTable = ({
                     </span>
                   )}
                 </td>
-                <td className="px-1.5 py-2 align-top">
+                <td className="px-1.5 py-2 align-top text-center">
                   {editableStatus && Number(item.submitted_to_hr) !== 1 ? (
                     <select
-                      className={`w-full max-w-[96px] rounded-md px-2 py-1 text-[12px] font-semibold ${priorityClass[item.priority] || "bg-slate-100 text-slate-700"}`}
+                      className={`mx-auto w-full max-w-[96px] rounded-md px-2 py-1 text-[12px] font-semibold ${priorityClass[item.priority] || "bg-slate-100 text-slate-700"}`}
                       value={item.priority || "Medium"}
                       onChange={(event) => {
                         if (onPriorityChange) {
@@ -715,13 +778,11 @@ const TaskTable = ({
                           }}
                         />
                       ) : (
-                        <button
-                          type="button"
-                          className="w-full rounded-md px-2.5 py-1.5 text-left text-[13px] text-slate-700"
-                          onClick={() => setDependencyActive(item.id, true)}
-                        >
-                          {getDependencyValue(item) || "-"}
-                        </button>
+                        <TaskCellPreview
+                          text={getDependencyValue(item)}
+                          interactive
+                          onEdit={() => setDependencyActive(item.id, true)}
+                        />
                       )}
                       {dependencyMeta[item.id]?.state === "saving" && (
                         <p className="mt-1 text-xs text-dsr-muted">Saving...</p>
@@ -734,13 +795,13 @@ const TaskTable = ({
                       )}
                     </div>
                   ) : (
-                    <span className="break-words">{item.dependency || "-"}</span>
+                    <TaskCellPreview text={item.dependency || "-"} />
                   )}
                 </td>
-                {showAssignee && <td className="px-2.5 py-2 align-top">{item.assigned_to_name || "-"}</td>}
-                {showAssigner && <td className="px-2.5 py-2 align-top">{item.assigned_by_name || "-"}</td>}
+                {showAssignee && <td className="px-2.5 py-2 align-top text-center">{item.assigned_to_name || "-"}</td>}
+                {showAssigner && <td className="px-2.5 py-2 align-top text-center">{item.assigned_by_name || "-"}</td>}
                 {showSubmitToHr && (
-                  <td className="px-2.5 py-2 align-top">
+                  <td className="px-2.5 py-2 align-top text-center">
                     {Number(item.submitted_to_hr) === 1 ? (
                       <span className="rounded-md bg-rose-100 px-2 py-1 text-xs font-semibold text-rose-800">
                         Submitted
@@ -758,13 +819,13 @@ const TaskTable = ({
                   </td>
                 )}
                 {showReassign && (
-                  <td className="px-2.5 py-2 align-top">
+                  <td className="px-2.5 py-2 align-top text-center">
                     {isCompletedTask ? (
                       <span className="text-xs text-slate-500">-</span>
                     ) : (
                       <button
                         type="button"
-                        className="btn-secondary whitespace-nowrap px-2.5 py-1.5 text-[13px]"
+                        className="btn-secondary inline-flex w-[74px] justify-center whitespace-nowrap px-0 py-1.5 text-[13px]"
                         disabled={!onReassign || reassigningTaskId === item.id}
                         onClick={() => openReassignModal(item)}
                       >
@@ -773,7 +834,7 @@ const TaskTable = ({
                     )}
                   </td>
                 )}
-                <td className="px-2.5 py-2 whitespace-nowrap align-top text-[12px] leading-tight">
+                <td className="px-2.5 py-2 whitespace-nowrap align-top text-center text-[12px] leading-tight">
                   {assignedAt ? (
                     <div>
                       <p>{assignedAt.date}</p>
@@ -789,7 +850,7 @@ const TaskTable = ({
                     </div>
                   )}
                 </td>
-                <td className="px-2.5 py-2 whitespace-nowrap align-top text-[12px] leading-tight">
+                <td className="px-2.5 py-2 whitespace-nowrap align-top text-center text-[12px] leading-tight">
                   {item.status === "Completed" && completedAt ? (
                     <div>
                       <p>{completedAt.date}</p>

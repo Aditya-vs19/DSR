@@ -3,6 +3,9 @@ import Charts from "../components/Charts";
 import ConfirmDialog from "../components/ConfirmDialog";
 import EmployeeTaskFilters from "../components/EmployeeTaskFilters";
 import PendingTasksSummary from "../components/PendingTasksSummary";
+import ProfileMenu from "../components/ProfileMenu";
+import ProfileSection from "../components/ProfileSection";
+import ReportPage from "./ReportPage";
 import TaskTable from "../components/TaskTable";
 import logo from "../assets/logo.png";
 import { useAuth } from "../context/AuthContext";
@@ -10,7 +13,7 @@ import useScrollHeader from "../hooks/useScrollHeader";
 import { authApi, reportApi, taskApi } from "../services/api";
 import { toTeamLabel } from "../utils/teamLabel";
 
-const TABS = ["Overview", "Tasks", "Profile"];
+const TABS = ["Overview", "Tasks", "Reports"];
 const PERIOD_OPTIONS = [
   { value: "all", label: "All Time" },
   { value: "today", label: "Today (Default)" },
@@ -552,7 +555,7 @@ const EmployeeDashboard = () => {
             <img
               src={logo}
               alt="DSR Management Logo"
-              className="h-16 w-[220px] shrink-0 object-cover object-left"
+              className="h-14 w-[260px] shrink-0 object-contain object-left"
             />
           </div>
 
@@ -574,10 +577,6 @@ const EmployeeDashboard = () => {
           </nav>
 
           <div className="flex items-center gap-3">
-            <div className="text-right">
-              <p className="text-sm font-bold capitalize">{user?.name}</p>
-              <p className="text-xs uppercase tracking-wide text-dsr-muted">{toTeamLabel(user?.team) || "Employee"}</p>
-            </div>
             <button
               type="button"
               onClick={() => setActiveTab("Notifications")}
@@ -590,9 +589,12 @@ const EmployeeDashboard = () => {
               </svg>
               {unreadCount > 0 && <span className="absolute right-2 top-2 h-2.5 w-2.5 rounded-full bg-rose-500" />}
             </button>
-            <button className="btn-secondary" type="button" onClick={logout}>
-              Logout
-            </button>
+            <ProfileMenu
+              user={user}
+              onOpenProfile={() => setActiveTab("Profile")}
+              onLogout={logout}
+              label={toTeamLabel(user?.team) || "Employee"}
+            />
           </div>
         </div>
       </header>
@@ -601,7 +603,7 @@ const EmployeeDashboard = () => {
         <div className="grid gap-3 lg:hidden">
           <select
             className="input"
-            value={TABS.includes(activeTab) ? activeTab : "Overview"}
+            value={TABS.includes(activeTab) || activeTab === "Profile" ? activeTab : "Overview"}
             onChange={(event) => setActiveTab(event.target.value)}
           >
             {TABS.map((tab) => (
@@ -609,6 +611,7 @@ const EmployeeDashboard = () => {
                 {tab}
               </option>
             ))}
+            <option value="Profile">Profile</option>
           </select>
         </div>
 
@@ -838,67 +841,22 @@ const EmployeeDashboard = () => {
           </section>
         )}
 
-        {activeTab === "Profile" && (
+        {activeTab === "Reports" && (
           <section className="space-y-4">
-            <div className="card-green">
-              <h2 className="mb-4 text-2xl font-bold">Profile</h2>
-              <div className="grid gap-3 rounded-xl border border-dsr-border/70 bg-white/60 p-4 text-sm md:grid-cols-2">
-                <p><span className="font-semibold">Name:</span> {user?.name}</p>
-                <p><span className="font-semibold">Role:</span> {String(user?.role || "").toUpperCase()}</p>
-                <p><span className="font-semibold">Email:</span> {user?.email}</p>
-                <p><span className="font-semibold">Department:</span> {toTeamLabel(user?.team) || "-"}</p>
-              </div>
-            </div>
-
-            <form className="card" onSubmit={handlePasswordChange}>
-              <h2 className="mb-4 text-2xl font-bold">Settings - Change Password</h2>
-              <div className="grid gap-3 md:grid-cols-2">
-                <div className="md:col-span-2">
-                  <label className="mb-1 block text-sm font-semibold text-slate-900">Current Password</label>
-                  <input
-                    className="input"
-                    type="password"
-                    value={passwordForm.currentPassword}
-                    onChange={(event) =>
-                      setPasswordForm((prev) => ({ ...prev, currentPassword: event.target.value }))
-                    }
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-sm font-semibold text-slate-900">New Password</label>
-                  <input
-                    className="input"
-                    type="password"
-                    value={passwordForm.newPassword}
-                    onChange={(event) =>
-                      setPasswordForm((prev) => ({ ...prev, newPassword: event.target.value }))
-                    }
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-sm font-semibold text-slate-900">Confirm Password</label>
-                  <input
-                    className="input"
-                    type="password"
-                    value={passwordForm.confirmPassword}
-                    onChange={(event) =>
-                      setPasswordForm((prev) => ({ ...prev, confirmPassword: event.target.value }))
-                    }
-                    required
-                  />
-                </div>
-
-                {passwordError && <p className="md:col-span-2 text-sm text-rose-600">{passwordError}</p>}
-                {passwordMessage && <p className="md:col-span-2 text-sm text-emerald-700">{passwordMessage}</p>}
-
-                <button className="btn-primary md:col-span-2 w-fit" type="submit">
-                  Update Password
-                </button>
-              </div>
-            </form>
+            <ReportPage role="employee" initialDate={todayText} initialDateRange="week" />
           </section>
+        )}
+
+        {activeTab === "Profile" && (
+          <ProfileSection
+            user={user}
+            departmentLabel={toTeamLabel(user?.team) || "-"}
+            passwordForm={passwordForm}
+            onPasswordFormChange={(field, value) => setPasswordForm((prev) => ({ ...prev, [field]: value }))}
+            onSubmit={handlePasswordChange}
+            passwordError={passwordError}
+            passwordMessage={passwordMessage}
+          />
         )}
 
         {loading && <p className="text-sm text-dsr-muted">Refreshing dashboard data...</p>}

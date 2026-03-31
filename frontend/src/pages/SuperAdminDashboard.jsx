@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Charts from "../components/Charts";
+import ProfileMenu from "../components/ProfileMenu";
+import ProfileSection from "../components/ProfileSection";
 import ReportPage from "./ReportPage";
 import TaskTable from "../components/TaskTable";
 import logo from "../assets/logo.png";
@@ -8,7 +10,7 @@ import useScrollHeader from "../hooks/useScrollHeader";
 import { authApi, reportApi, taskApi } from "../services/api";
 import { toTeamLabel } from "../utils/teamLabel";
 
-const TABS = ["Overview", "Tasks", "Employees", "Reports", "Profile"];
+const TABS = ["Overview", "Tasks", "Employees", "Reports"];
 
 const defaultAnalytics = { tasksPerTeam: [], completionRate: 0, topPerformers: [] };
 
@@ -200,6 +202,56 @@ const SuperAdminDashboard = () => {
     });
   }, [users, usersFilter, filters.team]);
 
+  const profileDepartmentLabel = useMemo(() => {
+    const normalizedTeam = String(user?.team || "").trim().toLowerCase();
+
+    if (["hr", "human resource", "human resources"].includes(normalizedTeam)) {
+      return "Human Resource";
+    }
+
+    return "Company Wide Access";
+  }, [user?.team]);
+
+  const overviewScopedUsers = useMemo(() => {
+    return users.filter((entry) => {
+      if (!["employee", "admin"].includes(entry.role)) {
+        return false;
+      }
+
+      if (filters.team === "all") {
+        return true;
+      }
+
+      return entry.team === filters.team;
+    });
+  }, [filters.team, users]);
+
+  const dailyOverviewTasks = useMemo(() => {
+    return tasks.filter((item) => {
+      const taskDepartment = resolveTaskDepartment(item);
+      const teamMatch = filters.team === "all" || taskDepartment === filters.team;
+      const taskDate = (item.created_at || "").slice(0, 10);
+      const dateMatch = !filters.date || taskDate === filters.date;
+      return teamMatch && dateMatch;
+    });
+  }, [filters.date, filters.team, tasks, users]);
+
+  const dailyOverviewCompletedTasks = useMemo(
+    () =>
+      dailyOverviewTasks.filter(
+        (item) => String(item.raw_status || item.status || "").toLowerCase() === "completed"
+      ).length,
+    [dailyOverviewTasks]
+  );
+
+  const dailyOverviewCompletionRate = useMemo(() => {
+    if (!dailyOverviewTasks.length) {
+      return 0;
+    }
+
+    return Number(((dailyOverviewCompletedTasks / dailyOverviewTasks.length) * 100).toFixed(2));
+  }, [dailyOverviewCompletedTasks, dailyOverviewTasks.length]);
+
   const unreadCount = useMemo(
     () => notifications.filter((entry) => !entry.is_read).length,
     [notifications]
@@ -272,14 +324,54 @@ const SuperAdminDashboard = () => {
   }, [filters.date, filters.team, tasks, users]);
 
   const filteredTopPerformers = useMemo(() => {
-    const performers = analytics.topPerformers || [];
+    const performerMap = new Map();
 
-    if (filters.team === "all") {
-      return performers;
-    }
+    users
+      .filter((item) => item.role === "employee" && (filters.team === "all" || item.team === filters.team))
+      .forEach((item) => {
+        performerMap.set(Number(item.id), {
+          id: item.id,
+          name: item.name,
+          team: item.team,
+          completed_tasks: 0,
+          total_tasks: 0,
+          productivity_score: 0
+        });
+      });
 
-    return performers.filter((item) => item.team === filters.team);
-  }, [analytics.topPerformers, filters.team]);
+    tasks.forEach((task) => {
+      const assigneeId = Number(task.assigned_to);
+      const performer = performerMap.get(assigneeId);
+      if (!performer) {
+        return;
+      }
+
+      performer.total_tasks += 1;
+
+      if (String(task.raw_status || task.status || "").toLowerCase() === "completed") {
+        performer.completed_tasks += 1;
+      }
+    });
+
+    return Array.from(performerMap.values())
+      .map((item) => ({
+        ...item,
+        productivity_score:
+          item.total_tasks > 0 ? Number(((item.completed_tasks / item.total_tasks) * 100).toFixed(2)) : 0
+      }))
+      .sort((left, right) => {
+        if (right.productivity_score !== left.productivity_score) {
+          return right.productivity_score - left.productivity_score;
+        }
+
+        if (right.completed_tasks !== left.completed_tasks) {
+          return right.completed_tasks - left.completed_tasks;
+        }
+
+        return left.name.localeCompare(right.name);
+      })
+      .slice(0, 10);
+  }, [filters.team, tasks, users]);
 
   const statusComparisonChartData = useMemo(() => {
     const scopeTasks = tasks.filter((task) => {
@@ -539,7 +631,7 @@ const SuperAdminDashboard = () => {
             <img
               src={logo}
               alt="DSR Management Logo"
-              className="h-16 w-[220px] shrink-0 object-cover object-left"
+              className="h-14 w-[260px] shrink-0 object-contain object-left"
             />
           </div>
 
@@ -561,10 +653,6 @@ const SuperAdminDashboard = () => {
           </nav>
 
           <div className="flex items-center gap-3">
-            <div className="text-right">
-              <p className="text-sm font-bold capitalize text-dsr-ink">{user?.name}</p>
-              <p className="text-xs uppercase tracking-wide text-dsr-muted">{user?.role}</p>
-            </div>
             <button
               type="button"
               onClick={() => setActiveTab("Notifications")}
@@ -577,9 +665,12 @@ const SuperAdminDashboard = () => {
               </svg>
               {unreadCount > 0 && <span className="absolute right-2 top-2 h-2.5 w-2.5 rounded-full bg-rose-500" />}
             </button>
-            <button type="button" onClick={logout} className="btn-secondary">
-              Logout
-            </button>
+            <ProfileMenu
+              user={user}
+              onOpenProfile={() => setActiveTab("Profile")}
+              onLogout={logout}
+              label="HR"
+            />
           </div>
         </div>
       </header>
@@ -588,7 +679,7 @@ const SuperAdminDashboard = () => {
         <div className="grid gap-3 lg:hidden">
           <select
             className="input"
-            value={TABS.includes(activeTab) ? activeTab : "Overview"}
+            value={TABS.includes(activeTab) || activeTab === "Profile" ? activeTab : "Overview"}
             onChange={(event) => setActiveTab(event.target.value)}
           >
             {TABS.map((tab) => (
@@ -596,6 +687,7 @@ const SuperAdminDashboard = () => {
                 {tab}
               </option>
             ))}
+            <option value="Profile">Profile</option>
           </select>
         </div>
 
@@ -604,21 +696,21 @@ const SuperAdminDashboard = () => {
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
               <div>
                 <p className="text-xs uppercase tracking-wide text-dsr-muted">Employees</p>
-                <h3 className="text-3xl font-extrabold">{users.length}</h3>
+                <h3 className="text-3xl font-extrabold">{overviewScopedUsers.length}</h3>
               </div>
               <div>
                 <p className="text-xs uppercase tracking-wide text-dsr-muted">Tasks</p>
-                <h3 className="text-3xl font-extrabold">{tasks.length}</h3>
+                <h3 className="text-3xl font-extrabold">{dailyOverviewTasks.length}</h3>
               </div>
               <div>
                 <p className="text-xs uppercase tracking-wide text-dsr-muted">Completed Tasks</p>
                 <h3 className="text-3xl font-extrabold text-emerald-700">
-                  {tasks.filter((item) => String(item.raw_status || item.status || "").toLowerCase() === "completed").length}
+                  {dailyOverviewCompletedTasks}
                 </h3>
               </div>
               <div>
                 <p className="text-xs uppercase tracking-wide text-dsr-muted">Completion Rate</p>
-                <h3 className="text-3xl font-extrabold text-dsr-brand">{analytics.completionRate || 0}%</h3>
+                <h3 className="text-3xl font-extrabold text-dsr-brand">{dailyOverviewCompletionRate}%</h3>
               </div>
             </div>
           </section>
@@ -743,6 +835,8 @@ const SuperAdminDashboard = () => {
                 labels={filteredTopPerformers.map((item) => item.name)}
                 values={filteredTopPerformers.map((item) => Number(item.productivity_score || 0))}
                 color="rgba(95, 157, 114, 0.85)"
+                yAxisTitle="Productivity Score"
+                yTickStep={5}
               />
               {filters.team === "all" && (
                 <Charts
@@ -1025,66 +1119,16 @@ const SuperAdminDashboard = () => {
         )}
 
         {activeTab === "Profile" && (
-          <section className="space-y-4">
-            <div className="card-green">
-              <h2 className="mb-4 text-2xl font-bold">Profile</h2>
-              <div className="grid gap-3 rounded-xl border border-dsr-border/70 bg-white/60 p-4 text-sm md:grid-cols-2">
-                <p><span className="font-semibold">Name:</span> {user?.name}</p>
-                <p><span className="font-semibold">Role:</span> {String(user?.role || "").toUpperCase()}</p>
-                <p><span className="font-semibold">Email:</span> {user?.email}</p>
-                <p><span className="font-semibold">Department:</span> {user?.team || "-"}</p>
-              </div>
-            </div>
-
-            <form className="card" onSubmit={handlePasswordChange}>
-              <h2 className="mb-4 text-2xl font-bold">Settings - Change Password</h2>
-              <div className="grid gap-3 md:grid-cols-2">
-                <div className="md:col-span-2">
-                  <label className="mb-1 block text-sm font-semibold text-slate-900">Current Password</label>
-                  <input
-                    className="input"
-                    type="password"
-                    value={passwordForm.currentPassword}
-                    onChange={(event) =>
-                      setPasswordForm((prev) => ({ ...prev, currentPassword: event.target.value }))
-                    }
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-sm font-semibold text-slate-900">New Password</label>
-                  <input
-                    className="input"
-                    type="password"
-                    value={passwordForm.newPassword}
-                    onChange={(event) =>
-                      setPasswordForm((prev) => ({ ...prev, newPassword: event.target.value }))
-                    }
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-sm font-semibold text-slate-900">Confirm Password</label>
-                  <input
-                    className="input"
-                    type="password"
-                    value={passwordForm.confirmPassword}
-                    onChange={(event) =>
-                      setPasswordForm((prev) => ({ ...prev, confirmPassword: event.target.value }))
-                    }
-                    required
-                  />
-                </div>
-
-                {passwordError && <p className="md:col-span-2 text-sm text-rose-600">{passwordError}</p>}
-                {passwordMessage && <p className="md:col-span-2 text-sm text-emerald-700">{passwordMessage}</p>}
-
-                <button className="btn-primary md:col-span-2 w-fit" type="submit">
-                  Update Password
-                </button>
-              </div>
-            </form>
-          </section>
+          <ProfileSection
+            user={user}
+            departmentLabel={profileDepartmentLabel}
+            showDepartment={false}
+            passwordForm={passwordForm}
+            onPasswordFormChange={(field, value) => setPasswordForm((prev) => ({ ...prev, [field]: value }))}
+            onSubmit={handlePasswordChange}
+            passwordError={passwordError}
+            passwordMessage={passwordMessage}
+          />
         )}
 
         {busy && <p className="text-sm text-dsr-muted">Refreshing dashboard data...</p>}

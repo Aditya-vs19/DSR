@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Charts from "../components/Charts";
 import Navbar from "../components/Navbar";
+import ProfileSection from "../components/ProfileSection";
 import Sidebar from "../components/Sidebar";
 import { useAuth } from "../context/AuthContext";
 import { authApi, reportApi, taskApi } from "../services/api";
@@ -28,6 +29,7 @@ const HRDashboard = () => {
   });
   const [passwordMessage, setPasswordMessage] = useState("");
   const [passwordError, setPasswordError] = useState("");
+  const profileSectionRef = useRef(null);
 
   const loadData = async () => {
     setLoading(true);
@@ -115,6 +117,10 @@ const HRDashboard = () => {
     return acc;
   }, {});
 
+  const handleOpenProfile = () => {
+    profileSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
   return (
     <div className="min-h-screen bg-slate-100">
       <Sidebar role={user.role} open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
@@ -123,6 +129,8 @@ const HRDashboard = () => {
           title="HR Dashboard"
           notifications={notifications}
           onToggleSidebar={() => setSidebarOpen((prev) => !prev)}
+          onOpenProfile={handleOpenProfile}
+          profileLabel="HR"
         />
 
         <main className="space-y-4 p-4">
@@ -303,66 +311,17 @@ const HRDashboard = () => {
             color="rgba(16, 185, 129, 0.8)"
           />
 
-          <section className="space-y-4">
-            <div className="card-green">
-              <h2 className="mb-4 text-2xl font-bold">Profile</h2>
-              <div className="grid gap-3 rounded-xl border border-slate-200 bg-white/60 p-4 text-sm md:grid-cols-2">
-                <p><span className="font-semibold">Name:</span> {user?.name}</p>
-                <p><span className="font-semibold">Role:</span> {String(user?.role || "").toUpperCase()}</p>
-                <p><span className="font-semibold">Email:</span> {user?.email}</p>
-                <p><span className="font-semibold">Department:</span> {user?.team || "-"}</p>
-              </div>
-            </div>
-
-            <form className="card" onSubmit={handlePasswordChange}>
-              <h2 className="mb-4 text-2xl font-bold">Settings - Change Password</h2>
-              <div className="grid gap-3 md:grid-cols-2">
-                <div className="md:col-span-2">
-                  <label className="mb-1 block text-sm font-semibold text-slate-900">Current Password</label>
-                  <input
-                    className="input"
-                    type="password"
-                    value={passwordForm.currentPassword}
-                    onChange={(event) =>
-                      setPasswordForm((prev) => ({ ...prev, currentPassword: event.target.value }))
-                    }
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-sm font-semibold text-slate-900">New Password</label>
-                  <input
-                    className="input"
-                    type="password"
-                    value={passwordForm.newPassword}
-                    onChange={(event) =>
-                      setPasswordForm((prev) => ({ ...prev, newPassword: event.target.value }))
-                    }
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-sm font-semibold text-slate-900">Confirm Password</label>
-                  <input
-                    className="input"
-                    type="password"
-                    value={passwordForm.confirmPassword}
-                    onChange={(event) =>
-                      setPasswordForm((prev) => ({ ...prev, confirmPassword: event.target.value }))
-                    }
-                    required
-                  />
-                </div>
-
-                {passwordError && <p className="md:col-span-2 text-sm text-rose-600">{passwordError}</p>}
-                {passwordMessage && <p className="md:col-span-2 text-sm text-emerald-700">{passwordMessage}</p>}
-
-                <button className="btn-primary md:col-span-2 w-fit" type="submit">
-                  Update Password
-                </button>
-              </div>
-            </form>
-          </section>
+          <div ref={profileSectionRef}>
+            <ProfileSection
+              user={user}
+              departmentLabel="Human Resource"
+              passwordForm={passwordForm}
+              onPasswordFormChange={(field, value) => setPasswordForm((prev) => ({ ...prev, [field]: value }))}
+              onSubmit={handlePasswordChange}
+              passwordError={passwordError}
+              passwordMessage={passwordMessage}
+            />
+          </div>
         </main>
       </div>
     </div>

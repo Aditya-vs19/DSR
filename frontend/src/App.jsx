@@ -3,6 +3,7 @@ import { useAuth } from "./context/AuthContext";
 import AdminDashboard from "./pages/AdminDashboard";
 import EmployeeDashboard from "./pages/EmployeeDashboard";
 import HRDashboard from "./pages/HRDashboard";
+import useAutoCapitalizeInputs from "./hooks/useAutoCapitalizeInputs";
 import Login from "./pages/Login";
 import SuperAdminDashboard from "./pages/SuperAdminDashboard";
 
@@ -40,6 +41,8 @@ const RootRedirect = () => {
 };
 
 const App = () => {
+  useAutoCapitalizeInputs();
+
   return (
     <Routes>
       <Route path="/" element={<RootRedirect />} />

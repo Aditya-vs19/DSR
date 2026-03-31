@@ -24,11 +24,15 @@ const Charts = ({
   color = "rgba(79, 70, 229, 0.8)",
   barWidth = 50,
   xAxisTitle = "",
-  yAxisTitle = ""
+  yAxisTitle = "",
+  yTickStep = 1
 }) => {
   const isCircular = type === "pie" || type === "donut";
   const hasCustomDatasets = Array.isArray(datasets) && datasets.length > 0;
   const renderedValues = chartValues || values;
+  const hasChartData = Array.isArray(renderedValues)
+    ? renderedValues.some((value) => Number(value || 0) > 0)
+    : false;
   const renderedDatasets = hasCustomDatasets
     ? datasets.map((entry) => ({
         tension: 2,
@@ -118,13 +122,26 @@ const Charts = ({
                 text: yAxisTitle
               },
               ticks: {
-                stepSize: 1,
+                stepSize: yTickStep,
                 precision: 0
               }
             }
           }
         })
   };
+
+  if (type === "donut" && !hasChartData) {
+    return (
+      <div className="card">
+        <div className="flex h-[340px] w-full flex-col items-center justify-center rounded-2xl border border-dashed border-dsr-border bg-dsr-soft/40 px-6 text-center">
+          <h3 className="text-lg font-semibold text-dsr-ink">{title}</h3>
+          <p className="mt-3 max-w-xs text-sm leading-6 text-dsr-muted">
+            No tasks completed yet today. The pie chart will appear here once completed tasks are available.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="card">

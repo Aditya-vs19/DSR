@@ -87,7 +87,7 @@ function ReportTaskDetailTable({ tasks = [], dateRange = "week" }) {
             <th className="border-b border-slate-200 px-3 py-3 text-left font-semibold text-slate-700">Task</th>
             <th className="border-b border-slate-200 px-3 py-3 text-left font-semibold text-slate-700">Action</th>
             <th className="border-b border-slate-200 px-3 py-3 text-left font-semibold text-slate-700">Status</th>
-            <th className="border-b border-slate-200 px-3 py-3 text-left font-semibold text-slate-700">Dependency</th>
+            <th className="border-b border-slate-200 px-3 py-3 text-left font-semibold text-slate-700">Dependency / Remark</th>
             <th className="border-b border-slate-200 px-3 py-3 text-left font-semibold text-slate-700">Assigned By</th>
             <th className="border-b border-slate-200 px-3 py-3 text-left font-semibold text-slate-700">Created At</th>
             <th className="border-b border-slate-200 px-3 py-3 text-left font-semibold text-slate-700">Completed At</th>

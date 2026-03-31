@@ -59,11 +59,11 @@ const Login = () => {
           </div>
         </section>
 
-        <section className="relative flex items-center justify-center overflow-hidden bg-[#ABFFFB] px-5 py-8 sm:px-8 lg:px-12">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(255,255,255,0.95),_transparent_34%),radial-gradient(circle_at_bottom,_rgba(45,212,191,0.20),_transparent_38%),radial-gradient(circle_at_right,_rgba(251,191,36,0.12),_transparent_28%)]" />
+        <section className="relative flex items-center justify-center overflow-hidden bg-[#84c8ba] px-5 py-8 sm:px-8 lg:px-12">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_bottom,_rgba(45,212,191,0.20),_transparent_38%),radial-gradient(circle_at_right,_rgba(251,191,36,0.12),_transparent_28%)]" />
           <div className="absolute inset-0 opacity-40 [background-image:linear-gradient(120deg,rgba(255,255,255,0.45)_0%,rgba(255,255,255,0)_32%,rgba(255,255,255,0.26)_65%,rgba(255,255,255,0)_100%)]" />
 
-          <div className="relative z-10 w-full max-w-2xl">
+          <div className="relative z-10 w-full max-w-xl">
             <div className="mb-8 text-center lg:hidden">
               <p className="text-sm font-semibold uppercase tracking-[0.45em] text-[#128a97]">DSR Management</p>
               <h2 className="mt-3 text-3xl font-semibold tracking-tight text-slate-800">
@@ -72,13 +72,13 @@ const Login = () => {
             </div>
 
             <form
-              className="mx-auto w-full max-w-xl rounded-[30px] bg-white/95 p-6 shadow-[0_24px_60px_rgba(15,23,42,0.16)] ring-1 ring-white/70 backdrop-blur sm:p-8 lg:p-11"
+              className="mx-auto w-full max-w-lg rounded-[10px] bg-white/95 p-5 shadow-[0_24px_60px_rgba(15,23,42,0.16)] ring-1 ring-white/70 backdrop-blur sm:p-7 lg:p-8"
               onSubmit={handleSubmit}
             >
               <h1 className="text-3xl font-bold tracking-tight text-[#0f6171] sm:text-[2.2rem]">Welcome back</h1>
               <p className="mt-3 text-base text-slate-500">Sign in to continue to your dashboard</p>
 
-              <div className="mt-10 space-y-7">
+              <div className="mt-8 space-y-5">
                 <div>
                   <label className="mb-3 block text-sm font-semibold text-slate-700">Username</label>
                   <input
@@ -123,7 +123,7 @@ const Login = () => {
                 </div>
               </div>
 
-              <div className="mt-8 flex flex-col gap-4 text-sm text-slate-500 sm:flex-row sm:items-center sm:justify-between">
+              <div className="mt-6 flex flex-col gap-4 text-sm text-slate-500 sm:flex-row sm:items-center sm:justify-between">
                 <label className="inline-flex items-center gap-3">
                   <input
                     className="h-4 w-4 rounded border-slate-300 text-[#0f6171] focus:ring-[#0f6171]"
@@ -133,23 +133,19 @@ const Login = () => {
                   />
                   <span>Remember me</span>
                 </label>
-
-                <button className="text-left font-semibold text-[#0f7c7a] transition hover:text-[#0c6361] sm:text-right" type="button">
-                  Forgot password?
-                </button>
               </div>
 
               {error && <p className="mt-5 text-sm font-medium text-rose-600">{error}</p>}
 
               <button
-                className="mt-8 inline-flex w-full items-center justify-center rounded-2xl bg-[#2f2f2f] px-6 py-4 text-base font-semibold text-white shadow-[0_14px_24px_rgba(15,23,42,0.16)] transition hover:bg-[#232323] disabled:cursor-not-allowed disabled:opacity-70"
+                className="mt-6 inline-flex w-full items-center justify-center rounded-2xl bg-[#2f2f2f] px-6 py-3.5 text-base font-semibold text-white shadow-[0_14px_24px_rgba(15,23,42,0.16)] transition hover:bg-[#232323] disabled:cursor-not-allowed disabled:opacity-70"
                 type="submit"
                 disabled={loading}
               >
                 {loading ? "Signing in..." : "Sign In"}
               </button>
 
-              <div className="mt-10 border-t border-slate-200 pt-6 text-center text-sm text-slate-400">
+              <div className="mt-8 border-t border-slate-200 pt-5 text-center text-sm text-slate-400">
                 &copy; {new Date().getFullYear()} DSR Management. All rights reserved.
               </div>
             </form>

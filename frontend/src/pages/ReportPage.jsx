@@ -224,9 +224,10 @@ function ReportPage({
   autoGenerateToken = 0
 }) {
   const { user } = useAuth();
+  const isEmployeeView = role === "employee";
   const [dateRange, setDateRange] = useState(initialDateRange);
   const [date, setDate] = useState(initialDate || new Date().toISOString().slice(0, 10));
-  const [reportType, setReportType] = useState("received");
+  const [reportType, setReportType] = useState(role === "employee" ? "detailed" : "received");
   const [team, setTeam] = useState(initialTeam);
   const [selectedEmployeeIds, setSelectedEmployeeIds] = useState(() => {
     if (!initialEmployeeId || initialEmployeeId === "all") {
@@ -252,6 +253,10 @@ function ReportPage({
   const [holidayRemovingId, setHolidayRemovingId] = useState(null);
 
   const employeeOptions = useMemo(() => {
+    if (isEmployeeView) {
+      return [];
+    }
+
     const scoped =
       role === "admin" || team === "all"
         ? directoryUsers
@@ -262,7 +267,7 @@ function ReportPage({
       name: entry.name,
       team: toTeamLabel(entry.team)
     }));
-  }, [directoryUsers, role, team]);
+  }, [directoryUsers, isEmployeeView, role, team]);
 
   const teamOptions = useMemo(() => {
     const entries = new Set(directoryUsers.map((item) => item.team).filter(Boolean));
@@ -271,6 +276,23 @@ function ReportPage({
 
   useEffect(() => {
     const loadFilterOptions = async () => {
+      if (isEmployeeView) {
+        if (user?.id) {
+          setDirectoryUsers([
+            {
+              id: user.id,
+              name: user.name,
+              email: user.email,
+              role: user.role,
+              team: user.team
+            }
+          ]);
+        } else {
+          setDirectoryUsers([]);
+        }
+        return;
+      }
+
       try {
         const usersRes = role === "admin" ? await authApi.getDepartmentEmployees() : await authApi.getEmployees();
         const users = Array.isArray(usersRes.data) ? usersRes.data : [];
@@ -310,9 +332,23 @@ function ReportPage({
     };
 
     loadFilterOptions();
-  }, [role, user]);
+  }, [isEmployeeView, role, user]);
 
   useEffect(() => {
+    if (!isEmployeeView) {
+      return;
+    }
+
+    setReportType("detailed");
+    setTeam(user?.team || "all");
+    setSelectedEmployeeIds(user?.id ? [String(user.id)] : []);
+  }, [isEmployeeView, user]);
+
+  useEffect(() => {
+    if (isEmployeeView) {
+      return;
+    }
+
     if (!selectedEmployeeIds.length) {
       return;
     }
@@ -323,7 +359,7 @@ function ReportPage({
     if (scopedSelection.length !== selectedEmployeeIds.length) {
       setSelectedEmployeeIds(scopedSelection);
     }
-  }, [employeeOptions, selectedEmployeeIds]);
+  }, [employeeOptions, isEmployeeView, selectedEmployeeIds]);
 
   const loadHolidays = useCallback(async () => {
     if (role !== "superadmin") return;
@@ -345,13 +381,32 @@ function ReportPage({
     setMessage("");
 
     try {
-      const [tasksRes, usersRes] = await Promise.all([
-        taskApi.getTasks(),
-        role === "admin" ? authApi.getDepartmentEmployees() : authApi.getEmployees()
-      ]);
+      const requests = [taskApi.getTasks()];
+
+      if (!isEmployeeView) {
+        requests.push(role === "admin" ? authApi.getDepartmentEmployees() : authApi.getEmployees());
+      }
+
+      const responses = await Promise.all(requests);
+      const tasksRes = responses[0];
+      const usersRes = responses[1];
 
       const allTasks = Array.isArray(tasksRes.data) ? tasksRes.data : [];
-      const users = Array.isArray(usersRes.data) ? usersRes.data : [];
+      const users = isEmployeeView
+        ? user?.id
+          ? [
+              {
+                id: user.id,
+                name: user.name,
+                email: user.email,
+                role: user.role,
+                team: user.team
+              }
+            ]
+          : []
+        : Array.isArray(usersRes?.data)
+          ? usersRes.data
+          : [];
       const scopedUsers =
         role === "admin" && user?.id
           ? [
@@ -376,6 +431,10 @@ function ReportPage({
       const scopedDetailedTasks = allTasks
         .filter((entry) => taskFallsWithinRange(entry, startDate, endDate))
         .filter((entry) => {
+          if (isEmployeeView) {
+            return Number(entry.assigned_to) === Number(user?.id);
+          }
+
           if (team === "all") return true;
           return teamByUserId.get(String(entry.assigned_to)) === team;
         })
@@ -417,9 +476,9 @@ function ReportPage({
       );
 
       setDetailedSummary(taskSummary);
-      setTotalTasks(allTasks.length);
+      setTotalTasks(isEmployeeView ? scopedDetailedTasks.length : allTasks.length);
 
-      if (reportType === "detailed") {
+      if (reportType === "detailed" || isEmployeeView) {
         const startText = toDateText(startDate);
         const endText = toDateText(endDate);
         const reportLabel = startText === endText ? startText : `${startText} to ${endText}`;
@@ -453,7 +512,7 @@ function ReportPage({
     } finally {
       setLoading(false);
     }
-  }, [date, dateRange, reportType, role, selectedEmployeeIds, team, user]);
+  }, [date, dateRange, isEmployeeView, reportType, role, selectedEmployeeIds, team, user]);
 
   const handleCellChange = useCallback(
     async (reportId, status) => {
@@ -498,7 +557,7 @@ function ReportPage({
   );
 
   const handleExportXlsx = useCallback(() => {
-    if (reportType === "detailed") {
+    if (reportType === "detailed" || isEmployeeView) {
       if (!detailedTasks.length) {
         setMessage("Generate detailed report data before exporting.");
         return;
@@ -601,7 +660,13 @@ function ReportPage({
         const url = window.URL.createObjectURL(blob);
         const link = document.createElement("a");
         link.href = url;
-        link.download = `detailed-task-report-${date}.xlsx`;
+        const { startDate, endDate } = getDateBounds(dateRange, date);
+        const startText = toDateText(startDate);
+        const endText = toDateText(endDate);
+        const suffix = startText === endText ? startText : `${startText}-to-${endText}`;
+        link.download = isEmployeeView
+          ? `my-detailed-task-report-${suffix}.xlsx`
+          : `detailed-task-report-${suffix}.xlsx`;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
@@ -758,7 +823,7 @@ function ReportPage({
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
     });
-  }, [date, dateRange, detailedTasks, gridData.employees, gridData.rows, gridData.startDate, gridData.summary, reportType, totalTasks]);
+  }, [date, dateRange, detailedTasks, gridData.employees, gridData.rows, gridData.startDate, gridData.summary, isEmployeeView, reportType, totalTasks]);
 
   const handleSaveHoliday = useCallback(async () => {
     const dateValue = String(holidayForm.date || "").slice(0, 10);
@@ -822,17 +887,27 @@ function ReportPage({
   }, [initialDate]);
 
   useEffect(() => {
+    if (isEmployeeView) {
+      setTeam(user?.team || "all");
+      return;
+    }
+
     setTeam(initialTeam || "all");
-  }, [initialTeam]);
+  }, [initialTeam, isEmployeeView, user]);
 
   useEffect(() => {
+    if (isEmployeeView) {
+      setSelectedEmployeeIds(user?.id ? [String(user.id)] : []);
+      return;
+    }
+
     if (!initialEmployeeId || initialEmployeeId === "all") {
       setSelectedEmployeeIds([]);
       return;
     }
 
     setSelectedEmployeeIds([String(initialEmployeeId)]);
-  }, [initialEmployeeId]);
+  }, [initialEmployeeId, isEmployeeView, user]);
 
   useEffect(() => {
     if (autoGenerateToken > 0) {
@@ -847,6 +922,8 @@ function ReportPage({
         onReportTypeChange={setReportType}
         dateRange={dateRange}
         onDateRangeChange={setDateRange}
+        date={date}
+        onDateChange={setDate}
         team={team}
         onTeamChange={setTeam}
         teamOptions={teamOptions}
@@ -859,6 +936,10 @@ function ReportPage({
         summary={gridData.summary || { received: 0, notReceived: 0, leave: 0 }}
         totalTasks={totalTasks}
         detailedSummary={detailedSummary}
+        showReportType={!isEmployeeView}
+        showDateField
+        showTeamFilter={!isEmployeeView}
+        showEmployeeFilter={!isEmployeeView}
       />
 
       {role === "superadmin" ? (
@@ -943,7 +1024,7 @@ function ReportPage({
       {message ? <div className="rounded-lg bg-slate-100 px-3 py-2 text-sm text-slate-700">{message}</div> : null}
 
       <div className="bg-white">
-        {reportType === "received" ? (
+        {reportType === "received" && !isEmployeeView ? (
           <ReportGrid
             rows={gridData.rows}
             employees={gridData.employees}

@@ -3,6 +3,8 @@ import Charts from "../components/Charts";
 import AdminTaskFilters from "../components/AdminTaskFilters";
 import ConfirmDialog from "../components/ConfirmDialog";
 import PendingTasksSummary from "../components/PendingTasksSummary";
+import ProfileMenu from "../components/ProfileMenu";
+import ProfileSection from "../components/ProfileSection";
 import ReportPage from "./ReportPage";
 import TaskTable from "../components/TaskTable";
 import logo from "../assets/logo.png";
@@ -11,7 +13,7 @@ import useScrollHeader from "../hooks/useScrollHeader";
 import { authApi, reportApi, taskApi } from "../services/api";
 import { toTeamLabel } from "../utils/teamLabel";
 
-const TABS = ["Overview", "Tasks", "Employees", "Reports", "Profile"];
+const TABS = ["Overview", "Tasks", "Employees", "Reports"];
 
 const getManagedDepartmentLabel = (currentUser) => {
   const name = String(currentUser?.name || "").trim().toLowerCase();
@@ -120,6 +122,21 @@ const AdminDashboard = () => {
       return statusMatch && dateMatch && employeeMatch;
     });
   }, [tasks, filters]);
+
+  const overviewDate = useMemo(() => filters.date || todayText, [filters.date, todayText]);
+
+  const dailyOverviewTasks = useMemo(
+    () => tasks.filter((item) => (item.created_at || "").slice(0, 10) === overviewDate),
+    [overviewDate, tasks]
+  );
+
+  const dailyOverviewCompletedTasks = useMemo(
+    () =>
+      dailyOverviewTasks.filter(
+        (item) => String(item.raw_status || item.status || "").toLowerCase() === "completed"
+      ).length,
+    [dailyOverviewTasks]
+  );
 
   const employeeTaskStatusChart = useMemo(() => {
     const employeeRecords = employees.filter((item) => item.role === "employee");
@@ -484,7 +501,7 @@ const AdminDashboard = () => {
             <img
               src={logo}
               alt="DSR Management Logo"
-              className="h-16 w-[220px] shrink-0 object-cover object-left"
+              className="h-14 w-[260px] shrink-0 object-contain object-left"
             />
           </div>
 
@@ -506,10 +523,6 @@ const AdminDashboard = () => {
           </nav>
 
           <div className="flex items-center gap-3">
-            <div className="text-right">
-              <p className="text-sm font-bold capitalize">{user?.name}</p>
-              <p className="text-xs uppercase tracking-wide text-dsr-muted">{managedDepartmentLabel} Admin</p>
-            </div>
             <button
               type="button"
               onClick={() => setActiveTab("Notifications")}
@@ -522,9 +535,12 @@ const AdminDashboard = () => {
               </svg>
               {unreadCount > 0 && <span className="absolute right-2 top-2 h-2.5 w-2.5 rounded-full bg-rose-500" />}
             </button>
-            <button className="btn-secondary" type="button" onClick={logout}>
-              Logout
-            </button>
+            <ProfileMenu
+              user={user}
+              onOpenProfile={() => setActiveTab("Profile")}
+              onLogout={logout}
+              label={managedDepartmentLabel}
+            />
           </div>
         </div>
       </header>
@@ -533,7 +549,7 @@ const AdminDashboard = () => {
         <div className="grid gap-3 lg:hidden">
           <select
             className="input"
-            value={TABS.includes(activeTab) ? activeTab : "Overview"}
+            value={TABS.includes(activeTab) || activeTab === "Profile" ? activeTab : "Overview"}
             onChange={(event) => setActiveTab(event.target.value)}
           >
             {TABS.map((tab) => (
@@ -541,6 +557,7 @@ const AdminDashboard = () => {
                 {tab}
               </option>
             ))}
+            <option value="Profile">Profile</option>
           </select>
         </div>
 
@@ -557,12 +574,12 @@ const AdminDashboard = () => {
               </div>
               <div>
                 <p className="text-xs uppercase tracking-wide text-dsr-muted">Tasks</p>
-                <h3 className="text-3xl font-extrabold">{tasks.length}</h3>
+                <h3 className="text-3xl font-extrabold">{dailyOverviewTasks.length}</h3>
               </div>
               <div>
                 <p className="text-xs uppercase tracking-wide text-dsr-muted">Completed Tasks</p>
                 <h3 className="text-3xl font-extrabold text-emerald-700">
-                  {tasks.filter((item) => item.status === "Completed").length}
+                  {dailyOverviewCompletedTasks}
                 </h3>
               </div>
             </div>
@@ -911,66 +928,15 @@ const AdminDashboard = () => {
         )}
 
         {activeTab === "Profile" && (
-          <section className="space-y-4">
-            <div className="card-green">
-              <h2 className="mb-4 text-2xl font-bold">Profile</h2>
-              <div className="grid gap-3 rounded-xl border border-dsr-border/70 bg-white/60 p-4 text-sm md:grid-cols-2">
-                <p><span className="font-semibold">Name:</span> {user?.name}</p>
-                <p><span className="font-semibold">Role:</span> {String(user?.role || "").toUpperCase()}</p>
-                <p><span className="font-semibold">Email:</span> {user?.email}</p>
-                <p><span className="font-semibold">Department:</span> {managedDepartmentLabel}</p>
-              </div>
-            </div>
-
-              <form className="card" onSubmit={handlePasswordChange}>
-                <h2 className="mb-4 text-2xl font-bold">Settings - Change Password</h2>
-                <div className="grid gap-3 md:grid-cols-2">
-                  <div className="md:col-span-2">
-                    <label className="mb-1 block text-sm font-semibold text-slate-900">Current Password</label>
-                    <input
-                      className="input"
-                      type="password"
-                      value={passwordForm.currentPassword}
-                      onChange={(event) =>
-                        setPasswordForm((prev) => ({ ...prev, currentPassword: event.target.value }))
-                      }
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-sm font-semibold text-slate-900">New Password</label>
-                    <input
-                      className="input"
-                      type="password"
-                      value={passwordForm.newPassword}
-                      onChange={(event) =>
-                        setPasswordForm((prev) => ({ ...prev, newPassword: event.target.value }))
-                      }
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-sm font-semibold text-slate-900">Confirm Password</label>
-                    <input
-                      className="input"
-                      type="password"
-                      value={passwordForm.confirmPassword}
-                      onChange={(event) =>
-                        setPasswordForm((prev) => ({ ...prev, confirmPassword: event.target.value }))
-                      }
-                      required
-                    />
-                  </div>
-
-                  {passwordError && <p className="md:col-span-2 text-sm text-rose-600">{passwordError}</p>}
-                  {passwordMessage && <p className="md:col-span-2 text-sm text-emerald-700">{passwordMessage}</p>}
-
-                  <button className="btn-primary md:col-span-2 w-fit" type="submit">
-                    Update Password
-                  </button>
-                </div>
-              </form>
-          </section>
+          <ProfileSection
+            user={user}
+            departmentLabel={managedDepartmentLabel}
+            passwordForm={passwordForm}
+            onPasswordFormChange={(field, value) => setPasswordForm((prev) => ({ ...prev, [field]: value }))}
+            onSubmit={handlePasswordChange}
+            passwordError={passwordError}
+            passwordMessage={passwordMessage}
+          />
         )}
 
         {loading && <p className="text-sm text-dsr-muted">Refreshing dashboard data...</p>}
