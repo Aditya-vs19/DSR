@@ -1,4 +1,4 @@
-# Daily Service Report (DSR) Management System
+# Daily Status Report (DSR) Management System
 
 This workspace now contains a full-stack DSR system with role-based access:
 
