@@ -37,6 +37,7 @@ export const authApi = {
 export const taskApi = {
   createTask: (payload) => api.post("/tasks", payload),
   getTasks: () => api.get("/tasks"),
+  deleteTask: (id) => api.delete(`/tasks/${id}`),
   updateTask: (id, payload) => api.put(`/tasks/${id}`, payload),
   updateTaskPriority: (id, payload) => api.put(`/tasks/${id}/priority`, payload),
   reassignTask: (id, payload) => api.put(`/tasks/${id}/reassign`, payload),

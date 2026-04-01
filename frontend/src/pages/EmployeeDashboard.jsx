@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Charts from "../components/Charts";
 import ConfirmDialog from "../components/ConfirmDialog";
+import CreateTaskModal from "../components/CreateTaskModal";
 import EmployeeTaskFilters from "../components/EmployeeTaskFilters";
 import PendingTasksSummary from "../components/PendingTasksSummary";
 import ProfileMenu from "../components/ProfileMenu";
@@ -11,6 +12,8 @@ import logo from "../assets/logo.png";
 import { useAuth } from "../context/AuthContext";
 import useScrollHeader from "../hooks/useScrollHeader";
 import { authApi, reportApi, taskApi } from "../services/api";
+import { collapseTaskLineages } from "../utils/taskLineage";
+import { getTaskDateText, getTodayText, TASK_DEPARTMENTS } from "../utils/taskMeta";
 import { toTeamLabel } from "../utils/teamLabel";
 
 const TABS = ["Overview", "Tasks", "Reports"];
@@ -22,11 +25,7 @@ const PERIOD_OPTIONS = [
   { value: "custom", label: "Custom Date" }
 ];
 
-const getLocalDateText = (date = new Date()) => {
-  const copy = new Date(date);
-  copy.setMinutes(copy.getMinutes() - copy.getTimezoneOffset());
-  return copy.toISOString().slice(0, 10);
-};
+const getLocalDateText = (date = new Date()) => getTodayText(date);
 
 const formatChartDateLabel = (date) => {
   const day = String(date.getDate()).padStart(2, "0");
@@ -83,13 +82,16 @@ const EmployeeDashboard = () => {
   const [submittingReport, setSubmittingReport] = useState(false);
   const [isSubmitConfirmOpen, setIsSubmitConfirmOpen] = useState(false);
   const [submitMessage, setSubmitMessage] = useState("");
+  const [isCreateTaskModalOpen, setIsCreateTaskModalOpen] = useState(false);
   const [form, setForm] = useState({
     client: "",
     task: "",
     action: "",
     dependency: "",
     deadline: "",
-    priority: "Medium"
+    priority: "Medium",
+    taskDepartment: String(user?.team || "").trim(),
+    taskDate: todayText
   });
   const [error, setError] = useState("");
   const [passwordForm, setPasswordForm] = useState({
@@ -129,6 +131,20 @@ const EmployeeDashboard = () => {
   }, []);
 
   useEffect(() => {
+    if (!user?.team) {
+      return;
+    }
+
+    setForm((prev) => ({
+      ...prev,
+      taskDepartment: prev.taskDepartment || String(user.team).trim(),
+      taskDate: prev.taskDate || todayText
+    }));
+  }, [todayText, user?.team]);
+
+  const visibleTasks = useMemo(() => collapseTaskLineages(tasks), [tasks]);
+
+  useEffect(() => {
     if (!isPeriodMenuOpen) {
       return undefined;
     }
@@ -154,11 +170,11 @@ const EmployeeDashboard = () => {
     sevenDaysAgo.setHours(0, 0, 0, 0);
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
 
-    return tasks.filter((item) => {
+    return visibleTasks.filter((item) => {
       const statusMatch = filters.status === "all" || item.status === filters.status;
 
-      const taskDateText = (item.created_at || "").slice(0, 10);
-      const taskDate = item.created_at ? new Date(item.created_at) : null;
+      const taskDateText = getTaskDateText(item);
+      const taskDate = taskDateText ? new Date(`${taskDateText}T00:00:00`) : null;
 
       let dateMatch = true;
       if (filters.period === "today") {
@@ -175,25 +191,17 @@ const EmployeeDashboard = () => {
 
       return statusMatch && dateMatch;
     });
-  }, [tasks, filters, todayText]);
+  }, [visibleTasks, filters, todayText]);
 
   const yesterdayTaskSummary = useMemo(() => {
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
     const yesterdayText = getLocalDateText(yesterday);
-    const carriedForwardSourceIds = new Set(
-      tasks
-        .map((item) => item.carried_forward_from_id)
-        .filter((value) => value !== null && value !== undefined)
-        .map((value) => Number(value))
-    );
-
-    return tasks.reduce(
+    return visibleTasks.reduce(
       (acc, item) => {
-        const isYesterday = (item.assigned_at || item.created_at || "").slice(0, 10) === yesterdayText;
-        const isCarriedForwardSource = carriedForwardSourceIds.has(Number(item.id));
+        const isYesterday = (item.assigned_at || getTaskDateText(item) || item.created_at || "").slice(0, 10) === yesterdayText;
 
-        if (!isYesterday || isCarriedForwardSource) {
+        if (!isYesterday) {
           return acc;
         }
 
@@ -208,29 +216,22 @@ const EmployeeDashboard = () => {
       },
       { pending: 0, inProgress: 0 }
     );
-  }, [tasks]);
+  }, [visibleTasks]);
 
   const visibleNotifications = useMemo(() => {
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
     const yesterdayText = getLocalDateText(yesterday);
 
-    const taskById = new Map(tasks.map((item) => [Number(item.id), item]));
-    const carriedForwardSourceIds = new Set(
-      tasks
-        .map((item) => item.carried_forward_from_id)
-        .filter((value) => value !== null && value !== undefined)
-        .map((value) => Number(value))
-    );
+    const taskById = new Map(visibleTasks.map((item) => [Number(item.id), item]));
 
     const unresolvedYesterdayLineageIds = new Set();
 
-    tasks
+    visibleTasks
       .filter(
         (item) =>
           item.status === "Pending" &&
-          ((item.assigned_at || item.created_at || "").slice(0, 10) === yesterdayText) &&
-          !carriedForwardSourceIds.has(Number(item.id))
+          ((item.assigned_at || getTaskDateText(item) || item.created_at || "").slice(0, 10) === yesterdayText)
       )
       .forEach((item) => {
         let currentId = Number(item.id);
@@ -256,7 +257,7 @@ const EmployeeDashboard = () => {
         unresolvedYesterdayLineageIds.has(Number(item.reference_id))
       );
     });
-  }, [notifications, tasks, todayText]);
+  }, [notifications, visibleTasks, todayText]);
 
   const unreadCount = useMemo(
     () => visibleNotifications.filter((item) => !item.is_read).length,
@@ -303,11 +304,23 @@ const EmployeeDashboard = () => {
     try {
       await taskApi.createTask({
         ...form,
+        taskDepartment: String(form.taskDepartment || "").trim() || undefined,
+        taskDate: form.taskDate,
         assignedTo: user.id,
         type: "self"
       });
 
-      setForm({ client: "", task: "", action: "", dependency: "", deadline: "", priority: "Medium" });
+      setForm({
+        client: "",
+        task: "",
+        action: "",
+        dependency: "",
+        deadline: "",
+        priority: "Medium",
+        taskDepartment: String(user?.team || "").trim(),
+        taskDate: todayText
+      });
+      setIsCreateTaskModalOpen(false);
       await loadData();
       setActiveTab("Tasks");
     } catch (apiError) {
@@ -320,17 +333,19 @@ const EmployeeDashboard = () => {
     status,
     dependency = task.dependency,
     action = task.action,
-    taskTitle = task.task
+    taskTitle = task.task,
+    client = task.client
   ) => {
     setError("");
 
     try {
-      await taskApi.updateTask(task.id, { status, dependency, action, taskTitle });
+      await taskApi.updateTask(task.id, { status, dependency, action, taskTitle, client });
       setTasks((prev) =>
         prev.map((entry) =>
           entry.id === task.id
             ? {
                 ...entry,
+                client,
                 task: taskTitle,
                 status,
                 dependency,
@@ -360,6 +375,20 @@ const EmployeeDashboard = () => {
       );
     } catch (apiError) {
       setError(apiError.response?.data?.message || "Failed to update priority");
+    }
+  };
+
+  const handleDeleteTask = async (task) => {
+    setError("");
+
+    try {
+      await taskApi.deleteTask(task.id);
+      setTasks((prev) => prev.filter((entry) => Number(entry.id) !== Number(task.id)));
+      setFocusedTaskId((current) => (Number(current) === Number(task.id) ? null : current));
+      await loadData();
+    } catch (apiError) {
+      setError(apiError.response?.data?.message || "Failed to delete task");
+      throw apiError;
     }
   };
 
@@ -439,6 +468,15 @@ const EmployeeDashboard = () => {
           entry.received_status === "Received"
       ),
     [reports, todayText]
+  );
+
+  const createTaskLockedForSelectedDate = useMemo(
+    () => form.taskDate === todayText && alreadySubmittedToday,
+    [alreadySubmittedToday, form.taskDate, todayText]
+  );
+  const taskDepartmentSelectOptions = useMemo(
+    () => TASK_DEPARTMENTS.map((department) => ({ value: department, label: toTeamLabel(department) })),
+    []
   );
 
   const handleSubmitReport = async () => {
@@ -534,6 +572,24 @@ const EmployeeDashboard = () => {
 
   return (
     <div className="min-h-screen bg-dsr-page text-dsr-ink">
+      <CreateTaskModal
+        open={isCreateTaskModalOpen}
+        title="Create Task"
+        form={form}
+        onFieldChange={(field, value) => setForm((prev) => ({ ...prev, [field]: value }))}
+        onSubmit={handleCreateTask}
+        onClose={() => setIsCreateTaskModalOpen(false)}
+        error={error}
+        locked={createTaskLockedForSelectedDate}
+        lockedMessage={
+          createTaskLockedForSelectedDate
+            ? "You already submitted today's report. Choose tomorrow or a future date to create a task."
+            : ""
+        }
+        submitLabel="Add Task"
+        todayText={todayText}
+        departmentOptions={taskDepartmentSelectOptions}
+      />
       <ConfirmDialog
         open={isSubmitConfirmOpen}
         title="Submit Report"
@@ -559,7 +615,7 @@ const EmployeeDashboard = () => {
             />
           </div>
 
-          <nav className="hidden items-center gap-2 rounded-full border border-dsr-border bg-dsr-soft px-3 py-2 lg:flex">
+          <nav className="hidden items-center gap-4 rounded-full border border-dsr-border bg-dsr-soft px-4 py-2 lg:flex">
             {TABS.map((tab) => (
               <button
                 key={tab}
@@ -619,85 +675,142 @@ const EmployeeDashboard = () => {
           <section className="card-green">
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
               <div>
-                <p className="text-xs uppercase tracking-wide text-dsr-muted">Total Tasks</p>
-                <h3 className="text-3xl font-extrabold">{tasks.length}</h3>
+                <p className="text-xs font-bold uppercase tracking-wide text-slate-900">Total Tasks</p>
+                <h3 className="text-3xl font-extrabold">{visibleTasks.length}</h3>
               </div>
               <div>
-                <p className="text-xs uppercase tracking-wide text-dsr-muted">Completed Tasks</p>
-                <h3 className="text-3xl font-extrabold text-emerald-700">{tasks.filter((item) => item.status === "Completed").length}</h3>
+                <p className="text-xs font-bold uppercase tracking-wide text-slate-900">Completed Tasks</p>
+                <h3 className="text-3xl font-extrabold text-emerald-700">{visibleTasks.filter((item) => item.status === "Completed").length}</h3>
               </div>
               <div>
-                <p className="text-xs uppercase tracking-wide text-dsr-muted">Completed Today</p>
+                <p className="text-xs font-bold uppercase tracking-wide text-slate-900">Completed Today</p>
                 <h3 className="text-3xl font-extrabold text-emerald-700">{summary.completed_tasks || 0}</h3>
               </div>
               <div>
-                <p className="text-xs uppercase tracking-wide text-dsr-muted">Pending Today</p>
+                <p className="text-xs font-bold uppercase tracking-wide text-slate-900">Pending Today</p>
                 <h3 className="text-3xl font-extrabold text-amber-700">{summary.pending_tasks || 0}</h3>
               </div>
             </div>
           </section>
         )}
 
-        {activeTab === "Tasks" && (
-          <form className="card grid w-full gap-2 md:grid-cols-2" onSubmit={handleCreateTask}>
-            <h2 className="md:col-span-2 text-lg font-semibold">Create Task</h2>
-            <div>
-              <h3 className="mb-1 text-sm font-semibold text-slate-900">Client / Vendor</h3>
-              <input
-                className="input"
-                value={form.client}
-                disabled={alreadySubmittedToday}
-                onChange={(event) => setForm((prev) => ({ ...prev, client: event.target.value }))}
+        {activeTab === "Overview" && (
+          <div className="space-y-4">
+            <div className="grid gap-2 lg:grid-cols-2">
+              <Charts
+                type="bar"
+                title="Tasks Completed"
+                labels={weeklyCompletionChart.labels}
+                values={weeklyCompletionChart.values}
+                color="rgba(42, 122, 70, 0.8)"
               />
+              <div className="card">
+                <h2 className="mb-2 text-lg font-semibold">New Assignment Alerts</h2>
+                <div className="space-y-2">
+                  {newTaskNotifications.slice(0, 6).map((item) => (
+                    <div key={item.id} className="rounded-xl border border-dsr-border bg-dsr-soft p-3">
+                      <p className="text-sm font-medium">{item.message}</p>
+                      <p className="mt-1 text-xs text-dsr-muted">
+                        {item.created_at ? new Date(item.created_at).toLocaleString() : ""}
+                      </p>
+                    </div>
+                  ))}
+                  {newTaskNotifications.length === 0 && (
+                    <p className="text-sm text-dsr-muted">No new assignment alerts</p>
+                  )}
+                </div>
+              </div>
             </div>
-            <div>
-              <h3 className="mb-1 text-sm font-semibold text-slate-900">Task Title</h3>
-              <input
-                className="input"
-                value={form.task}
-                disabled={alreadySubmittedToday}
-                onChange={(event) => setForm((prev) => ({ ...prev, task: event.target.value }))}
-                required
-              />
+
+            <div className="space-y-2">
+              <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_280px] xl:items-stretch">
+                <section className="card h-full">
+                  <EmployeeTaskFilters
+                    filters={filters}
+                    onStatusChange={(value) => setFilters((prev) => ({ ...prev, status: value }))}
+                    onPeriodMenuToggle={() => setIsPeriodMenuOpen((prev) => !prev)}
+                    isPeriodMenuOpen={isPeriodMenuOpen}
+                    periodFieldLabel={periodFieldLabel}
+                    periodOptions={PERIOD_OPTIONS}
+                    onPeriodSelect={handlePeriodSelect}
+                    periodMenuRef={periodMenuRef}
+                    customDateInputRef={customDateInputRef}
+                    onCustomDateChange={(value) => {
+                      setFilters((prev) => ({
+                        ...prev,
+                        period: "custom",
+                        date: value
+                      }));
+                      setIsPeriodMenuOpen(false);
+                    }}
+                    formatDateOptionLabel={formatDateOptionLabel}
+                  />
+                </section>
+
+                <PendingTasksSummary
+                  pending={yesterdayTaskSummary.pending}
+                  inProgress={yesterdayTaskSummary.inProgress}
+                  className="h-full max-w-[320px] xl:justify-self-end xl:self-stretch xl:w-full"
+                />
+              </div>
+
+              <section>
+                <h2 className="mb-2 text-lg font-semibold">Task List</h2>
+                <TaskTable
+                  tasks={filteredTasks}
+                  onStatusChange={handleStatusChange}
+                  onPriorityChange={handlePriorityChange}
+                  onDeleteTask={handleDeleteTask}
+                  canDeleteTask={(task) => Number(task.assigned_by) === Number(user?.id)}
+                  editableStatus
+                  showAssigner
+                  focusedTaskId={focusedTaskId}
+                  setFocusedTaskId={setFocusedTaskId}
+                />
+                {visibleTasks.length > 0 && filteredTasks.length === 0 && filters.period !== "all" && (
+                  <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                    No tasks in current day filter. 
+                    <button
+                      type="button"
+                      className="ml-1 font-semibold underline"
+                      onClick={() => setFilters((prev) => ({ ...prev, period: "all" }))}
+                    >
+                      Show all tasks
+                    </button>
+                  </div>
+                )}
+                <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-dsr-border bg-dsr-soft p-3">
+                  <p className="text-sm text-dsr-muted">
+                    Submit report for: <span className="font-semibold text-dsr-ink">{selectedReportDate || "Select a single day"}</span>
+                  </p>
+                  <button
+                    type="button"
+                    className={alreadySubmittedForDate ? "rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white" : "btn-primary"}
+                    disabled={!canSubmitReport || submittingReport}
+                    onClick={handleSubmitReport}
+                  >
+                    {alreadySubmittedForDate ? "Submitted" : submittingReport ? "Submitting..." : "Submit Report"}
+                  </button>
+                </div>
+                {submitMessage && <p className="mt-2 text-sm text-dsr-brand">{submitMessage}</p>}
+              </section>
             </div>
-            <h3 className="md:col-span-2 text-sm font-semibold text-slate-900">Action</h3>
-            <textarea
-              className="input md:col-span-2"
-              rows={3}
-              value={form.action}
-              disabled={alreadySubmittedToday}
-              onChange={(event) => setForm((prev) => ({ ...prev, action: event.target.value }))}
-              required
-            />
-            <div>
-              <h3 className="mb-1 text-sm font-semibold text-slate-900">Priority</h3>
-              <select
-                className="input"
-                value={form.priority}
-                disabled={alreadySubmittedToday}
-                onChange={(event) => setForm((prev) => ({ ...prev, priority: event.target.value }))}
-              >
-                <option value="Medium">Medium</option>
-                <option value="High">High</option>
-                <option value="Critical">Critical</option>
-              </select>
-            </div>
-            <button className="btn-primary md:col-span-2" type="submit" disabled={alreadySubmittedToday}>
-              {alreadySubmittedToday ? "Available Tomorrow" : "Add Task"}
-            </button>
-            {alreadySubmittedToday && (
-              <p className="md:col-span-2 text-sm text-rose-600">
-                You already submitted today's report. New tasks can be created tomorrow.
-              </p>
-            )}
-            {error && <p className="md:col-span-2 text-sm text-rose-600">{error}</p>}
-          </form>
+          </div>
         )}
 
-        {(activeTab === "Overview" || activeTab === "Tasks") && (
+        {activeTab === "Tasks" && (
           <div className="space-y-2">
             <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_280px] xl:items-stretch">
               <section className="card h-full">
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h2 className="text-lg font-semibold text-dsr-ink">Tasks</h2>
+                    <p className="text-sm text-dsr-muted">Open a focused modal to create and schedule your next task.</p>
+                  </div>
+                  <button type="button" className="btn-primary" onClick={() => setIsCreateTaskModalOpen(true)}>
+                    Create Task
+                  </button>
+                </div>
                 <EmployeeTaskFilters
                   filters={filters}
                   onStatusChange={(value) => setFilters((prev) => ({ ...prev, status: value }))}
@@ -723,7 +836,7 @@ const EmployeeDashboard = () => {
               <PendingTasksSummary
                 pending={yesterdayTaskSummary.pending}
                 inProgress={yesterdayTaskSummary.inProgress}
-                className="h-full xl:justify-self-end xl:self-stretch"
+                className="h-full max-w-[320px] xl:justify-self-end xl:self-stretch xl:w-full"
               />
             </div>
 
@@ -733,12 +846,14 @@ const EmployeeDashboard = () => {
                 tasks={filteredTasks}
                 onStatusChange={handleStatusChange}
                 onPriorityChange={handlePriorityChange}
+                onDeleteTask={handleDeleteTask}
+                canDeleteTask={(task) => Number(task.assigned_by) === Number(user?.id)}
                 editableStatus
                 showAssigner
                 focusedTaskId={focusedTaskId}
                 setFocusedTaskId={setFocusedTaskId}
               />
-              {tasks.length > 0 && filteredTasks.length === 0 && filters.period !== "all" && (
+              {visibleTasks.length > 0 && filteredTasks.length === 0 && filters.period !== "all" && (
                 <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
                   No tasks in current day filter. 
                   <button
@@ -765,34 +880,6 @@ const EmployeeDashboard = () => {
               </div>
               {submitMessage && <p className="mt-2 text-sm text-dsr-brand">{submitMessage}</p>}
             </section>
-          </div>
-        )}
-
-        {activeTab === "Overview" && (
-          <div className="grid gap-2 lg:grid-cols-2">
-            <Charts
-              type="bar"
-              title="Tasks Completed"
-              labels={weeklyCompletionChart.labels}
-              values={weeklyCompletionChart.values}
-              color="rgba(42, 122, 70, 0.8)"
-            />
-            <div className="card">
-              <h2 className="mb-2 text-lg font-semibold">New Assignment Alerts</h2>
-              <div className="space-y-2">
-                {newTaskNotifications.slice(0, 6).map((item) => (
-                  <div key={item.id} className="rounded-xl border border-dsr-border bg-dsr-soft p-3">
-                    <p className="text-sm font-medium">{item.message}</p>
-                    <p className="mt-1 text-xs text-dsr-muted">
-                      {item.created_at ? new Date(item.created_at).toLocaleString() : ""}
-                    </p>
-                  </div>
-                ))}
-                {newTaskNotifications.length === 0 && (
-                  <p className="text-sm text-dsr-muted">No new assignment alerts</p>
-                )}
-              </div>
-            </div>
           </div>
         )}
 

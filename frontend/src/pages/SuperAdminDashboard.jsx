@@ -8,9 +8,13 @@ import logo from "../assets/logo.png";
 import { useAuth } from "../context/AuthContext";
 import useScrollHeader from "../hooks/useScrollHeader";
 import { authApi, reportApi, taskApi } from "../services/api";
+import { collapseTaskLineages } from "../utils/taskLineage";
+import { getTaskDateText, getTodayText } from "../utils/taskMeta";
 import { toTeamLabel } from "../utils/teamLabel";
 
 const TABS = ["Overview", "Tasks", "Employees", "Reports"];
+
+const getTabLabel = (tab) => (tab === "Employees" ? "Team" : tab);
 
 const defaultAnalytics = { tasksPerTeam: [], completionRate: 0, topPerformers: [] };
 
@@ -34,7 +38,7 @@ const FALLBACK_DONUT_COLORS = [
 const SuperAdminDashboard = () => {
   const { user, logout } = useAuth();
   const isHeaderVisible = useScrollHeader();
-  const todayText = new Date().toISOString().slice(0, 10);
+  const todayText = getTodayText();
   const [users, setUsers] = useState([]);
   const [tasks, setTasks] = useState([]);
   const [reports, setReports] = useState([]);
@@ -111,6 +115,8 @@ const SuperAdminDashboard = () => {
     loadAnalytics();
   }, [filters.team, filters.date]);
 
+  const visibleTasks = useMemo(() => collapseTaskLineages(tasks), [tasks]);
+
   useEffect(() => {
     if (activeTab !== "Overview") {
       return;
@@ -146,16 +152,16 @@ const SuperAdminDashboard = () => {
   };
 
   const filteredTasks = useMemo(() => {
-    return tasks.filter((item) => {
+    return visibleTasks.filter((item) => {
       const statusMatch = filters.status === "all" || item.status === filters.status;
       const taskDepartment = resolveTaskDepartment(item);
       const teamMatch = filters.team === "all" || taskDepartment === filters.team;
       const employeeMatch =
         filters.employeeId === "all" || String(item.assigned_to) === String(filters.employeeId);
-      const dateMatch = !filters.date || (item.created_at || "").slice(0, 10) === filters.date;
+      const dateMatch = !filters.date || getTaskDateText(item) === filters.date;
       return statusMatch && teamMatch && employeeMatch && dateMatch;
     });
-  }, [tasks, filters, users]);
+  }, [visibleTasks, filters, users]);
 
   const taskEmployeeOptions = useMemo(() => {
     const scopedUsers = users.filter((entry) => {
@@ -227,14 +233,14 @@ const SuperAdminDashboard = () => {
   }, [filters.team, users]);
 
   const dailyOverviewTasks = useMemo(() => {
-    return tasks.filter((item) => {
+    return visibleTasks.filter((item) => {
       const taskDepartment = resolveTaskDepartment(item);
       const teamMatch = filters.team === "all" || taskDepartment === filters.team;
-      const taskDate = (item.created_at || "").slice(0, 10);
+      const taskDate = getTaskDateText(item);
       const dateMatch = !filters.date || taskDate === filters.date;
       return teamMatch && dateMatch;
     });
-  }, [filters.date, filters.team, tasks, users]);
+  }, [filters.date, filters.team, visibleTasks, users]);
 
   const dailyOverviewCompletedTasks = useMemo(
     () =>
@@ -258,7 +264,7 @@ const SuperAdminDashboard = () => {
   );
 
   const completedTasksPieData = useMemo(() => {
-    const filteredCompletedTasks = tasks.filter((item) => {
+    const filteredCompletedTasks = visibleTasks.filter((item) => {
       const statusValue = String(item.raw_status || item.status || "").toLowerCase();
       if (statusValue !== "completed") {
         return false;
@@ -268,7 +274,7 @@ const SuperAdminDashboard = () => {
         return true;
       }
 
-      const completedDate = (item.completed_at || item.created_at || "").slice(0, 10);
+      const completedDate = (item.completed_at || getTaskDateText(item) || item.created_at || "").slice(0, 10);
       return completedDate === filters.date;
     });
 
@@ -321,7 +327,7 @@ const SuperAdminDashboard = () => {
         (teamName, index) => TEAM_DONUT_COLORS[teamName] || FALLBACK_DONUT_COLORS[index % FALLBACK_DONUT_COLORS.length]
       )
     };
-  }, [filters.date, filters.team, tasks, users]);
+  }, [filters.date, filters.team, visibleTasks, users]);
 
   const filteredTopPerformers = useMemo(() => {
     const performerMap = new Map();
@@ -339,7 +345,7 @@ const SuperAdminDashboard = () => {
         });
       });
 
-    tasks.forEach((task) => {
+    visibleTasks.forEach((task) => {
       const assigneeId = Number(task.assigned_to);
       const performer = performerMap.get(assigneeId);
       if (!performer) {
@@ -371,16 +377,16 @@ const SuperAdminDashboard = () => {
         return left.name.localeCompare(right.name);
       })
       .slice(0, 10);
-  }, [filters.team, tasks, users]);
+  }, [filters.team, visibleTasks, users]);
 
   const statusComparisonChartData = useMemo(() => {
-    const scopeTasks = tasks.filter((task) => {
+    const scopeTasks = visibleTasks.filter((task) => {
       if (filters.date) {
         const statusValue = String(task.raw_status || task.status || "").toLowerCase();
-        const taskDate =
+      const taskDate =
           statusValue === "completed"
-            ? (task.completed_at || task.created_at || "").slice(0, 10)
-            : (task.created_at || "").slice(0, 10);
+            ? (task.completed_at || getTaskDateText(task) || task.created_at || "").slice(0, 10)
+            : getTaskDateText(task);
 
         if (taskDate !== filters.date) {
           return false;
@@ -439,9 +445,9 @@ const SuperAdminDashboard = () => {
         xAxisTitle: "Department",
         yAxisTitle: "Task Count",
         datasets: [
-          { label: "Pending Tasks", data: values.map((entry) => entry.pending), backgroundColor: "#94A3B8" },
-          { label: "In Progress Tasks", data: values.map((entry) => entry.inProgress), backgroundColor: "#3A6FF7" },
-          { label: "Completed Tasks", data: values.map((entry) => entry.completed), backgroundColor: "#2A7A46" }
+          { label: "Pending Tasks", data: values.map((entry) => entry.pending), backgroundColor: "#f1dc21" },
+          { label: "In Progress Tasks", data: values.map((entry) => entry.inProgress), backgroundColor: "#33a8d6" },
+          { label: "Completed Tasks", data: values.map((entry) => entry.completed), backgroundColor: "#51bb2a" }
         ]
       };
     }
@@ -491,7 +497,7 @@ const SuperAdminDashboard = () => {
         { label: "Completed Tasks", data: values.map((entry) => entry.completed), backgroundColor: "#2A7A46" }
       ]
     };
-  }, [tasks, users, filters.team, filters.date]);
+  }, [visibleTasks, users, filters.team, filters.date]);
 
   const handleMarkRead = async (id) => {
     await taskApi.markNotificationRead(id);
@@ -647,7 +653,7 @@ const SuperAdminDashboard = () => {
                     : "text-dsr-ink hover:bg-white hover:text-dsr-brand"
                 }`}
               >
-                {tab}
+                {getTabLabel(tab)}
               </button>
             ))}
           </nav>
@@ -684,7 +690,7 @@ const SuperAdminDashboard = () => {
           >
             {TABS.map((tab) => (
               <option key={tab} value={tab}>
-                {tab}
+                {getTabLabel(tab)}
               </option>
             ))}
             <option value="Profile">Profile</option>
@@ -695,21 +701,21 @@ const SuperAdminDashboard = () => {
           <section className="card-green">
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
               <div>
-                <p className="text-xs uppercase tracking-wide text-dsr-muted">Employees</p>
+                <p className="text-xs font-bold uppercase tracking-wide text-slate-900">Employees</p>
                 <h3 className="text-3xl font-extrabold">{overviewScopedUsers.length}</h3>
               </div>
               <div>
-                <p className="text-xs uppercase tracking-wide text-dsr-muted">Tasks</p>
+                <p className="text-xs font-bold uppercase tracking-wide text-slate-900">Tasks</p>
                 <h3 className="text-3xl font-extrabold">{dailyOverviewTasks.length}</h3>
               </div>
               <div>
-                <p className="text-xs uppercase tracking-wide text-dsr-muted">Completed Tasks</p>
+                <p className="text-xs font-bold uppercase tracking-wide text-slate-900">Completed Tasks</p>
                 <h3 className="text-3xl font-extrabold text-emerald-700">
                   {dailyOverviewCompletedTasks}
                 </h3>
               </div>
               <div>
-                <p className="text-xs uppercase tracking-wide text-dsr-muted">Completion Rate</p>
+                <p className="text-xs font-bold uppercase tracking-wide text-slate-900">Completion Rate</p>
                 <h3 className="text-3xl font-extrabold text-dsr-brand">{dailyOverviewCompletionRate}%</h3>
               </div>
             </div>
@@ -720,7 +726,7 @@ const SuperAdminDashboard = () => {
           <section className="card">
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-2">
               <div>
-                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-dsr-muted">Department</label>
+                <label className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-900">Department</label>
                 <select
                   className="input"
                   value={filters.team}
@@ -739,7 +745,7 @@ const SuperAdminDashboard = () => {
                 </select>
               </div>
               <div>
-                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-dsr-muted">Task Date</label>
+                <label className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-900">Task Date</label>
                 <input
                   className="input"
                   type="date"
@@ -755,7 +761,7 @@ const SuperAdminDashboard = () => {
           <section className="card">
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
               <div>
-                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-dsr-muted">Status</label>
+                <label className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-900">Status</label>
                 <select
                   className="input"
                   value={filters.status}
@@ -768,7 +774,7 @@ const SuperAdminDashboard = () => {
                 </select>
               </div>
               <div>
-                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-dsr-muted">Department</label>
+                <label className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-900">Department</label>
                 <select
                   className="input"
                   value={filters.team}
@@ -787,7 +793,7 @@ const SuperAdminDashboard = () => {
                 </select>
               </div>
               <div>
-                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-dsr-muted">Employee</label>
+                <label className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-900">Employee</label>
                 <select
                   className="input"
                   value={filters.employeeId}
@@ -802,7 +808,7 @@ const SuperAdminDashboard = () => {
                 </select>
               </div>
               <div>
-                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-dsr-muted">Task Date</label>
+                <label className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-900">Task Date</label>
                 <input
                   className="input"
                   type="date"
@@ -856,13 +862,6 @@ const SuperAdminDashboard = () => {
                 yAxisTitle={statusComparisonChartData.yAxisTitle}
               />
             </div>
-            <TaskTable
-              tasks={filteredTasks}
-              editableStatus={false}
-              showAssignee
-              focusedTaskId={focusedTaskId}
-              setFocusedTaskId={setFocusedTaskId}
-            />
           </>
         )}
 
@@ -880,7 +879,7 @@ const SuperAdminDashboard = () => {
           <section className="card overflow-x-auto">
             <form className="mb-4 grid gap-3 rounded-xl border border-dsr-border/70 bg-dsr-soft p-3 md:grid-cols-2 xl:grid-cols-6" onSubmit={handleCreateUser}>
               <label>
-                <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-dsr-muted">Name</span>
+                <span className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-900">Name</span>
                 <input
                   className="input"
                   value={newUserForm.name}
@@ -889,7 +888,7 @@ const SuperAdminDashboard = () => {
                 />
               </label>
               <label>
-                <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-dsr-muted">Email</span>
+                <span className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-900">Email</span>
                 <input
                   className="input"
                   type="email"
@@ -899,7 +898,7 @@ const SuperAdminDashboard = () => {
                 />
               </label>
               <label>
-                <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-dsr-muted">Password</span>
+                <span className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-900">Password</span>
                 <input
                   className="input"
                   type="password"
@@ -909,7 +908,7 @@ const SuperAdminDashboard = () => {
                 />
               </label>
               <label>
-                <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-dsr-muted">Role</span>
+                <span className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-900">Role</span>
                 <select
                   className="input"
                   value={newUserForm.role}
@@ -930,7 +929,7 @@ const SuperAdminDashboard = () => {
                 </select>
               </label>
               <label>
-                <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-dsr-muted">Department</span>
+                <span className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-900">Department</span>
                 <input
                   className="input"
                   value={newUserForm.team}
@@ -952,7 +951,7 @@ const SuperAdminDashboard = () => {
 
             <div className="mb-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
               <label>
-                <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-dsr-muted">Search (Name / Email)</span>
+                <span className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-900">Search (Name / Email)</span>
                 <input
                   className="input"
                   value={usersFilter.search}

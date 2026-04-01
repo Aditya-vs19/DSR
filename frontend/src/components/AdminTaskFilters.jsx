@@ -2,7 +2,7 @@ const AdminTaskFilters = ({ filters, employees, user, onStatusChange, onEmployee
   return (
     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
       <div>
-        <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-dsr-muted">Status</label>
+        <label className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-900">Status</label>
         <select className="input" value={filters.status} onChange={(event) => onStatusChange(event.target.value)}>
           <option value="all">All</option>
           <option value="Pending">Pending</option>
@@ -12,7 +12,7 @@ const AdminTaskFilters = ({ filters, employees, user, onStatusChange, onEmployee
       </div>
 
       <div>
-        <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-dsr-muted">Employee</label>
+        <label className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-900">Employee</label>
         <select className="input" value={filters.employeeId} onChange={(event) => onEmployeeChange(event.target.value)}>
           <option value="all">All Team Members</option>
           {employees.map((employee) => (
@@ -25,7 +25,7 @@ const AdminTaskFilters = ({ filters, employees, user, onStatusChange, onEmployee
       </div>
 
       <div>
-        <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-dsr-muted">Date</label>
+        <label className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-900">Date</label>
         <input className="input" type="date" value={filters.date} onChange={(event) => onDateChange(event.target.value)} />
       </div>
     </div>

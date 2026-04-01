@@ -6,7 +6,7 @@ const PendingTasksSummary = ({ pending = 0, inProgress = 0, title = "Yesterday C
 
   return (
     <aside
-      className={`w-full rounded-2xl border px-2.5 py-2 shadow-sm ${
+      className={`w-full rounded-md border px-2.5 py-2 shadow-sm ${
         hasCarryOver ? "border-rose-300 bg-rose-50" : "border-emerald-200 bg-emerald-50"
       } ${className}`}
       aria-live="polite"
@@ -22,14 +22,14 @@ const PendingTasksSummary = ({ pending = 0, inProgress = 0, title = "Yesterday C
         </span>
       </div>
 
-      <div className="mt-1 grid grid-cols-2 gap-1.5">
-        <div className="rounded-lg border border-rose-200 bg-white/70 px-2 py-0.5">
+      <div className="mt-2 grid grid-cols-1 gap-2">
+        <div className="w-full rounded-lg border border-rose-200 bg-white/70 px-3 py-1.5">
           <p className="text-[9px] font-semibold uppercase tracking-wide text-rose-600">Pending</p>
-          <p className="text-base font-bold leading-tight text-rose-700">{pendingCount}</p>
+          <p className="text-xl font-bold leading-tight text-rose-700">{pendingCount}</p>
         </div>
-        <div className="rounded-lg border border-amber-200 bg-white/70 px-2 py-0.5">
+        <div className="w-full rounded-lg border border-amber-200 bg-white/70 px-3 py-1.5">
           <p className="text-[9px] font-semibold uppercase tracking-wide text-amber-700">In Progress</p>
-          <p className="text-base font-bold leading-tight text-amber-700">{inProgressCount}</p>
+          <p className="text-xl font-bold leading-tight text-amber-700">{inProgressCount}</p>
         </div>
       </div>
 

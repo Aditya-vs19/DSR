@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import Charts from "../components/Charts";
 import AdminTaskFilters from "../components/AdminTaskFilters";
 import ConfirmDialog from "../components/ConfirmDialog";
+import CreateTaskModal from "../components/CreateTaskModal";
 import PendingTasksSummary from "../components/PendingTasksSummary";
 import ProfileMenu from "../components/ProfileMenu";
 import ProfileSection from "../components/ProfileSection";
@@ -11,9 +12,13 @@ import logo from "../assets/logo.png";
 import { useAuth } from "../context/AuthContext";
 import useScrollHeader from "../hooks/useScrollHeader";
 import { authApi, reportApi, taskApi } from "../services/api";
+import { collapseTaskLineages } from "../utils/taskLineage";
+import { getTaskDateText, getTodayText, TASK_DEPARTMENTS } from "../utils/taskMeta";
 import { toTeamLabel } from "../utils/teamLabel";
 
 const TABS = ["Overview", "Tasks", "Employees", "Reports"];
+
+const getTabLabel = (tab) => (tab === "Employees" ? "Team" : tab);
 
 const getManagedDepartmentLabel = (currentUser) => {
   const name = String(currentUser?.name || "").trim().toLowerCase();
@@ -29,7 +34,7 @@ const getManagedDepartmentLabel = (currentUser) => {
 const AdminDashboard = () => {
   const { user, logout } = useAuth();
   const isHeaderVisible = useScrollHeader();
-  const todayText = new Date().toISOString().slice(0, 10);
+  const todayText = getTodayText();
   const [tasks, setTasks] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [performance, setPerformance] = useState([]);
@@ -46,7 +51,8 @@ const AdminDashboard = () => {
     assignedTo: "",
     deadline: "",
     priority: "Medium",
-    taskDepartment: ""
+    taskDepartment: String(user?.team || "").trim(),
+    taskDate: todayText
   });
   const [selfAssign, setSelfAssign] = useState(false);
   const [error, setError] = useState("");
@@ -60,15 +66,24 @@ const AdminDashboard = () => {
   const [reassigningTaskId, setReassigningTaskId] = useState(null);
   const [submittingOwnReport, setSubmittingOwnReport] = useState(false);
   const [isOwnSubmitConfirmOpen, setIsOwnSubmitConfirmOpen] = useState(false);
+  const [isCreateTaskModalOpen, setIsCreateTaskModalOpen] = useState(false);
   const [ownSubmitMessage, setOwnSubmitMessage] = useState("");
   const [focusedTaskId, setFocusedTaskId] = useState(null);
   const [comparisonFilter, setComparisonFilter] = useState({ mode: "overall", date: todayText });
   const managedDepartmentLabel = useMemo(() => getManagedDepartmentLabel(user), [user]);
-  const isSnigdhaDualAdmin = useMemo(
-    () => String(user?.name || "").trim().toLowerCase() === "snigdha" && String(user?.role || "") === "admin",
-    [user]
+  const taskDepartmentOptions = useMemo(
+    () =>
+      TASK_DEPARTMENTS.filter(Boolean).sort((left, right) => {
+        if (left === user?.team) return -1;
+        if (right === user?.team) return 1;
+        return left.localeCompare(right);
+      }),
+    [user?.team]
   );
-  const snigdhaDepartmentOptions = ["Sales", "Logistics"];
+  const taskDepartmentSelectOptions = useMemo(
+    () => taskDepartmentOptions.map((department) => ({ value: department, label: toTeamLabel(department) })),
+    [taskDepartmentOptions]
+  );
   const reassignOptions = useMemo(() => {
     const teamEmployees = employees.filter((item) => item.role === "employee");
     const adminSelfOption =
@@ -114,20 +129,34 @@ const AdminDashboard = () => {
     return () => clearInterval(timer);
   }, []);
 
+  useEffect(() => {
+    if (!user?.team) {
+      return;
+    }
+
+    setForm((prev) => ({
+      ...prev,
+      taskDepartment: prev.taskDepartment || String(user.team).trim(),
+      taskDate: prev.taskDate || todayText
+    }));
+  }, [todayText, user?.team]);
+
+  const visibleTasks = useMemo(() => collapseTaskLineages(tasks), [tasks]);
+
   const filteredTasks = useMemo(() => {
-    return tasks.filter((item) => {
+    return visibleTasks.filter((item) => {
       const statusMatch = filters.status === "all" || item.status === filters.status;
-      const dateMatch = !filters.date || (item.created_at || "").slice(0, 10) === filters.date;
+      const dateMatch = !filters.date || getTaskDateText(item) === filters.date;
       const employeeMatch = filters.employeeId === "all" || String(item.assigned_to) === filters.employeeId;
       return statusMatch && dateMatch && employeeMatch;
     });
-  }, [tasks, filters]);
+  }, [visibleTasks, filters]);
 
   const overviewDate = useMemo(() => filters.date || todayText, [filters.date, todayText]);
 
   const dailyOverviewTasks = useMemo(
-    () => tasks.filter((item) => (item.created_at || "").slice(0, 10) === overviewDate),
-    [overviewDate, tasks]
+    () => visibleTasks.filter((item) => getTaskDateText(item) === overviewDate),
+    [overviewDate, visibleTasks]
   );
 
   const dailyOverviewCompletedTasks = useMemo(
@@ -142,7 +171,7 @@ const AdminDashboard = () => {
     const employeeRecords = employees.filter((item) => item.role === "employee");
     const chartMembers = [...employeeRecords];
 
-    if (isSnigdhaDualAdmin && user?.id) {
+    if (user?.id) {
       chartMembers.push({
         id: user.id,
         name: `${user.name} (Admin)`,
@@ -152,7 +181,7 @@ const AdminDashboard = () => {
     }
 
     const memberIdSet = new Set(chartMembers.map((item) => Number(item.id)));
-    const chartTaskPool = tasks.filter((item) => {
+    const chartTaskPool = visibleTasks.filter((item) => {
       const assigneeId = Number(item.assigned_to);
       if (!memberIdSet.has(assigneeId)) {
         return false;
@@ -165,8 +194,8 @@ const AdminDashboard = () => {
       const statusValue = String(item.raw_status || item.status || "").toLowerCase();
       const taskDate =
         statusValue === "completed"
-          ? (item.completed_at || item.created_at || "").slice(0, 10)
-          : (item.created_at || "").slice(0, 10);
+          ? (item.completed_at || getTaskDateText(item) || item.created_at || "").slice(0, 10)
+          : getTaskDateText(item);
 
       return taskDate === comparisonFilter.date;
     });
@@ -209,27 +238,27 @@ const AdminDashboard = () => {
         {
           label: "Completed",
           data: rows.map((item) => Number(item.completed || 0)),
-          backgroundColor: "rgba(33, 128, 70, 0.85)",
-          borderColor: "rgba(33, 128, 70, 1)",
+          backgroundColor: "#51bb2a",
+          borderColor: "#51bb2a",
           borderWidth: 1
         },
         {
           label: "Pending",
           data: rows.map((item) => Number(item.pending || 0)),
-          backgroundColor: "rgba(220, 38, 38, 0.8)",
-          borderColor: "rgba(220, 38, 38, 1)",
+          backgroundColor: "#f1dc21",
+          borderColor: "#f1dc21",
           borderWidth: 1
         },
         {
           label: "In Progress",
           data: rows.map((item) => Number(item.inProgress || 0)),
-          backgroundColor: "rgba(37, 99, 235, 0.8)",
-          borderColor: "rgba(37, 99, 235, 1)",
+          backgroundColor: "#33a8d6",
+          borderColor: "#33a8d6",
           borderWidth: 1
         }
       ]
     };
-  }, [employees, tasks, comparisonFilter]);
+  }, [employees, visibleTasks, comparisonFilter]);
 
   const yesterdayTaskSummary = useMemo(() => {
     const yesterday = new Date();
@@ -237,20 +266,12 @@ const AdminDashboard = () => {
     const yesterdayText = new Date(yesterday.getTime() - yesterday.getTimezoneOffset() * 60000)
       .toISOString()
       .slice(0, 10);
-    const carriedForwardSourceIds = new Set(
-      tasks
-        .map((item) => item.carried_forward_from_id)
-        .filter((value) => value !== null && value !== undefined)
-        .map((value) => Number(value))
-    );
-
-    return tasks.reduce(
+    return visibleTasks.reduce(
       (acc, item) => {
-        const isYesterday = (item.assigned_at || item.created_at || "").slice(0, 10) === yesterdayText;
+        const isYesterday = (item.assigned_at || getTaskDateText(item) || item.created_at || "").slice(0, 10) === yesterdayText;
         const isOwnTask = Number(item.assigned_to) === Number(user?.id);
-        const isCarriedForwardSource = carriedForwardSourceIds.has(Number(item.id));
 
-        if (!isYesterday || !isOwnTask || isCarriedForwardSource) {
+        if (!isYesterday || !isOwnTask) {
           return acc;
         }
 
@@ -265,7 +286,7 @@ const AdminDashboard = () => {
       },
       { pending: 0, inProgress: 0 }
     );
-  }, [tasks, user?.id]);
+  }, [visibleTasks, user?.id]);
 
   const unreadCount = useMemo(
     () => notifications.filter((item) => !item.is_read).length,
@@ -298,24 +319,28 @@ const AdminDashboard = () => {
     [reports, todayText, user?.id]
   );
 
+  const createTaskLockedForSelectedDate = useMemo(
+    () => form.taskDate === todayText && alreadySubmittedOwnToday,
+    [alreadySubmittedOwnToday, form.taskDate, todayText]
+  );
+
   const handleAssign = async (event) => {
     event.preventDefault();
     setError("");
 
     try {
       const assignedToId = selfAssign ? Number(user.id) : Number(form.assignedTo);
-      const selectedTaskDepartment = selfAssign && isSnigdhaDualAdmin
-        ? String(form.taskDepartment || "").trim()
-        : "";
+      const selectedTaskDepartment = String(form.taskDepartment || "").trim();
 
-      if (selfAssign && isSnigdhaDualAdmin && !selectedTaskDepartment) {
-        setError("Select task department (Sales or Logistics)");
+      if (!selectedTaskDepartment) {
+        setError("Select task department");
         return;
       }
 
       await taskApi.createTask({
         ...form,
         taskDepartment: selectedTaskDepartment || undefined,
+        taskDate: form.taskDate,
         assignedTo: assignedToId,
         type: selfAssign ? "self" : "assigned"
       });
@@ -328,9 +353,11 @@ const AdminDashboard = () => {
         assignedTo: "",
         deadline: "",
         priority: "Medium",
-        taskDepartment: ""
+        taskDepartment: String(user?.team || "").trim(),
+        taskDate: todayText
       });
       setSelfAssign(false);
+      setIsCreateTaskModalOpen(false);
       await loadData();
       setActiveTab("Tasks");
     } catch (apiError) {
@@ -343,17 +370,19 @@ const AdminDashboard = () => {
     status,
     dependency = task.dependency,
     action = task.action,
-    taskTitle = task.task
+    taskTitle = task.task,
+    client = task.client
   ) => {
     setError("");
 
     try {
-      await taskApi.updateTask(task.id, { status, dependency, action, taskTitle });
+      await taskApi.updateTask(task.id, { status, dependency, action, taskTitle, client });
       setTasks((prev) =>
         prev.map((entry) =>
           entry.id === task.id
             ? {
                 ...entry,
+                client,
                 task: taskTitle,
                 status,
                 dependency,
@@ -403,6 +432,20 @@ const AdminDashboard = () => {
       setError(apiError.response?.data?.message || "Failed to reassign task");
     } finally {
       setReassigningTaskId(null);
+    }
+  };
+
+  const handleDeleteTask = async (task) => {
+    setError("");
+
+    try {
+      await taskApi.deleteTask(task.id);
+      setTasks((prev) => prev.filter((entry) => Number(entry.id) !== Number(task.id)));
+      setFocusedTaskId((current) => (Number(current) === Number(task.id) ? null : current));
+      await loadData();
+    } catch (apiError) {
+      setError(apiError.response?.data?.message || "Failed to delete task");
+      throw apiError;
     }
   };
 
@@ -480,6 +523,37 @@ const AdminDashboard = () => {
 
   return (
     <div className="min-h-screen bg-dsr-page text-dsr-ink">
+      <CreateTaskModal
+        open={isCreateTaskModalOpen}
+        title="Create Task"
+        form={form}
+        onFieldChange={(field, value) => setForm((prev) => ({ ...prev, [field]: value }))}
+        onSubmit={handleAssign}
+        onClose={() => setIsCreateTaskModalOpen(false)}
+        error={error}
+        locked={createTaskLockedForSelectedDate}
+        lockedMessage={
+          createTaskLockedForSelectedDate
+            ? "You already submitted today's report. Choose tomorrow or a future date to create a task."
+            : ""
+        }
+        submitLabel="Add Task"
+        todayText={todayText}
+        departmentOptions={taskDepartmentSelectOptions}
+        showAssignment
+        employees={employees}
+        selfAssign={selfAssign}
+        onSelfAssignChange={(checked) => {
+          setSelfAssign(checked);
+          if (checked) {
+            setForm((prev) => ({ ...prev, assignedTo: String(user?.id || "") }));
+          } else {
+            setForm((prev) => ({ ...prev, assignedTo: "" }));
+          }
+        }}
+        currentUserId={user?.id}
+        currentUserName={user?.name}
+      />
       <ConfirmDialog
         open={isOwnSubmitConfirmOpen}
         title="Submit Self-Task Report"
@@ -517,7 +591,7 @@ const AdminDashboard = () => {
                     : "text-dsr-ink hover:bg-white hover:text-dsr-brand"
                 }`}
               >
-                {tab}
+                {getTabLabel(tab)}
               </button>
             ))}
           </nav>
@@ -554,7 +628,7 @@ const AdminDashboard = () => {
           >
             {TABS.map((tab) => (
               <option key={tab} value={tab}>
-                {tab}
+                {getTabLabel(tab)}
               </option>
             ))}
             <option value="Profile">Profile</option>
@@ -565,19 +639,19 @@ const AdminDashboard = () => {
           <section className="card-green">
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
               <div>
-                <p className="text-xs uppercase tracking-wide text-dsr-muted">Department</p>
+                <p className="text-xs font-bold uppercase tracking-wide text-slate-900">Department</p>
                 <h3 className="text-3xl font-extrabold">{managedDepartmentLabel}</h3>
               </div>
               <div>
-                <p className="text-xs uppercase tracking-wide text-dsr-muted">Team Members</p>
+                <p className="text-xs font-bold uppercase tracking-wide text-slate-900">Team Members</p>
                 <h3 className="text-3xl font-extrabold">{employees.length}</h3>
               </div>
               <div>
-                <p className="text-xs uppercase tracking-wide text-dsr-muted">Tasks</p>
+                <p className="text-xs font-bold uppercase tracking-wide text-slate-900">Tasks</p>
                 <h3 className="text-3xl font-extrabold">{dailyOverviewTasks.length}</h3>
               </div>
               <div>
-                <p className="text-xs uppercase tracking-wide text-dsr-muted">Completed Tasks</p>
+                <p className="text-xs font-bold uppercase tracking-wide text-slate-900">Completed Tasks</p>
                 <h3 className="text-3xl font-extrabold text-emerald-700">
                   {dailyOverviewCompletedTasks}
                 </h3>
@@ -587,115 +661,14 @@ const AdminDashboard = () => {
         )}
 
         {activeTab === "Tasks" && (
-          <form className="card grid w-full gap-2 md:grid-cols-2" onSubmit={handleAssign}>
-            <h2 className="md:col-span-2 text-lg font-semibold">Create Task</h2>
-            <div>
-              <h2 className="mb-1 text-sm font-semibold text-slate-900">Client / Vendor</h2>
-              <input
-                className="input"
-                value={form.client}
-                disabled={alreadySubmittedOwnToday}
-                onChange={(event) => setForm((prev) => ({ ...prev, client: event.target.value }))}
-              />
-            </div>
-            <div>
-              <h2 className="mb-1 text-sm font-semibold text-slate-900">Task Title</h2>
-              <input
-                className="input"
-                value={form.task}
-                disabled={alreadySubmittedOwnToday}
-                onChange={(event) => setForm((prev) => ({ ...prev, task: event.target.value }))}
-                required
-              />
-            </div>
-            <h2 className="md:col-span-2 text-sm text-dsr-muted">Assign</h2>
-            <select
-              className="input"
-              value={form.assignedTo}
-              onChange={(event) => setForm((prev) => ({ ...prev, assignedTo: event.target.value }))}
-              disabled={selfAssign || alreadySubmittedOwnToday}
-              required
-            >
-              <option value="">Assign to team employee</option>
-              {employees.map((employee) => (
-                <option key={employee.id} value={employee.id}>
-                  {employee.name}
-                </option>
-              ))}
-            </select>
-            <label className="flex items-center gap-2 rounded-xl border border-dsr-border bg-dsr-soft px-3 py-2 text-sm text-dsr-muted">
-              <input
-                type="checkbox"
-                checked={selfAssign}
-                disabled={alreadySubmittedOwnToday}
-                onChange={(event) => {
-                  const checked = event.target.checked;
-                  setSelfAssign(checked);
-                  if (checked) {
-                    setForm((prev) => ({
-                      ...prev,
-                      assignedTo: String(user?.id || ""),
-                      taskDepartment: isSnigdhaDualAdmin ? prev.taskDepartment : ""
-                    }));
-                  } else {
-                    setForm((prev) => ({ ...prev, assignedTo: "", taskDepartment: "" }));
-                  }
-                }}
-              />
-              Self assign (assign to me)
-            </label>
-            {selfAssign && isSnigdhaDualAdmin && (
-              <>
-                <h2 className="md:col-span-2 text-sm font-semibold text-slate-900">Task Department</h2>
-                <select
-                  className="input md:col-span-2"
-                  value={form.taskDepartment}
-                  disabled={alreadySubmittedOwnToday}
-                  onChange={(event) => setForm((prev) => ({ ...prev, taskDepartment: event.target.value }))}
-                  required
-                >
-                  <option value="">Select department for this self-task</option>
-                  {snigdhaDepartmentOptions.map((department) => (
-                    <option key={department} value={department}>{department}</option>
-                  ))}
-                </select>
-              </>
-            )}
-            <h2 className="md:col-span-2 text-sm font-semibold text-slate-900">Action</h2>
-            <textarea
-              className="input md:col-span-2"
-              rows={3}
-              value={form.action}
-              disabled={alreadySubmittedOwnToday}
-              onChange={(event) => setForm((prev) => ({ ...prev, action: event.target.value }))}
-              required
-            />
-            <h2 className="md:col-span-2 text-sm font-semibold text-slate-900">Priority</h2>
-            <select
-              className="input md:col-span-2"
-              value={form.priority}
-              disabled={alreadySubmittedOwnToday}
-              onChange={(event) => setForm((prev) => ({ ...prev, priority: event.target.value }))}
-            >
-              <option value="Medium">Medium</option>
-              <option value="High">High</option>
-              <option value="Critical">Critical</option>
-            </select>
-            <button className="btn-primary md:col-span-2" type="submit" disabled={alreadySubmittedOwnToday}>
-              {alreadySubmittedOwnToday ? "Available Tomorrow" : "Add Task"}
-            </button>
-            {alreadySubmittedOwnToday && (
-              <p className="md:col-span-2 text-sm text-rose-600">
-                You already submitted today's report. New tasks can be created tomorrow.
-              </p>
-            )}
-            {error && <p className="md:col-span-2 text-sm text-rose-600">{error}</p>}
-          </form>
-        )}
-
-        {activeTab === "Tasks" && (
           <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_280px] xl:items-stretch">
             <section className="card h-full">
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                <h2 className="text-lg font-semibold text-dsr-ink">Tasks</h2>
+                <button type="button" className="btn-primary" onClick={() => setIsCreateTaskModalOpen(true)}>
+                  Create Task
+                </button>
+              </div>
               <AdminTaskFilters
                 filters={filters}
                 employees={employees}
@@ -720,7 +693,7 @@ const AdminDashboard = () => {
             <section className="card">
               <div className="grid gap-3 md:grid-cols-3">
                 <div>
-                  <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-dsr-muted">
+                  <label className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-900">
                     Comparison View
                   </label>
                   <select
@@ -738,7 +711,7 @@ const AdminDashboard = () => {
                   </select>
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-dsr-muted">
+                  <label className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-900">
                     Comparison Date
                   </label>
                   <input
@@ -781,33 +754,6 @@ const AdminDashboard = () => {
                 datasets={employeeTaskStatusChart.datasets}
               />
             </div>
-            <TaskTable
-              tasks={filteredTasks}
-              onStatusChange={handleStatusChange}
-              onPriorityChange={handlePriorityChange}
-              editableStatus
-              showAssignee
-              showReassign
-              reassignOptions={reassignOptions}
-              onReassign={handleReassign}
-              reassigningTaskId={reassigningTaskId}
-              focusedTaskId={focusedTaskId}
-              setFocusedTaskId={setFocusedTaskId}
-            />
-            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-dsr-border bg-dsr-soft p-3">
-              <p className="text-sm text-dsr-muted">
-                Submit self-task report for: <span className="font-semibold text-dsr-ink">{adminReportDate}</span>
-              </p>
-              <button
-                type="button"
-                className={alreadySubmittedOwnForDate ? "rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white" : "btn-primary"}
-                disabled={submittingOwnReport}
-                onClick={handleSubmitOwnReport}
-              >
-                {alreadySubmittedOwnForDate ? "Submitted" : submittingOwnReport ? "Submitting..." : "Submit Report"}
-              </button>
-            </div>
-            {ownSubmitMessage && <p className="mt-2 text-sm text-dsr-brand">{ownSubmitMessage}</p>}
           </>
         )}
 
@@ -817,6 +763,8 @@ const AdminDashboard = () => {
               tasks={filteredTasks}
               onStatusChange={handleStatusChange}
               onPriorityChange={handlePriorityChange}
+              onDeleteTask={handleDeleteTask}
+              canDeleteTask={(task) => Number(task.assigned_by) === Number(user?.id)}
               editableStatus
               showAssignee
               showReassign
@@ -844,35 +792,39 @@ const AdminDashboard = () => {
         )}
 
         {activeTab === "Employees" && (
-          <section className="card overflow-x-auto">
+          <section>
             <h2 className="mb-3 text-lg font-semibold">Department Employees</h2>
-            <table className="min-w-full text-sm">
-              <thead>
-                <tr className="border-b bg-dsr-soft text-left">
-                  <th className="p-3">Name</th>
-                  <th className="p-3">Email</th>
-                  <th className="p-3">Role</th>
-                  <th className="p-3">Department</th>
-                </tr>
-              </thead>
-              <tbody>
-                {employees.map((entry) => (
-                  <tr key={entry.id} className="border-b border-dsr-border/70">
-                    <td className="p-3 font-semibold">{entry.name}</td>
-                    <td className="p-3">{entry.email}</td>
-                    <td className="p-3 uppercase">{entry.role}</td>
-                    <td className="p-3">{toTeamLabel(entry.team) || "-"}</td>
-                  </tr>
-                ))}
-                {employees.length === 0 && (
-                  <tr>
-                    <td colSpan={4} className="p-4 text-center text-dsr-muted">
-                      No employees found in this department
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+            <div className="overflow-hidden rounded-md border border-slate-200 bg-white shadow-sm">
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-sm">
+                  <thead>
+                    <tr className="border-b bg-dsr-soft text-left">
+                      <th className="p-3">Name</th>
+                      <th className="p-3">Email</th>
+                      <th className="p-3">Role</th>
+                      <th className="p-3">Department</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {employees.map((entry) => (
+                      <tr key={entry.id} className="border-b border-dsr-border/70">
+                        <td className="p-3 font-semibold">{entry.name}</td>
+                        <td className="p-3">{entry.email}</td>
+                        <td className="p-3 uppercase">{entry.role}</td>
+                        <td className="p-3">{toTeamLabel(entry.team) || "-"}</td>
+                      </tr>
+                    ))}
+                    {employees.length === 0 && (
+                      <tr>
+                        <td colSpan={4} className="p-4 text-center text-dsr-muted">
+                          No employees found in this department
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </section>
         )}
 

@@ -50,6 +50,8 @@ export const getReportsController = async (req, res) => {
         managedTeams,
         dateRange: req.query.dateRange,
         date: req.query.date,
+        customStartDate: req.query.customStartDate,
+        customEndDate: req.query.customEndDate,
         teamFilter: req.query.team,
         employeeId: req.query.employeeId,
         employeeIds: normalizeEmployeeIds(req.query.employeeIds)

@@ -26,6 +26,7 @@ CREATE TABLE tasks (
   submitted_to_hr TINYINT(1) NOT NULL DEFAULT 0,
   submitted_to_hr_at TIMESTAMP NULL,
   carried_forward_from_id INT NULL,
+  task_date DATE NOT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   reassigned_at TIMESTAMP NULL,
   completed_at TIMESTAMP NULL,

@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import ConfirmDialog from "./ConfirmDialog";
+import { getTaskDateText, getTodayText } from "../utils/taskMeta";
 
 const TASKS_PER_PAGE = 10;
 
@@ -74,6 +76,23 @@ const formatUtcDateTimeParts = (value) => {
   };
 };
 
+const formatDateOnly = (value) => {
+  if (!value) {
+    return "";
+  }
+
+  const parsed = new Date(`${String(value).slice(0, 10)}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) {
+    return String(value).slice(0, 10);
+  }
+
+  return parsed.toLocaleDateString([], {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  });
+};
+
 const TaskCellPreview = ({ text = "", interactive = false, onEdit = null }) => {
   const contentRef = useRef(null);
   const [expanded, setExpanded] = useState(false);
@@ -100,8 +119,8 @@ const TaskCellPreview = ({ text = "", interactive = false, onEdit = null }) => {
   }, [text]);
 
   const contentClassName = interactive
-    ? "w-full rounded-md px-2.5 py-1.5 text-left text-[13px] text-slate-700 whitespace-pre-wrap break-words"
-    : "block px-2.5 py-1.5 text-[13px] text-slate-700 whitespace-pre-wrap break-words";
+    ? "w-full rounded-md px-2.5 py-1.5 text-left text-[13px] font-medium text-slate-900 whitespace-pre-wrap break-words"
+    : "block px-2.5 py-1.5 text-[13px] font-medium text-slate-900 whitespace-pre-wrap break-words";
 
   const clampStyle = expanded
     ? undefined
@@ -155,9 +174,12 @@ const TaskTable = ({
   reassignOptions = [],
   onReassign,
   reassigningTaskId = null,
+  onDeleteTask = null,
+  canDeleteTask = null,
   focusedTaskId = null,
   setFocusedTaskId = null
 }) => {
+  const wrapperRef = useRef(null);
   const [dependencyDrafts, setDependencyDrafts] = useState({});
   const [dependencyMeta, setDependencyMeta] = useState({});
   const [activeDependencyIds, setActiveDependencyIds] = useState({});
@@ -166,13 +188,21 @@ const TaskTable = ({
   const [actionMeta, setActionMeta] = useState({});
   const [activeActionIds, setActiveActionIds] = useState({});
   const [skipActionPersistIds, setSkipActionPersistIds] = useState({});
+  const [clientDrafts, setClientDrafts] = useState({});
+  const [clientMeta, setClientMeta] = useState({});
+  const [activeClientIds, setActiveClientIds] = useState({});
+  const [skipClientPersistIds, setSkipClientPersistIds] = useState({});
   const [taskTitleDrafts, setTaskTitleDrafts] = useState({});
   const [taskTitleMeta, setTaskTitleMeta] = useState({});
   const [activeTaskTitleIds, setActiveTaskTitleIds] = useState({});
   const [skipTaskTitlePersistIds, setSkipTaskTitlePersistIds] = useState({});
   const [reassignModalTask, setReassignModalTask] = useState(null);
   const [reassignSelectionId, setReassignSelectionId] = useState("");
+  const [hoveredDeleteTask, setHoveredDeleteTask] = useState(null);
+  const [deleteConfirmTask, setDeleteConfirmTask] = useState(null);
+  const [deletingTaskId, setDeletingTaskId] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
+  const todayText = getTodayText();
 
   const totalPages = Math.max(1, Math.ceil(tasks.length / TASKS_PER_PAGE));
   const paginatedTasks = useMemo(() => {
@@ -198,6 +228,19 @@ const TaskTable = ({
       return next;
     });
   }, [tasks, dependencyMeta, activeDependencyIds]);
+
+  useEffect(() => {
+    setClientDrafts((prev) => {
+      const next = {};
+      tasks.forEach((task) => {
+        const taskClient = task.client ?? "";
+        const isActive = Boolean(activeClientIds[task.id]);
+        const isSaving = clientMeta[task.id]?.state === "saving";
+        next[task.id] = isActive || isSaving ? prev[task.id] ?? taskClient : taskClient;
+      });
+      return next;
+    });
+  }, [tasks, clientMeta, activeClientIds]);
 
   useEffect(() => {
     setActionDrafts((prev) => {
@@ -253,8 +296,26 @@ const TaskTable = ({
   }, [focusedTaskId, tasks, currentPage, setFocusedTaskId]);
 
   const getDependencyValue = (item) => dependencyDrafts[item.id] ?? item.dependency ?? "";
+  const getClientValue = (item) => clientDrafts[item.id] ?? item.client ?? "";
   const getActionValue = (item) => actionDrafts[item.id] ?? item.action ?? "";
   const getTaskTitleValue = (item) => taskTitleDrafts[item.id] ?? item.task ?? "";
+  const setClientActive = (taskId, isActive) => {
+    setActiveClientIds((prev) => {
+      const currentlyActive = Boolean(prev[taskId]);
+      if (currentlyActive === isActive) {
+        return prev;
+      }
+
+      const next = { ...prev };
+      if (isActive) {
+        next[taskId] = true;
+      } else {
+        delete next[taskId];
+      }
+      return next;
+    });
+  };
+
   const setDependencyActive = (taskId, isActive) => {
     setActiveDependencyIds((prev) => {
       const currentlyActive = Boolean(prev[taskId]);
@@ -316,6 +377,32 @@ const TaskTable = ({
       delete next[taskId];
       return next;
     });
+  };
+
+  const clearClientMeta = (taskId) => {
+    setClientMeta((prev) => {
+      if (!prev[taskId]) {
+        return prev;
+      }
+
+      const next = { ...prev };
+      delete next[taskId];
+      return next;
+    });
+  };
+
+  const resetClientMeta = (taskId) => {
+    setTimeout(() => {
+      setClientMeta((prev) => {
+        if (!prev[taskId] || prev[taskId].state !== "saved") {
+          return prev;
+        }
+
+        const next = { ...prev };
+        delete next[taskId];
+        return next;
+      });
+    }, 1200);
   };
 
   const resetDependencyMeta = (taskId) => {
@@ -420,6 +507,48 @@ const TaskTable = ({
     } catch {
       setDependencyDrafts((prev) => ({ ...prev, [item.id]: item.dependency ?? "" }));
       setDependencyMeta((prev) => ({
+        ...prev,
+        [item.id]: { state: "error" }
+      }));
+    }
+  };
+
+  const persistClient = async (item, value = undefined) => {
+    if (!onStatusChange) {
+      return;
+    }
+
+    if (skipClientPersistIds[item.id]) {
+      setSkipClientPersistIds((prev) => {
+        const next = { ...prev };
+        delete next[item.id];
+        return next;
+      });
+      return;
+    }
+
+    const nextClient = String(value ?? getClientValue(item)).trim();
+    const currentClient = String(item.client ?? "").trim();
+
+    if (nextClient === currentClient) {
+      return;
+    }
+
+    setClientMeta((prev) => ({
+      ...prev,
+      [item.id]: { state: "saving" }
+    }));
+
+    try {
+      await onStatusChange(item, item.status, getDependencyValue(item), getActionValue(item), getTaskTitleValue(item), nextClient);
+      setClientMeta((prev) => ({
+        ...prev,
+        [item.id]: { state: "saved" }
+      }));
+      resetClientMeta(item.id);
+    } catch {
+      setClientDrafts((prev) => ({ ...prev, [item.id]: item.client ?? "" }));
+      setClientMeta((prev) => ({
         ...prev,
         [item.id]: { state: "error" }
       }));
@@ -533,22 +662,71 @@ const TaskTable = ({
     ? reassignOptions.filter((member) => Number(member.id) !== Number(reassignModalTask.assigned_to))
     : [];
 
+  const isTaskDeletable = (item) => {
+    if (!onDeleteTask) {
+      return false;
+    }
+
+    if (typeof canDeleteTask === "function") {
+      return Boolean(canDeleteTask(item));
+    }
+
+    return true;
+  };
+
+  const handleRowHover = (event, item) => {
+    if (!isTaskDeletable(item) || !wrapperRef.current) {
+      return;
+    }
+
+    const wrapperRect = wrapperRef.current.getBoundingClientRect();
+    const rowRect = event.currentTarget.getBoundingClientRect();
+
+    setHoveredDeleteTask({
+      id: Number(item.id),
+      item,
+      top: rowRect.top - wrapperRect.top + rowRect.height / 2
+    });
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteConfirmTask || !onDeleteTask) {
+      return;
+    }
+
+    setDeletingTaskId(deleteConfirmTask.id);
+
+    try {
+      await onDeleteTask(deleteConfirmTask);
+      setDeleteConfirmTask(null);
+      setHoveredDeleteTask((current) => (Number(current?.id) === Number(deleteConfirmTask.id) ? null : current));
+    } finally {
+      setDeletingTaskId(null);
+    }
+  };
+
   return (
-    <div className="card overflow-x-auto">
+    <div
+      ref={wrapperRef}
+      className="relative overflow-visible"
+      onMouseLeave={() => setHoveredDeleteTask(null)}
+    >
+      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_18px_40px_rgba(15,23,42,0.10)]">
+      <div className="overflow-x-auto">
       <table className="w-full table-fixed border-collapse text-[13px]">
         <thead>
-          <tr className="border-b border-slate-300 bg-slate-50 text-left text-slate-700">
+          <tr className="border-b border-slate-300 bg-emerald-100/75 text-left text-slate-700">
             <th className="w-14 px-2.5 py-2">Sr No</th>
-            <th className="w-[15%] px-2.5 py-2 whitespace-normal break-words">Client / Vendor</th>
-            <th className="w-[25%] pl-2.5 pr-0.5 py-2">Task title</th>
-            <th className="w-[23%] pl-0.5 pr-2.5 py-2">Action</th>
+            <th className="w-[15%] px-2.5 py-2 whitespace-normal">Client / Vendor</th>
+            <th className="w-[25%] px-2.5 py-2 text-center">Task title</th>
+            <th className="w-[23%] px-2.5 py-2 text-center">Action</th>
             <th className="w-24 px-1.5 py-2 text-center">Status</th>
             <th className="w-20 px-1.5 py-2 text-center">Priority</th>
             <th className="w-[16%] px-2 py-2">Dependency / Remark</th>
-            {showAssignee && <th className="w-24 px-2.5 py-2 text-center">Assigned To</th>}
+            {showAssignee && <th className="w-24 px-1.5 py-2 text-center">Assigned To</th>}
             {showAssigner && <th className="w-28 px-2.5 py-2 text-center">Assigned By</th>}
             {showSubmitToHr && <th className="w-28 px-2.5 py-2 text-center">HR Submit</th>}
-            {showReassign && <th className="w-24 px-2.5 py-2 text-center">Reassign</th>}
+            {showReassign && <th className="w-24 px-1 py-2 text-center">Reassign</th>}
             <th className="w-28 px-2.5 py-2 text-center">Assigned Time</th>
             <th className="w-28 px-2.5 py-2 text-center">Completed Time</th>
           </tr>
@@ -557,6 +735,10 @@ const TaskTable = ({
           {paginatedTasks.map((item, index) => {
             const overdue = item.deadline && item.status !== "Completed" && new Date(item.deadline) < new Date();
             const isCompletedTask = item.status === "Completed";
+            const taskDateText = getTaskDateText(item);
+            const isFutureTask = Boolean(taskDateText) && taskDateText > todayText;
+            const canEditTask = editableStatus && Number(item.submitted_to_hr) !== 1 && !isFutureTask;
+            const isClientEditing = Boolean(activeClientIds[item.id]);
             const isTaskTitleEditing = Boolean(activeTaskTitleIds[item.id]);
             const isActionEditing = Boolean(activeActionIds[item.id]);
             const isDependencyEditing = Boolean(activeDependencyIds[item.id]);
@@ -568,24 +750,77 @@ const TaskTable = ({
               <tr
                 key={item.id}
                 data-task-id={item.id}
+                onMouseEnter={(event) => handleRowHover(event, item)}
                 className={`border-b border-slate-300 ${
                   Number(focusedTaskId) === Number(item.id)
                     ? "bg-emerald-50"
                     : overdue
                       ? "bg-rose-50"
-                      : item.status === "Completed"
-                        ? "bg-green-50"
-                        : item.status === "In Progress"
-                          ? "bg-sky-50"
-                        : item.status === "Pending"
-                          ? "bg-yellow-50"
-                        : ""
+                      : ""
                 }`}
               >
-                <td className="px-2.5 py-2 align-top">{(currentPage - 1) * TASKS_PER_PAGE + index + 1}</td>
-                <td className="px-2.5 py-2 align-top font-medium break-words">{item.client}</td>
-                <td className="pl-2.5 pr-0.5 py-2 align-top overflow-hidden">
-                  {editableStatus && Number(item.submitted_to_hr) !== 1 ? (
+                <td className="px-2.5 py-2 align-top font-medium text-slate-900">{(currentPage - 1) * TASKS_PER_PAGE + index + 1}</td>
+                <td className="px-2.5 py-2 align-top overflow-hidden">
+                  {canEditTask ? (
+                    <div className="w-full max-w-full">
+                      {isClientEditing ? (
+                        <textarea
+                          autoFocus
+                          rows={3}
+                          className="block w-full max-w-full resize-y rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-[13px] leading-5 text-slate-700 outline-none focus:border-emerald-500"
+                          placeholder="Update client / vendor"
+                          value={getClientValue(item)}
+                          onChange={(event) => {
+                            setClientDrafts((prev) => ({ ...prev, [item.id]: event.target.value }));
+                            clearClientMeta(item.id);
+                          }}
+                          onBlur={(event) => {
+                            setClientActive(item.id, false);
+                            void persistClient(item, event.target.value);
+                          }}
+                          onKeyDown={(event) => {
+                            if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+                              event.preventDefault();
+                              event.currentTarget.blur();
+                            }
+
+                            if (event.key === "Escape") {
+                              setSkipClientPersistIds((prev) => ({ ...prev, [item.id]: true }));
+                              setClientDrafts((prev) => ({
+                                ...prev,
+                                [item.id]: item.client ?? ""
+                              }));
+                              clearClientMeta(item.id);
+                              event.currentTarget.blur();
+                            }
+                          }}
+                        />
+                      ) : (
+                        <TaskCellPreview
+                          text={getClientValue(item)}
+                          interactive
+                          onEdit={() => setClientActive(item.id, true)}
+                        />
+                      )}
+                      {clientMeta[item.id]?.state === "saving" && (
+                        <p className="mt-1 text-xs text-dsr-muted">Saving...</p>
+                      )}
+                      {clientMeta[item.id]?.state === "saved" && (
+                        <p className="mt-1 text-xs text-emerald-600">Saved</p>
+                      )}
+                      {clientMeta[item.id]?.state === "error" && (
+                        <p className="mt-1 text-xs text-rose-600">Could not save client / vendor</p>
+                      )}
+                    </div>
+                  ) : (
+                    <div>
+                      <TaskCellPreview text={item.client || "-"} />
+                      {isFutureTask ? <p className="mt-1 px-2.5 text-xs text-slate-500">Editable on {taskDateText}</p> : null}
+                    </div>
+                  )}
+                </td>
+                <td className="px-2.5 py-2 align-top overflow-hidden">
+                  {canEditTask ? (
                     <div className="w-full max-w-full">
                       {isTaskTitleEditing ? (
                         <textarea
@@ -636,12 +871,15 @@ const TaskTable = ({
                         <p className="mt-1 text-xs text-rose-600">Could not save task title</p>
                       )}
                     </div>
-                  ) : (
-                    <TaskCellPreview text={item.task || "-"} />
+                    ) : (
+                    <div>
+                      <TaskCellPreview text={item.task || "-"} />
+                      {isFutureTask ? <p className="mt-1 px-2.5 text-xs text-slate-500">Editable on {taskDateText}</p> : null}
+                    </div>
                   )}
                 </td>
-                <td className="pl-0.5 pr-2.5 py-2 align-top overflow-hidden">
-                  {editableStatus && Number(item.submitted_to_hr) !== 1 ? (
+                <td className="px-2.5 py-2 align-top overflow-hidden">
+                  {canEditTask ? (
                     <div className="w-full max-w-full">
                       {isActionEditing ? (
                         <textarea
@@ -693,13 +931,16 @@ const TaskTable = ({
                       )}
                     </div>
                     ) : (
-                      <TaskCellPreview text={item.action || "-"} />
+                      <div>
+                        <TaskCellPreview text={item.action || "-"} />
+                        {isFutureTask ? <p className="mt-1 px-2.5 text-xs text-slate-500">Editable on {taskDateText}</p> : null}
+                      </div>
                     )}
                   </td>
                 <td className="px-1.5 py-2 align-top text-center">
-                  {editableStatus && Number(item.submitted_to_hr) !== 1 ? (
+                  {canEditTask ? (
                     <select
-                      className={`mx-auto w-full max-w-[104px] rounded-md px-2 py-1 text-[12px] font-semibold ${statusClass[item.status] || "bg-slate-100 text-slate-700"}`}
+                      className={`mx-auto w-full max-w-[104px] rounded-md px-2 py-1 text-[9px] font-semibold ${statusClass[item.status] || "bg-slate-100 text-slate-700"}`}
                       value={item.status}
                       onChange={(event) =>
                         onStatusChange(
@@ -716,15 +957,15 @@ const TaskTable = ({
                       <option value="Completed">Completed</option>
                     </select>
                   ) : (
-                    <span className={`inline-flex whitespace-nowrap rounded-md px-2 py-1 text-[12px] font-semibold ${statusClass[item.status]}`}>
+                    <span className={`inline-flex whitespace-nowrap rounded-md px-2 py-1 text-[9px] font-semibold ${statusClass[item.status]}`}>
                       {item.status}
                     </span>
                   )}
                 </td>
                 <td className="px-1.5 py-2 align-top text-center">
-                  {editableStatus && Number(item.submitted_to_hr) !== 1 ? (
+                  {canEditTask ? (
                     <select
-                      className={`mx-auto w-full max-w-[96px] rounded-md px-2 py-1 text-[12px] font-semibold ${priorityClass[item.priority] || "bg-slate-100 text-slate-700"}`}
+                      className={`mx-auto w-full max-w-[96px] rounded-md px-2 py-1 text-[9px] font-semibold ${priorityClass[item.priority] || "bg-slate-100 text-slate-700"}`}
                       value={item.priority || "Medium"}
                       onChange={(event) => {
                         if (onPriorityChange) {
@@ -737,13 +978,13 @@ const TaskTable = ({
                       <option value="Critical">Critical</option>
                     </select>
                   ) : (
-                    <span className={`inline-flex whitespace-nowrap rounded-md px-2 py-1 text-[12px] font-semibold ${priorityClass[item.priority] || "bg-slate-100 text-slate-700"}`}>
+                    <span className={`inline-flex whitespace-nowrap rounded-md px-2 py-1 text-[9px] font-semibold ${priorityClass[item.priority] || "bg-slate-100 text-slate-700"}`}>
                       {item.priority || "Medium"}
                     </span>
                   )}
                 </td>
                 <td className="px-2 py-2 align-top">
-                  {editableStatus && Number(item.submitted_to_hr) !== 1 ? (
+                  {canEditTask ? (
                     <div className="w-full">
                       {isDependencyEditing ? (
                         <textarea
@@ -794,14 +1035,17 @@ const TaskTable = ({
                         <p className="mt-1 text-xs text-rose-600">Could not save dependancy / remark</p>
                       )}
                     </div>
-                  ) : (
-                    <TaskCellPreview text={item.dependency || "-"} />
+                    ) : (
+                    <div>
+                      <TaskCellPreview text={item.dependency || "-"} />
+                      {isFutureTask ? <p className="mt-1 px-2.5 text-xs text-slate-500">Editable on {taskDateText}</p> : null}
+                    </div>
                   )}
                 </td>
-                {showAssignee && <td className="px-2.5 py-2 align-top text-center">{item.assigned_to_name || "-"}</td>}
-                {showAssigner && <td className="px-2.5 py-2 align-top text-center">{item.assigned_by_name || "-"}</td>}
+                {showAssignee && <td className="px-1.5 py-2 align-top text-center font-medium text-slate-900">{item.assigned_to_name || "-"}</td>}
+                {showAssigner && <td className="px-2.5 py-2 align-top text-center font-medium text-slate-900">{item.assigned_by_name || "-"}</td>}
                 {showSubmitToHr && (
-                  <td className="px-2.5 py-2 align-top text-center">
+                  <td className="px-1 py-2 align-top text-center">
                     {Number(item.submitted_to_hr) === 1 ? (
                       <span className="rounded-md bg-rose-100 px-2 py-1 text-xs font-semibold text-rose-800">
                         Submitted
@@ -810,7 +1054,7 @@ const TaskTable = ({
                       <button
                         type="button"
                         className="btn-primary px-2.5 py-1.5 text-[13px]"
-                        disabled={!onSubmitToHr || submittingTaskId === item.id}
+                        disabled={!onSubmitToHr || submittingTaskId === item.id || isFutureTask}
                         onClick={() => onSubmitToHr?.(item)}
                       >
                         {submittingTaskId === item.id ? "Submitting..." : "Submit to HR"}
@@ -825,8 +1069,8 @@ const TaskTable = ({
                     ) : (
                       <button
                         type="button"
-                        className="btn-secondary inline-flex w-[74px] justify-center whitespace-nowrap px-0 py-1.5 text-[13px]"
-                        disabled={!onReassign || reassigningTaskId === item.id}
+                        className="btn-secondary inline-flex h-6 w-[64px] items-center justify-center whitespace-nowrap !rounded-none px-0 py-0 text-[10px] leading-none"
+                        disabled={!onReassign || reassigningTaskId === item.id || isFutureTask}
                         onClick={() => openReassignModal(item)}
                       >
                         {reassigningTaskId === item.id ? "Reassigning..." : "Reassign"}
@@ -834,10 +1078,10 @@ const TaskTable = ({
                     )}
                   </td>
                 )}
-                <td className="px-2.5 py-2 whitespace-nowrap align-top text-center text-[12px] leading-tight">
+                <td className="px-2.5 py-2 whitespace-nowrap align-top text-center text-[12px] font-medium text-slate-900 leading-tight">
                   {assignedAt ? (
                     <div>
-                      <p>{assignedAt.date}</p>
+                      <p>{isFutureTask && taskDateText ? formatDateOnly(taskDateText) : assignedAt.date}</p>
                       <p>{assignedAt.time}</p>
                     </div>
                   ) : (
@@ -850,7 +1094,7 @@ const TaskTable = ({
                     </div>
                   )}
                 </td>
-                <td className="px-2.5 py-2 whitespace-nowrap align-top text-center text-[12px] leading-tight">
+                <td className="px-2.5 py-2 whitespace-nowrap align-top text-center text-[12px] font-medium text-slate-900 leading-tight">
                   {item.status === "Completed" && completedAt ? (
                     <div>
                       <p>{completedAt.date}</p>
@@ -881,6 +1125,32 @@ const TaskTable = ({
           )}
         </tbody>
       </table>
+      </div>
+      </div>
+
+      {hoveredDeleteTask && isTaskDeletable(hoveredDeleteTask.item) ? (
+        <>
+          <div
+            className="absolute right-[-56px] top-0 bottom-0 w-16"
+            onMouseEnter={() => setHoveredDeleteTask((current) => current)}
+          />
+          <button
+            type="button"
+            className="absolute right-[-44px] z-10 inline-flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-md border border-rose-200 bg-white text-rose-600 shadow-md transition hover:bg-rose-50"
+            style={{ top: hoveredDeleteTask.top }}
+            onClick={() => setDeleteConfirmTask(hoveredDeleteTask.item)}
+            aria-label="Delete task"
+          >
+            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M3 6h18" />
+              <path d="M8 6V4h8v2" />
+              <path d="M6 6l1 14h10l1-14" />
+              <path d="M10 11v6" />
+              <path d="M14 11v6" />
+            </svg>
+          </button>
+        </>
+      ) : null}
 
       {tasks.length > 0 && (
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-3 py-3 text-sm">
@@ -920,7 +1190,7 @@ const TaskTable = ({
             <p className="mt-1 text-sm text-dsr-muted">Current assignee: {reassignModalTask.assigned_to_name || "-"}</p>
 
             <div className="mt-4">
-                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-dsr-muted">
+                <label className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-900">
                   Select assignee
                 </label>
                 <select
@@ -953,6 +1223,25 @@ const TaskTable = ({
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={Boolean(deleteConfirmTask)}
+        title="Delete Task"
+        message={
+          deleteConfirmTask
+            ? `Do you want to delete "${deleteConfirmTask.task}"? This will remove its carried-forward copies too.`
+            : ""
+        }
+        confirmText="Delete"
+        cancelText="Cancel"
+        loading={Number(deletingTaskId) === Number(deleteConfirmTask?.id)}
+        onCancel={() => {
+          if (!deletingTaskId) {
+            setDeleteConfirmTask(null);
+          }
+        }}
+        onConfirm={() => void handleDeleteConfirm()}
+      />
     </div>
   );
 };

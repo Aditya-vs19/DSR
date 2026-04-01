@@ -29,13 +29,13 @@ textarea,
 }
 
 .card {
-  @apply rounded-2xl p-4 shadow-sm;
+  @apply rounded-md p-4 shadow-sm;
   background: var(--dsr-card);
   border: 1px solid var(--dsr-border);
 }
 
 .card-green {
-  @apply rounded-2xl p-4 shadow-sm;
+  @apply rounded-md p-4 shadow-sm;
   background: linear-gradient(140deg, #f6faf6, #edf4ee);
   border: 1px solid var(--dsr-border);
 }

@@ -8,6 +8,10 @@ function ReportHeader({
   onDateRangeChange,
   date,
   onDateChange,
+  customStartDate,
+  onCustomStartDateChange,
+  customEndDate,
+  onCustomEndDateChange,
   team,
   onTeamChange,
   teamOptions,
@@ -104,13 +108,13 @@ function ReportHeader({
   const headerGridClassName = isEmployeeHeaderLayout
     ? "grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,2fr)]"
     : "grid gap-3 md:grid-cols-6";
-  const actionsClassName = isEmployeeHeaderLayout ? "md:col-span-1" : "md:col-span-2";
+  const actionsClassName = "md:col-span-1";
   const actionButtonsClassName = isEmployeeHeaderLayout
     ? "flex flex-wrap items-center gap-2 md:grid md:grid-cols-2"
-    : "flex items-center gap-2";
+    : "flex flex-wrap items-center gap-2";
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+    <div className="rounded-md border border-slate-200 bg-white p-4 shadow-sm">
       <div className={headerGridClassName}>
         {showReportType ? <label className="md:col-span-1">
           <span className="mb-1 block text-xs font-bold uppercase tracking-wide text-black">Report Type</span>
@@ -124,25 +128,46 @@ function ReportHeader({
           </select>
         </label> : null}
 
-        <label className="md:col-span-1">
+        <label className={`md:col-span-1 ${!isEmployeeHeaderLayout && !showReportType ? "md:max-w-[170px]" : ""}`}>
           <span className="mb-1 block text-xs font-bold uppercase tracking-wide text-black">Range</span>
           <select
             value={dateRange}
             onChange={(event) => onDateRangeChange(event.target.value)}
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300"
+            className={`${!isEmployeeHeaderLayout && !showReportType ? "w-[150px]" : "w-full"} rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300`}
           >
             <option value="today">Today</option>
             <option value="week">Week</option>
             <option value="month">Month</option>
+            <option value="custom">Custom Range</option>
           </select>
         </label>
 
-        {showDateField ? <label className="md:col-span-1">
+        {showDateField && dateRange !== "custom" ? <label className="md:col-span-1">
           <span className="mb-1 block text-xs font-bold uppercase tracking-wide text-black">Date</span>
           <input
             type="date"
             value={date}
             onChange={(event) => onDateChange(event.target.value)}
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300"
+          />
+        </label> : null}
+
+        {showDateField && dateRange === "custom" ? <label className="md:col-span-1">
+          <span className="mb-1 block text-xs font-bold uppercase tracking-wide text-black">From Date</span>
+          <input
+            type="date"
+            value={customStartDate}
+            onChange={(event) => onCustomStartDateChange(event.target.value)}
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300"
+          />
+        </label> : null}
+
+        {showDateField && dateRange === "custom" ? <label className="md:col-span-1">
+          <span className="mb-1 block text-xs font-bold uppercase tracking-wide text-black">To Date</span>
+          <input
+            type="date"
+            value={customEndDate}
+            onChange={(event) => onCustomEndDateChange(event.target.value)}
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300"
           />
         </label> : null}
@@ -251,8 +276,9 @@ function ReportHeader({
 
       <div className="mt-4 grid gap-2 sm:grid-cols-4">
         {stats.map((item) => (
-          <div key={item.label} className={`rounded-lg px-3 py-2 text-sm ${item.className}`}>
-            {item.label}: {item.value}
+          <div key={item.label} className={`rounded-lg px-4 py-3 ${item.className}`}>
+            <p className="text-sm font-bold uppercase tracking-wide text-slate-800">{item.label}</p>
+            <p className="mt-1 text-2xl font-extrabold leading-none text-slate-900">{item.value}</p>
           </div>
         ))}
       </div>

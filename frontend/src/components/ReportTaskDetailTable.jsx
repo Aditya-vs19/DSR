@@ -1,4 +1,5 @@
 import React from "react";
+import { getTaskDateText } from "../utils/taskMeta";
 import { toTeamLabel } from "../utils/teamLabel";
 
 const statusBadgeClass = {
@@ -35,7 +36,7 @@ const formatDaySectionLabel = (task, dateRange) => {
     return task.groupLabel;
   }
 
-  const parsed = new Date(task.created_at);
+  const parsed = new Date(getTaskDateText(task) ? `${getTaskDateText(task)}T00:00:00` : task.created_at);
   if (Number.isNaN(parsed.getTime())) {
     return task.groupLabel || task.day || "Unknown Day";
   }
@@ -48,7 +49,7 @@ const formatDaySectionLabel = (task, dateRange) => {
 function ReportTaskDetailTable({ tasks = [], dateRange = "week" }) {
   if (!tasks.length) {
     return (
-      <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-500">
+      <div className="rounded-md border border-slate-200 bg-white p-8 text-center text-sm text-slate-500">
         Generate detailed report to view task list.
       </div>
     );
@@ -61,7 +62,7 @@ function ReportTaskDetailTable({ tasks = [], dateRange = "week" }) {
     const dateKey =
       dateRange === "month"
         ? task.groupLabel || `week-unknown-${task.id}`
-        : String(task.created_at || "").slice(0, 10) || `unknown-${task.id}`;
+        : getTaskDateText(task) || `unknown-${task.id}`;
 
     if (!groupIndexByDate.has(dateKey)) {
       groupIndexByDate.set(dateKey, groupedTasks.length);
@@ -77,27 +78,27 @@ function ReportTaskDetailTable({ tasks = [], dateRange = "week" }) {
   });
 
   return (
-    <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
+    <div className="overflow-x-auto rounded-md border border-slate-200 bg-white shadow-sm">
       <table className="min-w-full border-collapse text-sm">
         <thead>
-          <tr className="bg-slate-100">
-            <th className="border-b border-slate-200 px-3 py-3 text-left font-semibold text-slate-700">Employee</th>
-            <th className="border-b border-slate-200 px-3 py-3 text-left font-semibold text-slate-700">Team</th>
-            <th className="border-b border-slate-200 px-3 py-3 text-left font-semibold text-slate-700">Client</th>
-            <th className="border-b border-slate-200 px-3 py-3 text-left font-semibold text-slate-700">Task</th>
-            <th className="border-b border-slate-200 px-3 py-3 text-left font-semibold text-slate-700">Action</th>
-            <th className="border-b border-slate-200 px-3 py-3 text-left font-semibold text-slate-700">Status</th>
-            <th className="border-b border-slate-200 px-3 py-3 text-left font-semibold text-slate-700">Dependency / Remark</th>
-            <th className="border-b border-slate-200 px-3 py-3 text-left font-semibold text-slate-700">Assigned By</th>
-            <th className="border-b border-slate-200 px-3 py-3 text-left font-semibold text-slate-700">Created At</th>
-            <th className="border-b border-slate-200 px-3 py-3 text-left font-semibold text-slate-700">Completed At</th>
+          <tr className="bg-sky-100">
+            <th className="border-b border-sky-200 px-3 py-3 text-left font-semibold text-slate-900">Employee</th>
+            <th className="border-b border-sky-200 px-3 py-3 text-left font-semibold text-slate-900">Team</th>
+            <th className="border-b border-sky-200 px-3 py-3 text-left font-semibold text-slate-900">Client</th>
+            <th className="border-b border-sky-200 px-3 py-3 text-left font-semibold text-slate-900">Task</th>
+            <th className="border-b border-sky-200 px-3 py-3 text-left font-semibold text-slate-900">Action</th>
+            <th className="border-b border-sky-200 px-3 py-3 text-left font-semibold text-slate-900">Status</th>
+            <th className="border-b border-sky-200 px-3 py-3 text-left font-semibold text-slate-900">Dependency / Remark</th>
+            <th className="border-b border-sky-200 px-3 py-3 text-left font-semibold text-slate-900">Assigned By</th>
+            <th className="border-b border-sky-200 px-3 py-3 text-left font-semibold text-slate-900">Created At</th>
+            <th className="border-b border-sky-200 px-3 py-3 text-left font-semibold text-slate-900">Completed At</th>
           </tr>
         </thead>
         <tbody>
           {groupedTasks.map((group) => (
             <React.Fragment key={group.key}>
-              <tr className="bg-slate-200/70">
-                <td colSpan={10} className="px-3 py-2 text-left font-semibold text-slate-800">
+              <tr className="bg-amber-100">
+                <td colSpan={10} className="px-3 py-2 text-left font-semibold text-amber-900">
                   {group.label}
                 </td>
               </tr>

@@ -2,6 +2,7 @@ import {
   carryForwardPendingTasks,
   createNotification,
   createTask,
+  deleteTaskChain,
   getDepartmentAdminPerformance,
   getEmployeeDailySummary,
   getEmployeeTimeline,
@@ -20,7 +21,7 @@ import {
 } from "../models/taskModel.js";
 import { hasReceivedDailyReport } from "../models/reportModel.js";
 import { findUserById } from "../models/userModel.js";
-import { getManagedTeamsForAdmin } from "../utils/teamScope.js";
+import { getManagedTeamsForAdmin, TASK_DEPARTMENTS } from "../utils/teamScope.js";
 
 const statusMap = {
   pending: "Pending",
@@ -51,9 +52,30 @@ const normalizeTaskPriority = (value) => {
   return priorityMap[key] || null;
 };
 
+const businessDateFormatter = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "Asia/Kolkata",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit"
+});
+
+const getCurrentDateText = (value = new Date()) => businessDateFormatter.format(new Date(value));
+
+const toDateText = (value) => {
+  if (!value) {
+    return "";
+  }
+
+  if (value instanceof Date) {
+    return businessDateFormatter.format(value);
+  }
+
+  return String(value).slice(0, 10);
+};
+
 export const createTaskController = async (req, res) => {
   try {
-    const { client, task, action, status, dependency, assignedTo, type, deadline, priority, taskDepartment } = req.body;
+    const { client, task, action, status, dependency, assignedTo, type, deadline, priority, taskDepartment, taskDate } = req.body;
     const assignedBy = req.user.id;
     const normalizedClient = String(client || "").trim();
 
@@ -69,8 +91,17 @@ export const createTaskController = async (req, res) => {
       return res.status(403).json({ message: "Employees can create only self tasks" });
     }
 
-    if (["employee", "admin"].includes(req.user.role)) {
-      const today = new Date().toISOString().slice(0, 10);
+    const normalizedTaskDate = String(taskDate || "").slice(0, 10) || getCurrentDateText();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(normalizedTaskDate)) {
+      return res.status(400).json({ message: "Task date must be a valid date" });
+    }
+
+    if (normalizedTaskDate < getCurrentDateText()) {
+      return res.status(400).json({ message: "Task date cannot be in the past" });
+    }
+
+    if (["employee", "admin"].includes(req.user.role) && normalizedTaskDate === getCurrentDateText()) {
+      const today = getCurrentDateText();
       const alreadySubmittedToday = await hasReceivedDailyReport({
         userId: req.user.id,
         date: today
@@ -103,20 +134,10 @@ export const createTaskController = async (req, res) => {
     }
 
     const normalizedTaskDepartment = String(taskDepartment || "").trim();
-    let resolvedTaskDepartment = null;
+    let resolvedTaskDepartment = normalizedTaskDepartment || String(assignee.team || req.user.team || "").trim() || null;
 
-    if (normalizedTaskDepartment) {
-      const managedTeams = req.user.role === "admin" ? getManagedTeamsForAdmin(req.user) : [];
-
-      if (!(req.user.role === "admin" && isSelfTask)) {
-        return res.status(400).json({ message: "Task department can be set only for admin self tasks" });
-      }
-
-      if (!managedTeams.includes(normalizedTaskDepartment)) {
-        return res.status(400).json({ message: "Invalid task department for current admin" });
-      }
-
-      resolvedTaskDepartment = normalizedTaskDepartment;
+    if (resolvedTaskDepartment && !TASK_DEPARTMENTS.includes(resolvedTaskDepartment)) {
+      return res.status(400).json({ message: "Invalid task department" });
     }
 
     const normalizedStatus = normalizeTaskStatus(status) || "Pending";
@@ -134,7 +155,8 @@ export const createTaskController = async (req, res) => {
       type,
       deadline,
       priority: normalizedPriority,
-      taskDepartment: resolvedTaskDepartment
+      taskDepartment: resolvedTaskDepartment,
+      taskDate: normalizedTaskDate
     });
 
     if (Number(assignedTo) !== Number(assignedBy)) {
@@ -154,7 +176,7 @@ export const createTaskController = async (req, res) => {
 
 export const getTasksController = async (req, res) => {
   try {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = getCurrentDateText();
     await carryForwardPendingTasks(today);
 
     const { role, id: userId, team } = req.user;
@@ -169,10 +191,11 @@ export const getTasksController = async (req, res) => {
 export const updateTaskStatusController = async (req, res) => {
   try {
     const { id } = req.params;
-    const { status, dependency = null, action = "", taskTitle = "" } = req.body;
+    const { status, dependency = null, action = "", taskTitle = "", client = "" } = req.body;
     const normalizedStatus = normalizeTaskStatus(status);
     const normalizedAction = String(action || "").trim();
     const normalizedTaskTitle = String(taskTitle || "").trim();
+    const normalizedClient = String(client || "").trim();
 
     if (!normalizedStatus) {
       return res.status(400).json({ message: "Invalid status. Use Pending, In Progress, or Completed." });
@@ -193,6 +216,10 @@ export const updateTaskStatusController = async (req, res) => {
 
     if (Number(task.submitted_to_hr) === 1) {
       return res.status(400).json({ message: "Submitted tasks cannot be edited" });
+    }
+
+    if (toDateText(task.task_date) > getCurrentDateText()) {
+      return res.status(400).json({ message: "Future tasks can be edited only on their task date" });
     }
 
     let assignee = null;
@@ -218,6 +245,7 @@ export const updateTaskStatusController = async (req, res) => {
 
     await updateTaskStatus({
       id,
+      client: normalizedClient,
       status: normalizedStatus,
       dependency,
       action: normalizedAction,
@@ -248,6 +276,35 @@ export const updateTaskStatusController = async (req, res) => {
   }
 };
 
+export const deleteTaskController = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const task = await getTaskById(id);
+
+    if (!task) {
+      return res.status(404).json({ message: "Task not found" });
+    }
+
+    const canDelete =
+      req.user.role === "superadmin" ||
+      req.user.role === "hr" ||
+      Number(task.assigned_by) === Number(req.user.id);
+
+    if (!canDelete) {
+      return res.status(403).json({ message: "Only the task creator can delete this task" });
+    }
+
+    const deletedIds = await deleteTaskChain(id);
+
+    return res.status(200).json({
+      message: "Task deleted",
+      deletedIds
+    });
+  } catch (error) {
+    return res.status(500).json({ message: "Failed to delete task", error: error.message });
+  }
+};
+
 export const reassignTaskController = async (req, res) => {
   try {
     if (req.user.role !== "admin") {
@@ -269,6 +326,10 @@ export const reassignTaskController = async (req, res) => {
 
     if (task.status === "Completed") {
       return res.status(400).json({ message: "Completed tasks cannot be reassigned" });
+    }
+
+    if (toDateText(task.task_date) > getCurrentDateText()) {
+      return res.status(400).json({ message: "Future tasks can be edited only on their task date" });
     }
 
     if (Number(task.assigned_to) === nextAssigneeId) {
@@ -358,6 +419,10 @@ export const updateTaskPriorityController = async (req, res) => {
       return res.status(400).json({ message: "Submitted tasks cannot be edited" });
     }
 
+    if (toDateText(task.task_date) > getCurrentDateText()) {
+      return res.status(400).json({ message: "Future tasks can be edited only on their task date" });
+    }
+
     let assignee = null;
     if (req.user.role === "admin") {
       assignee = await findUserById(task.assigned_to);
@@ -388,7 +453,7 @@ export const updateTaskPriorityController = async (req, res) => {
 
 export const getEmployeeSummaryController = async (req, res) => {
   try {
-    const date = req.query.date || new Date().toISOString().slice(0, 10);
+    const date = req.query.date || getCurrentDateText();
     const employeeId = req.user.id;
     const summary = await getEmployeeDailySummary(employeeId, date);
     return res.status(200).json(summary);
@@ -474,6 +539,10 @@ export const submitTaskToHrController = async (req, res) => {
 
     if (result.forbidden) {
       return res.status(403).json({ message: "You can submit only your own tasks" });
+    }
+
+    if (result.futureLocked) {
+      return res.status(400).json({ message: "Future tasks can be submitted only on their task date" });
     }
 
     if (!result.changed) {

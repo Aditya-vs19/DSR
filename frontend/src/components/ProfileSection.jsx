@@ -12,7 +12,7 @@ const ProfileSection = ({
 }) => {
   return (
     <section className="space-y-6">
-      <div className="overflow-hidden rounded-[30px] border border-dsr-border bg-[linear-gradient(135deg,#f8fbf8,#eef5f0)] shadow-sm">
+      <div className="overflow-hidden rounded-md border border-dsr-border bg-[linear-gradient(135deg,#f8fbf8,#eef5f0)] shadow-sm">
         <div className="grid gap-6 px-6 py-7 lg:grid-cols-[minmax(0,1.2fr)_minmax(220px,0.8fr)] lg:px-8">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.28em] text-dsr-brand">Profile</p>
@@ -30,14 +30,14 @@ const ProfileSection = ({
             </div>
           </div>
 
-          <div className={`rounded-[26px] border border-white/80 bg-white/80 p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.85)] ${showDepartment ? "" : "max-w-[360px]"}`}>
+          <div className={`rounded-[12px] border border-white/80 bg-white/80 p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.85)] ${showDepartment ? "" : "max-w-[360px]"}`}>
             <div className={`grid gap-4 ${showDepartment ? "sm:grid-cols-2" : "sm:grid-cols-1"}`}>
-              <div className={`rounded-2xl border border-dsr-border bg-dsr-soft/45 p-4 ${showDepartment ? "" : "max-w-[320px]"}`}>
+              <div className={`rounded-lg border border-dsr-border bg-dsr-soft/45 p-4 ${showDepartment ? "" : "max-w-[320px]"}`}>
                 <p className="text-xs font-semibold uppercase tracking-[0.22em] text-dsr-muted">Role</p>
                 <p className="mt-3 text-lg font-semibold text-dsr-ink">{String(user?.role || "").toUpperCase()}</p>
               </div>
               {showDepartment ? (
-                <div className="rounded-2xl border border-dsr-border bg-dsr-soft/45 p-4">
+                <div className="rounded-lg border border-dsr-border bg-dsr-soft/45 p-4">
                   <p className="text-xs font-semibold uppercase tracking-[0.22em] text-dsr-muted">Department</p>
                   <p className="mt-3 text-lg font-semibold text-dsr-ink">{departmentLabel || toTeamLabel(user?.team) || "-"}</p>
                 </div>
@@ -47,7 +47,7 @@ const ProfileSection = ({
         </div>
       </div>
 
-      <form className="rounded-[30px] border border-dsr-border bg-white p-6 shadow-sm lg:p-7" onSubmit={onSubmit}>
+      <form className="rounded-md border border-dsr-border bg-white p-6 shadow-sm lg:p-7" onSubmit={onSubmit}>
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.24em] text-dsr-brand">Security</p>
@@ -58,7 +58,7 @@ const ProfileSection = ({
 
         <div className="mt-6 grid gap-4 lg:grid-cols-[1.2fr_1fr_1fr_auto] lg:items-end">
           <label className="block">
-            <span className="mb-2 block text-xs font-semibold uppercase tracking-wide text-dsr-muted">Current Password</span>
+            <span className="mb-2 block text-xs font-bold uppercase tracking-wide text-slate-900">Current Password</span>
             <input
               className="input h-12"
               type="password"
@@ -68,7 +68,7 @@ const ProfileSection = ({
             />
           </label>
           <label className="block">
-            <span className="mb-2 block text-xs font-semibold uppercase tracking-wide text-dsr-muted">New Password</span>
+            <span className="mb-2 block text-xs font-bold uppercase tracking-wide text-slate-900">New Password</span>
             <input
               className="input h-12"
               type="password"
@@ -78,7 +78,7 @@ const ProfileSection = ({
             />
           </label>
           <label className="block">
-            <span className="mb-2 block text-xs font-semibold uppercase tracking-wide text-dsr-muted">Confirm Password</span>
+            <span className="mb-2 block text-xs font-bold uppercase tracking-wide text-slate-900">Confirm Password</span>
             <input
               className="input h-12"
               type="password"

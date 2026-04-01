@@ -1,6 +1,7 @@
 import express from "express";
 import {
   createTaskController,
+  deleteTaskController,
   getDepartmentAdminPerformanceController,
   getEmployeeSummaryController,
   getEmployeeTimelineController,
@@ -22,6 +23,7 @@ router.use(authenticate);
 
 router.post("/", createTaskController);
 router.get("/", getTasksController);
+router.delete("/:id", deleteTaskController);
 router.put("/:id", updateTaskStatusController);
 router.put("/:id/priority", updateTaskPriorityController);
 router.put("/:id/reassign", authorizeRoles("admin"), reassignTaskController);

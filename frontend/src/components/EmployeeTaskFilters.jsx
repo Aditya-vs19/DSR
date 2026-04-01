@@ -14,7 +14,7 @@ const EmployeeTaskFilters = ({
   return (
     <div className="grid gap-3 sm:grid-cols-2">
       <div>
-        <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-dsr-muted">Status</label>
+        <label className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-900">Status</label>
         <select className="input" value={filters.status} onChange={(event) => onStatusChange(event.target.value)}>
           <option value="all">All</option>
           <option value="Pending">Pending</option>
@@ -24,7 +24,7 @@ const EmployeeTaskFilters = ({
       </div>
 
       <div className="relative" ref={periodMenuRef}>
-        <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-dsr-muted">Task Period</label>
+        <label className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-900">Task Period</label>
         <button
           type="button"
           className="input flex w-full items-center justify-between text-left"

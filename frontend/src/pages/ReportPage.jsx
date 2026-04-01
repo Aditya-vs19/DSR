@@ -5,6 +5,8 @@ import ReportGrid from "../components/ReportGrid";
 import ReportTaskDetailTable from "../components/ReportTaskDetailTable";
 import { useAuth } from "../context/AuthContext";
 import { authApi, reportApi, taskApi } from "../services/api";
+import { collapseTaskLineages } from "../utils/taskLineage";
+import { getTaskDateText } from "../utils/taskMeta";
 import { toTeamLabel } from "../utils/teamLabel";
 
 const COLOR = {
@@ -61,7 +63,27 @@ const normalizeStatus = (status) => {
 
 const OFF_DAY_STATUSES = new Set(["Holiday", "Weekly Off"]);
 
-const getDateBounds = (dateRange, anchorDateText) => {
+const getDateBounds = (dateRange, anchorDateText, customStartDateText = "", customEndDateText = "") => {
+  if (dateRange === "custom") {
+    const customStart = customStartDateText ? new Date(`${customStartDateText}T00:00:00`) : new Date();
+    const customEnd = customEndDateText ? new Date(`${customEndDateText}T00:00:00`) : new Date(customStart);
+
+    if (Number.isNaN(customStart.getTime()) || Number.isNaN(customEnd.getTime())) {
+      const fallback = new Date();
+      fallback.setHours(0, 0, 0, 0);
+      return { startDate: fallback, endDate: fallback };
+    }
+
+    const normalizedStart = new Date(customStart);
+    const normalizedEnd = new Date(customEnd);
+    normalizedStart.setHours(0, 0, 0, 0);
+    normalizedEnd.setHours(0, 0, 0, 0);
+
+    return normalizedStart <= normalizedEnd
+      ? { startDate: normalizedStart, endDate: normalizedEnd }
+      : { startDate: normalizedEnd, endDate: normalizedStart };
+  }
+
   const anchor = anchorDateText ? new Date(`${anchorDateText}T00:00:00`) : new Date();
   if (Number.isNaN(anchor.getTime())) {
     const fallback = new Date();
@@ -99,7 +121,8 @@ const toDateText = (dateValue) => {
 };
 
 const taskFallsWithinRange = (task, rangeStart, rangeEnd) => {
-  const taskDateValue = new Date(task.created_at);
+  const taskDateText = getTaskDateText(task);
+  const taskDateValue = taskDateText ? new Date(`${taskDateText}T00:00:00`) : new Date(task.created_at);
   if (Number.isNaN(taskDateValue.getTime())) {
     return false;
   }
@@ -171,7 +194,7 @@ const getDetailedGroupKey = (task, dateRange) => {
     return task.groupLabel || `week-unknown-${task.id}`;
   }
 
-  return String(task.created_at || "").slice(0, 10) || `unknown-${task.id}`;
+  return getTaskDateText(task) || `unknown-${task.id}`;
 };
 
 const getDetailedGroupLabel = (task, dateRange) => {
@@ -179,7 +202,7 @@ const getDetailedGroupLabel = (task, dateRange) => {
     return task.groupLabel;
   }
 
-  const parsed = new Date(task.created_at);
+  const parsed = new Date(getTaskDateText(task) ? `${getTaskDateText(task)}T00:00:00` : task.created_at);
   if (Number.isNaN(parsed.getTime())) {
     return task.groupLabel || task.day || "Unknown Day";
   }
@@ -215,6 +238,15 @@ const formatDateForSheet = (dateText) => {
   });
 };
 
+const resolveTaskDepartment = (task, teamByUserId) => {
+  const explicitDepartment = String(task?.task_department || "").trim();
+  if (explicitDepartment) {
+    return explicitDepartment;
+  }
+
+  return String(teamByUserId.get(String(task?.assigned_to)) || "").trim();
+};
+
 function ReportPage({
   role = "admin",
   initialDateRange = "week",
@@ -227,6 +259,8 @@ function ReportPage({
   const isEmployeeView = role === "employee";
   const [dateRange, setDateRange] = useState(initialDateRange);
   const [date, setDate] = useState(initialDate || new Date().toISOString().slice(0, 10));
+  const [customStartDate, setCustomStartDate] = useState(initialDate || new Date().toISOString().slice(0, 10));
+  const [customEndDate, setCustomEndDate] = useState(initialDate || new Date().toISOString().slice(0, 10));
   const [reportType, setReportType] = useState(role === "employee" ? "detailed" : "received");
   const [team, setTeam] = useState(initialTeam);
   const [selectedEmployeeIds, setSelectedEmployeeIds] = useState(() => {
@@ -391,7 +425,7 @@ function ReportPage({
       const tasksRes = responses[0];
       const usersRes = responses[1];
 
-      const allTasks = Array.isArray(tasksRes.data) ? tasksRes.data : [];
+      const allTasks = collapseTaskLineages(Array.isArray(tasksRes.data) ? tasksRes.data : []);
       const users = isEmployeeView
         ? user?.id
           ? [
@@ -426,7 +460,7 @@ function ReportPage({
 
       const teamByUserId = new Map(scopedUsers.map((entry) => [String(entry.id), entry.team || "-"]));
 
-      const { startDate, endDate } = getDateBounds(dateRange, date);
+      const { startDate, endDate } = getDateBounds(dateRange, date, customStartDate, customEndDate);
 
       const scopedDetailedTasks = allTasks
         .filter((entry) => taskFallsWithinRange(entry, startDate, endDate))
@@ -436,7 +470,7 @@ function ReportPage({
           }
 
           if (team === "all") return true;
-          return teamByUserId.get(String(entry.assigned_to)) === team;
+          return resolveTaskDepartment(entry, teamByUserId) === team;
         })
         .filter((entry) => {
           if (!selectedEmployeeIds.length) return true;
@@ -454,12 +488,12 @@ function ReportPage({
         })
         .map((entry) => ({
           ...entry,
-          assigned_to_team: toTeamLabel(teamByUserId.get(String(entry.assigned_to))) || "-",
-          day: formatDayText(entry.created_at),
+          assigned_to_team: toTeamLabel(resolveTaskDepartment(entry, teamByUserId)) || "-",
+          day: formatDayText(getTaskDateText(entry)),
           groupLabel:
             dateRange === "month"
-              ? getWeekLabelForDate(entry.created_at, startDate)
-              : formatDayText(entry.created_at)
+              ? getWeekLabelForDate(getTaskDateText(entry), startDate)
+              : formatDayText(getTaskDateText(entry))
         }));
 
       setDetailedTasks(scopedDetailedTasks);
@@ -489,6 +523,8 @@ function ReportPage({
       const reportParams = {
         dateRange,
         date,
+        customStartDate,
+        customEndDate,
         employeeIds: selectedEmployeeIds.join(",")
       };
 
@@ -512,7 +548,7 @@ function ReportPage({
     } finally {
       setLoading(false);
     }
-  }, [date, dateRange, isEmployeeView, reportType, role, selectedEmployeeIds, team, user]);
+  }, [customEndDate, customStartDate, date, dateRange, isEmployeeView, reportType, role, selectedEmployeeIds, team, user]);
 
   const handleCellChange = useCallback(
     async (reportId, status) => {
@@ -660,7 +696,7 @@ function ReportPage({
         const url = window.URL.createObjectURL(blob);
         const link = document.createElement("a");
         link.href = url;
-        const { startDate, endDate } = getDateBounds(dateRange, date);
+        const { startDate, endDate } = getDateBounds(dateRange, date, customStartDate, customEndDate);
         const startText = toDateText(startDate);
         const endText = toDateText(endDate);
         const suffix = startText === endText ? startText : `${startText}-to-${endText}`;
@@ -823,7 +859,7 @@ function ReportPage({
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
     });
-  }, [date, dateRange, detailedTasks, gridData.employees, gridData.rows, gridData.startDate, gridData.summary, isEmployeeView, reportType, totalTasks]);
+  }, [customEndDate, customStartDate, date, dateRange, detailedTasks, gridData.employees, gridData.rows, gridData.startDate, gridData.summary, isEmployeeView, reportType, totalTasks]);
 
   const handleSaveHoliday = useCallback(async () => {
     const dateValue = String(holidayForm.date || "").slice(0, 10);
@@ -883,6 +919,8 @@ function ReportPage({
   useEffect(() => {
     if (initialDate) {
       setDate(initialDate);
+      setCustomStartDate(initialDate);
+      setCustomEndDate(initialDate);
     }
   }, [initialDate]);
 
@@ -924,6 +962,10 @@ function ReportPage({
         onDateRangeChange={setDateRange}
         date={date}
         onDateChange={setDate}
+        customStartDate={customStartDate}
+        onCustomStartDateChange={setCustomStartDate}
+        customEndDate={customEndDate}
+        onCustomEndDateChange={setCustomEndDate}
         team={team}
         onTeamChange={setTeam}
         teamOptions={teamOptions}

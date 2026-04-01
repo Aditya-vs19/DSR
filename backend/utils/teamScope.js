@@ -1,6 +1,11 @@
 const SALES_TEAM = "Sales";
 const LOGISTICS_TEAM = "Logistics";
+const OPERATIONS_TEAM = "Operations";
+const TECHNICAL_TEAM = "Technical";
+const FINANCE_TEAM = "Finance";
 const DUAL_TEAM_ADMIN_NAME = "snigdha";
+
+export const TASK_DEPARTMENTS = [SALES_TEAM, LOGISTICS_TEAM, OPERATIONS_TEAM, TECHNICAL_TEAM, FINANCE_TEAM];
 
 const normalizeText = (value) => String(value || "").trim().toLowerCase();
 

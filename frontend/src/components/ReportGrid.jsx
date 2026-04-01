@@ -13,14 +13,14 @@ const STATUS_BADGES = {
 function ReportGrid({ rows = [], employees = [], onCellChange, loadingCellId = null }) {
   if (!rows.length || !employees.length) {
     return (
-      <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-500">
+      <div className="rounded-md border border-slate-200 bg-white p-8 text-center text-sm text-slate-500">
         Generate a report to view the daily grid.
       </div>
     );
   }
 
   return (
-    <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
+    <div className="overflow-x-auto rounded-md border border-slate-200 bg-white shadow-sm">
       <table className="min-w-full border-collapse text-sm">
         <thead>
           <tr className="bg-slate-100">
