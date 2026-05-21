@@ -1167,7 +1167,7 @@ const TaskTable = ({
             >
               Previous
             </button>
-            <span className="rounded-md bg-slate-100 px-3 py-1.5 text-sm font-semibold text-slate-700">
+            <span className="rounded-md border border-slate-300 bg-slate-200 px-3 py-1.5 text-sm font-semibold text-slate-800 shadow-sm">
               Page {currentPage} / {totalPages}
             </span>
             <button

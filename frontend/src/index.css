@@ -29,15 +29,17 @@ textarea,
 }
 
 .card {
-  @apply rounded-md p-4 shadow-sm;
+  @apply rounded-xl p-4;
   background: var(--dsr-card);
   border: 1px solid var(--dsr-border);
+  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.08);
 }
 
 .card-green {
-  @apply rounded-md p-4 shadow-sm;
+  @apply rounded-xl p-4;
   background: linear-gradient(140deg, #f6faf6, #edf4ee);
   border: 1px solid var(--dsr-border);
+  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.08);
 }
 
 .input {

@@ -1,27 +1,32 @@
+import FilterSelect from "./FilterSelect";
+
 const AdminTaskFilters = ({ filters, employees, user, onStatusChange, onEmployeeChange, onDateChange }) => {
+  const statusOptions = [
+    { value: "all", label: "All" },
+    { value: "Pending", label: "Pending" },
+    { value: "In Progress", label: "In Progress" },
+    { value: "Completed", label: "Completed" }
+  ];
+
+  const employeeOptions = [
+    { value: "all", label: "All Team Members" },
+    ...employees.map((employee) => ({
+      value: String(employee.id),
+      label: employee.name
+    })),
+    { value: String(user?.id || ""), label: `Self (${user?.name})` }
+  ];
+
   return (
     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
       <div>
         <label className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-900">Status</label>
-        <select className="input" value={filters.status} onChange={(event) => onStatusChange(event.target.value)}>
-          <option value="all">All</option>
-          <option value="Pending">Pending</option>
-          <option value="In Progress">In Progress</option>
-          <option value="Completed">Completed</option>
-        </select>
+        <FilterSelect value={filters.status} options={statusOptions} onChange={onStatusChange} />
       </div>
 
       <div>
         <label className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-900">Employee</label>
-        <select className="input" value={filters.employeeId} onChange={(event) => onEmployeeChange(event.target.value)}>
-          <option value="all">All Team Members</option>
-          {employees.map((employee) => (
-            <option key={employee.id} value={String(employee.id)}>
-              {employee.name}
-            </option>
-          ))}
-          <option value={String(user?.id || "")}>Self ({user?.name})</option>
-        </select>
+        <FilterSelect value={filters.employeeId} options={employeeOptions} onChange={onEmployeeChange} />
       </div>
 
       <div>

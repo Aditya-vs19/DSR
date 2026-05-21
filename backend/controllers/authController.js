@@ -2,12 +2,14 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import {
   createUser,
+  deactivateUserById,
   findUserById,
   findUserAuthById,
   findUserByEmail,
   findUserByUsername,
   listEmployees,
   listTeamEmployees,
+  reactivateUserById,
   updateUserPasswordById
 } from "../models/userModel.js";
 import { getManagedTeamsForAdmin } from "../utils/teamScope.js";
@@ -41,6 +43,24 @@ const signToken = (user) =>
     { expiresIn: process.env.JWT_EXPIRES_IN || "1d" }
   );
 
+const isEmploymentActive = (user) => {
+  if (!user?.employment_end_date) {
+    return true;
+  }
+
+  const endDateText = user.employment_end_date instanceof Date
+    ? user.employment_end_date.toISOString().slice(0, 10)
+    : String(user.employment_end_date).slice(0, 10);
+  const todayText = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).format(new Date());
+
+  return endDateText > todayText;
+};
+
 export const register = async (req, res) => {
   try {
     const { name, email, password, role = "employee", team = null } = req.body;
@@ -59,7 +79,20 @@ export const register = async (req, res) => {
 
     const existingUser = await findUserByEmail(email);
     if (existingUser) {
-      return res.status(409).json({ message: "Email already exists" });
+      if (isEmploymentActive(existingUser)) {
+        return res.status(409).json({ message: "Email already exists" });
+      }
+
+      const hashedPassword = await bcrypt.hash(password, 10);
+      const user = await reactivateUserById(existingUser.id, {
+        name,
+        email,
+        password: hashedPassword,
+        role,
+        team
+      });
+
+      return res.status(200).json({ message: "Employee reactivated", user });
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -89,6 +122,11 @@ export const login = async (req, res) => {
     if (!user) {
       console.warn(`[auth] Login failed: user not found (${username})`);
       return res.status(401).json({ message: "Invalid credentials" });
+    }
+
+    if (!isEmploymentActive(user)) {
+      console.warn(`[auth] Login blocked: inactive employee (${username})`);
+      return res.status(403).json({ message: "Account is inactive" });
     }
 
     const usesBcryptHash = BCRYPT_HASH_PATTERN.test(String(user.password || ""));
@@ -236,5 +274,39 @@ export const resetManagedUserPassword = async (req, res) => {
     return res.status(200).json({ message: `Password updated for ${targetUser.name}` });
   } catch (error) {
     return res.status(500).json({ message: "Failed to reset password", error: error.message });
+  }
+};
+
+export const deactivateManagedUser = async (req, res) => {
+  try {
+    const targetUserId = Number(req.params.id);
+
+    if (!Number.isInteger(targetUserId) || targetUserId <= 0) {
+      return res.status(400).json({ message: "User id must be a valid positive integer" });
+    }
+
+    if (targetUserId === Number(req.user.id)) {
+      return res.status(400).json({ message: "You cannot delete your own account" });
+    }
+
+    const targetUser = await findUserById(targetUserId);
+    if (!targetUser) {
+      return res.status(404).json({ message: "Target employee not found" });
+    }
+
+    if (!isEmploymentActive(targetUser)) {
+      return res.status(400).json({ message: "Employee is already deleted" });
+    }
+
+    const result = await deactivateUserById(targetUserId);
+    if (!result?.affectedRows) {
+      return res.status(500).json({ message: "Employee delete was not persisted" });
+    }
+
+    return res.status(200).json({
+      message: `${targetUser.name} deleted. Historical data is preserved.`
+    });
+  } catch (error) {
+    return res.status(500).json({ message: "Failed to delete employee", error: error.message });
   }
 };

@@ -10,7 +10,11 @@ const statusBadgeClass = {
 
 const formatDateTime = (value) => {
   if (!value) return "-";
-  const date = new Date(value);
+  const rawValue = String(value).trim();
+  const normalizedValue = /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(\.\d+)?$/.test(rawValue)
+    ? rawValue.replace(" ", "T")
+    : rawValue;
+  const date = new Date(normalizedValue);
   if (Number.isNaN(date.getTime())) return String(value);
   return date.toLocaleString();
 };
@@ -78,7 +82,7 @@ function ReportTaskDetailTable({ tasks = [], dateRange = "week" }) {
   });
 
   return (
-    <div className="overflow-x-auto rounded-md border border-slate-200 bg-white shadow-sm">
+    <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-[0_18px_40px_rgba(15,23,42,0.10)]">
       <table className="min-w-full border-collapse text-sm">
         <thead>
           <tr className="bg-sky-100">
@@ -90,7 +94,7 @@ function ReportTaskDetailTable({ tasks = [], dateRange = "week" }) {
             <th className="border-b border-sky-200 px-3 py-3 text-left font-semibold text-slate-900">Status</th>
             <th className="border-b border-sky-200 px-3 py-3 text-left font-semibold text-slate-900">Dependency / Remark</th>
             <th className="border-b border-sky-200 px-3 py-3 text-left font-semibold text-slate-900">Assigned By</th>
-            <th className="border-b border-sky-200 px-3 py-3 text-left font-semibold text-slate-900">Created At</th>
+            <th className="border-b border-sky-200 px-3 py-3 text-left font-semibold text-slate-900">Assigned At</th>
             <th className="border-b border-sky-200 px-3 py-3 text-left font-semibold text-slate-900">Completed At</th>
           </tr>
         </thead>
@@ -107,20 +111,20 @@ function ReportTaskDetailTable({ tasks = [], dateRange = "week" }) {
                   key={task.id}
                   className={`border-b border-slate-200/80 ${task.status === "Completed" ? "bg-emerald-50/30" : task.status === "Pending" ? "bg-amber-50/20" : task.status === "In Progress" ? "bg-sky-50/30" : "bg-white"}`}
                 >
-                  <td className="px-3 py-2 font-medium text-slate-700">{task.assigned_to_name || "-"}</td>
-                  <td className="px-3 py-2 text-slate-600">{toTeamLabel(task.assigned_to_team) || "-"}</td>
-                  <td className="px-3 py-2 text-slate-600">{task.client || "-"}</td>
-                  <td className="px-3 py-2 text-slate-700">{task.task || "-"}</td>
-                  <td className="px-3 py-2 text-slate-600">{task.action || "-"}</td>
+                  <td className="px-3 py-2 font-semibold text-slate-900">{task.assigned_to_name || "-"}</td>
+                  <td className="px-3 py-2 font-medium text-slate-800">{toTeamLabel(task.assigned_to_team) || "-"}</td>
+                  <td className="px-3 py-2 font-medium text-slate-800">{task.client || "-"}</td>
+                  <td className="px-3 py-2 font-medium text-slate-900">{task.task || "-"}</td>
+                  <td className="px-3 py-2 font-medium text-slate-900">{task.action || "-"}</td>
                   <td className="px-3 py-2">
                     <span className={`inline-flex whitespace-nowrap rounded-md border px-2 py-1 text-xs font-semibold ${statusBadgeClass[task.status] || "bg-slate-100 text-slate-700 border-slate-200"}`}>
                       {task.status || "-"}
                     </span>
                   </td>
-                  <td className="px-3 py-2 text-slate-600">{task.dependency || "-"}</td>
-                  <td className="px-3 py-2 text-slate-600">{task.assigned_by_name || "-"}</td>
-                  <td className="px-3 py-2 text-slate-600">{formatDateTime(task.created_at)}</td>
-                  <td className="px-3 py-2 text-slate-600">{formatUtcDateTime(task.completed_at)}</td>
+                  <td className="px-3 py-2 font-medium text-slate-800">{task.dependency || "-"}</td>
+                  <td className="px-3 py-2 font-medium text-slate-800">{task.assigned_by_name || "-"}</td>
+                  <td className="px-3 py-2 font-medium text-slate-800">{formatDateTime(task.assigned_at || task.created_at)}</td>
+                  <td className="px-3 py-2 font-medium text-slate-800">{formatUtcDateTime(task.completed_at)}</td>
                 </tr>
               ))}
             </React.Fragment>

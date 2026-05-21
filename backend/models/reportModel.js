@@ -1,11 +1,34 @@
 import { query } from "../config/db.js";
 
-const CELL_STATUSES = ["Received", "Not Received", "Leave"];
+const CELL_STATUSES = ["Received", "Not Received", "Leave", "On Site"];
 const REPORT_TIMEZONE_OFFSET = "+05:30";
 let dailyReportTableEnsured = false;
 let taskSubmissionColumnsEnsured = false;
 let holidaysTableEnsured = false;
 let taskDateColumnEnsured = false;
+let userLifecycleColumnsEnsured = false;
+
+const ensureUserLifecycleColumns = async () => {
+  if (userLifecycleColumnsEnsured) return;
+
+  const existingColumns = await query(
+    `
+      SELECT COLUMN_NAME
+      FROM information_schema.COLUMNS
+      WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = 'users'
+        AND COLUMN_NAME = 'employment_end_date'
+    `
+  );
+
+  const columnSet = new Set(existingColumns.map((entry) => entry.COLUMN_NAME));
+
+  if (!columnSet.has("employment_end_date")) {
+    await query("ALTER TABLE users ADD COLUMN employment_end_date DATE NULL");
+  }
+
+  userLifecycleColumnsEnsured = true;
+};
 
 const ensureTaskSubmissionColumns = async () => {
   if (taskSubmissionColumnsEnsured) return;
@@ -41,13 +64,31 @@ const ensureDailyReportTable = async () => {
       id INT AUTO_INCREMENT PRIMARY KEY,
       report_date DATE NOT NULL,
       user_id INT NOT NULL,
-      status ENUM('Received', 'Not Received', 'Leave') NOT NULL DEFAULT 'Not Received',
+      status ENUM('Received', 'Not Received', 'Leave', 'On Site') NOT NULL DEFAULT 'Not Received',
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       UNIQUE KEY uk_daily_report_user_date (report_date, user_id),
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     )
   `);
+
+  const statusColumns = await query(
+    `
+      SELECT COLUMN_TYPE
+      FROM information_schema.COLUMNS
+      WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = 'daily_employee_reports'
+        AND COLUMN_NAME = 'status'
+      LIMIT 1
+    `
+  );
+
+  const statusColumnType = String(statusColumns[0]?.COLUMN_TYPE || "");
+  if (!statusColumnType.includes("'On Site'")) {
+    await query(
+      "ALTER TABLE daily_employee_reports MODIFY COLUMN status ENUM('Received', 'Not Received', 'Leave', 'On Site') NOT NULL DEFAULT 'Not Received'"
+    );
+  }
 
   dailyReportTableEnsured = true;
 };
@@ -117,6 +158,31 @@ const normalizeSqlDate = (value) => {
   return formatDate(new Date(value));
 };
 
+const getSaturdayOccurrence = (date) => {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime()) || date.getDay() !== 6) {
+    return 0;
+  }
+
+  return Math.floor((date.getDate() - 1) / 7) + 1;
+};
+
+const isDefaultWeeklyOffDate = (date) => {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
+    return false;
+  }
+
+  if (date.getDay() === 0) {
+    return true;
+  }
+
+  if (date.getDay() !== 6) {
+    return false;
+  }
+
+  const saturdayOccurrence = getSaturdayOccurrence(date);
+  return saturdayOccurrence === 1 || saturdayOccurrence === 3;
+};
+
 const getDateBounds = (dateRange = "week", baseDate = new Date(), customStartDate = "", customEndDate = "") => {
   if (dateRange === "custom") {
     const customStart = customStartDate ? new Date(customStartDate) : new Date();
@@ -166,6 +232,16 @@ const getDatesInRange = (startDate, endDate) => {
     cursor.setDate(cursor.getDate() + 1);
   }
   return dates;
+};
+
+const parseDateOnly = (value) => {
+  const [year, month, day] = String(value || "").slice(0, 10).split("-").map(Number);
+
+  if (!year || !month || !day) {
+    return null;
+  }
+
+  return new Date(year, month - 1, day);
 };
 
 export const upsertHoliday = async ({ date, title, createdBy }) => {
@@ -406,6 +482,7 @@ export const getDailyReportGridByRole = async ({
   await ensureDailyReportTable();
   await ensureHolidaysTable();
   await ensureTaskDateColumn();
+  await ensureUserLifecycleColumns();
 
   const { startDate, endDate } = getDateBounds(
     dateRange,
@@ -430,29 +507,36 @@ export const getDailyReportGridByRole = async ({
         endDate: formatDate(endDate),
         employees: [],
         rows: [],
-        summary: { received: 0, notReceived: 0, leave: 0 },
+        summary: { received: 0, notReceived: 0, leave: 0, onSite: 0 },
+        taskSummary: { total: 0, completed: 0, pending: 0 },
         holidays: []
       };
     }
 
     const placeholders = scopedTeams.map(() => "?").join(",");
     usersSql = `
-      SELECT id, name, email, role, team
+      SELECT id, name, email, role, team, employment_end_date
       FROM users
-      WHERE (team IN (${placeholders}) AND role = 'employee')
+      WHERE ((team IN (${placeholders}) AND role = 'employee')
          OR id = ?
+      )
+        AND (employment_end_date IS NULL OR employment_end_date > ?)
       ORDER BY role DESC, name
     `;
-    usersParams = [...scopedTeams, userId];
+    usersParams = [...scopedTeams, userId, formatDate(startDate)];
   } else {
     usersSql = `
-      SELECT id, name, email, role, team
+      SELECT id, name, email, role, team, employment_end_date
       FROM users
       WHERE role IN ${superadminRoleFilter}
         ${teamFilter && teamFilter !== "all" ? "AND team = ?" : ""}
+        AND (employment_end_date IS NULL OR employment_end_date > ?)
       ORDER BY team, role DESC, name
     `;
-    usersParams = teamFilter && teamFilter !== "all" ? [teamFilter] : [];
+    usersParams = [
+      ...(teamFilter && teamFilter !== "all" ? [teamFilter] : []),
+      formatDate(startDate)
+    ];
   }
 
   let users = await query(usersSql, usersParams);
@@ -492,7 +576,8 @@ export const getDailyReportGridByRole = async ({
       endDate: formatDate(endDate),
       employees: [],
       rows: [],
-      summary: { received: 0, notReceived: 0, leave: 0 },
+      summary: { received: 0, notReceived: 0, leave: 0, onSite: 0 },
+      taskSummary: { total: 0, completed: 0, pending: 0 },
       holidays: holidays.map((entry) => ({
         id: entry.id,
         date: normalizeSqlDate(entry.holiday_date),
@@ -526,32 +611,6 @@ export const getDailyReportGridByRole = async ({
   }
 
   const idPlaceholders = users.map(() => "?").join(",");
-  const taskActivityRows = await query(
-    `
-      SELECT
-        t.assigned_to AS user_id,
-        t.task_date AS task_date,
-        COUNT(t.id) AS total_tasks,
-        SUM(CASE WHEN t.status = 'Completed' THEN 1 ELSE 0 END) AS completed_tasks,
-        SUM(CASE WHEN t.status <> 'Completed' THEN 1 ELSE 0 END) AS pending_tasks
-      FROM tasks t
-      WHERE t.task_date BETWEEN ? AND ?
-        AND t.assigned_to IN (${idPlaceholders})
-      GROUP BY t.assigned_to, t.task_date
-    `,
-    [formatDate(startDate), formatDate(endDate), ...users.map((entry) => entry.id)]
-  );
-
-  const taskActivityMap = new Map(
-    taskActivityRows.map((entry) => [
-      `${normalizeSqlDate(entry.task_date)}-${entry.user_id}`,
-      {
-        totalTasks: Number(entry.total_tasks || 0),
-        completedTasks: Number(entry.completed_tasks || 0),
-        pendingTasks: Number(entry.pending_tasks || 0)
-      }
-    ])
-  );
 
   const cells = await query(
     `
@@ -591,13 +650,12 @@ export const getDailyReportGridByRole = async ({
     const isSunday = day.getDay() === 0;
     const isWeekend = day.getDay() === 0 || day.getDay() === 6;
     const isHoliday = Boolean(holiday);
+    const isDefaultWeeklyOff = isDefaultWeeklyOffDate(day);
     const isFutureDate = dateText > todayInReportTimezone;
 
     const employees = users.map((employee) => {
       const cell = cellMap.get(`${dateText}-${employee.id}`);
       const cellStatus = CELL_STATUSES.includes(cell?.status) ? cell.status : "Not Received";
-      const taskActivity = taskActivityMap.get(`${dateText}-${employee.id}`);
-      const workedOnDay = Number(taskActivity?.totalTasks || 0) > 0;
 
       if (isFutureDate) {
         return {
@@ -608,25 +666,13 @@ export const getDailyReportGridByRole = async ({
         };
       }
 
-      if (isSunday || isHoliday) {
-        if (cellStatus === "Received" || cellStatus === "Leave") {
+      if (isDefaultWeeklyOff || isHoliday) {
+        if (cellStatus === "Received" || cellStatus === "Leave" || cellStatus === "On Site") {
           return {
             reportId: cell?.id || null,
             userId: employee.id,
             name: employee.name,
             status: cellStatus
-          };
-        }
-
-        if (workedOnDay) {
-          return {
-            reportId: null,
-            userId: employee.id,
-            name: employee.name,
-            status: Number(taskActivity.pendingTasks || 0) > 0 ? "Pending" : "Completed",
-            totalTasks: Number(taskActivity.totalTasks || 0),
-            completedTasks: Number(taskActivity.completedTasks || 0),
-            pendingTasks: Number(taskActivity.pendingTasks || 0)
           };
         }
 
@@ -651,6 +697,7 @@ export const getDailyReportGridByRole = async ({
       day: dayName,
       weekLabel: `Week ${weekNumber}`,
       isWeekend,
+      isDefaultWeeklyOff,
       holidayTitle: holiday?.title || "",
       employees
     };
@@ -667,14 +714,35 @@ export const getDailyReportGridByRole = async ({
           acc.received += 1;
         } else if (entry.status === "Leave") {
           acc.leave += 1;
+        } else if (entry.status === "On Site") {
+          acc.onSite += 1;
         } else {
           acc.notReceived += 1;
         }
       });
       return acc;
     },
-    { received: 0, notReceived: 0, leave: 0 }
+    { received: 0, notReceived: 0, leave: 0, onSite: 0 }
   );
+
+  const taskSummaryRows = await query(
+    `
+      SELECT
+        COUNT(*) AS total_tasks,
+        SUM(CASE WHEN status = 'Completed' THEN 1 ELSE 0 END) AS completed_tasks,
+        SUM(CASE WHEN status <> 'Completed' THEN 1 ELSE 0 END) AS pending_tasks
+      FROM tasks
+      WHERE task_date BETWEEN ? AND ?
+        AND assigned_to IN (${idPlaceholders})
+    `,
+    [formatDate(startDate), formatDate(endDate), ...users.map((entry) => entry.id)]
+  );
+
+  const taskSummary = taskSummaryRows[0] || {
+    total_tasks: 0,
+    completed_tasks: 0,
+    pending_tasks: 0
+  };
 
   return {
     dateRange,
@@ -688,6 +756,11 @@ export const getDailyReportGridByRole = async ({
     })),
     rows,
     summary,
+    taskSummary: {
+      total: Number(taskSummary.total_tasks || 0),
+      completed: Number(taskSummary.completed_tasks || 0),
+      pending: Number(taskSummary.pending_tasks || 0)
+    },
     holidays: holidays.map((entry) => ({
       id: entry.id,
       date: normalizeSqlDate(entry.holiday_date),
@@ -744,6 +817,7 @@ export const submitEmployeeDailyReport = async ({ employeeId, date, onlySelfAssi
   await ensureDailyReportTable();
   await ensureTaskSubmissionColumns();
   await ensureTaskDateColumn();
+  const alreadyReceived = await hasReceivedDailyReport({ userId: employeeId, date });
 
   const selfTaskFilterClause = onlySelfAssigned ? "AND type = 'self'" : "";
 
@@ -805,7 +879,7 @@ export const submitEmployeeDailyReport = async ({ employeeId, date, onlySelfAssi
     [date, employeeId]
   );
 
-  return { submitted: true, ...taskSummary };
+  return { submitted: true, resubmitted: alreadyReceived, ...taskSummary };
 };
 
 export const getReportDetailsById = async (reportId) => {
@@ -842,24 +916,261 @@ export const getReportDetailsById = async (reportId) => {
 
   const tasks = await query(
     `
+      WITH RECURSIVE task_origin AS (
+        SELECT
+          id,
+          carried_forward_from_id,
+          created_at AS root_created_at
+        FROM tasks
+
+        UNION ALL
+
+        SELECT
+          child.id,
+          child.carried_forward_from_id,
+          task_origin.root_created_at
+        FROM tasks child
+        INNER JOIN task_origin ON task_origin.id = child.carried_forward_from_id
+      )
       SELECT
-        id,
-        client,
-        task,
-        action,
-        status,
-        dependency,
-        created_at,
-        completed_at,
-        submitted_to_hr,
-        submitted_to_hr_at
-      FROM tasks
-      WHERE assigned_to = ?
-        AND task_date = ?
-      ORDER BY created_at DESC
+        t.id,
+        t.client,
+        t.task,
+        t.action,
+        t.status,
+        t.dependency,
+        DATE_FORMAT(COALESCE(task_origin.root_created_at, t.created_at), '%Y-%m-%d %H:%i:%s') AS assigned_at,
+        t.created_at,
+        t.completed_at,
+        t.submitted_to_hr,
+        t.submitted_to_hr_at
+      FROM tasks t
+      LEFT JOIN task_origin ON task_origin.id = t.id
+      WHERE t.assigned_to = ?
+        AND t.task_date = ?
+      ORDER BY t.created_at DESC
     `,
     [report.employee_id, report.date]
   );
 
   return { report, tasks };
+};
+
+export const getAutomatedReportEmailSummary = async ({ startDate, endDate }) => {
+  await ensureDailyReportTable();
+  await ensureHolidaysTable();
+  await ensureTaskDateColumn();
+  await ensureUserLifecycleColumns();
+
+  const parsedStartDate = parseDateOnly(startDate);
+  const parsedEndDate = parseDateOnly(endDate);
+
+  if (!parsedStartDate || !parsedEndDate) {
+    throw new Error("Invalid date range provided for email summary");
+  }
+
+  const effectiveStartDate = parsedStartDate <= parsedEndDate ? parsedStartDate : parsedEndDate;
+  const effectiveEndDate = parsedStartDate <= parsedEndDate ? parsedEndDate : parsedStartDate;
+  const normalizedStartDate = formatDate(effectiveStartDate);
+  const normalizedEndDate = formatDate(effectiveEndDate);
+
+  const users = await query(
+    `
+      SELECT id, name, email, role, team, employment_end_date
+      FROM users
+      WHERE role IN ('employee', 'admin')
+        AND (employment_end_date IS NULL OR employment_end_date > ?)
+      ORDER BY team ASC, role DESC, name ASC
+    `,
+    [normalizedStartDate]
+  );
+
+  const dates = getDatesInRange(effectiveStartDate, effectiveEndDate);
+  const holidays = await listHolidays({
+    startDate: normalizedStartDate,
+    endDate: normalizedEndDate
+  });
+  const holidayByDate = new Map(
+    holidays.map((entry) => [normalizeSqlDate(entry.holiday_date), entry])
+  );
+
+  if (users.length > 0 && dates.length > 0) {
+    const seedValues = [];
+    const seedParams = [];
+
+    for (const day of dates) {
+      const dateText = formatDate(day);
+      if (holidayByDate.has(dateText) || isDefaultWeeklyOffDate(day)) {
+        continue;
+      }
+
+      for (const user of users) {
+        seedValues.push("(?, ?, 'Not Received')");
+        seedParams.push(dateText, user.id);
+      }
+    }
+
+    if (seedValues.length > 0) {
+      await query(
+        `
+          INSERT IGNORE INTO daily_employee_reports (report_date, user_id, status)
+          VALUES ${seedValues.join(",")}
+        `,
+        seedParams
+      );
+    }
+  }
+
+  const userIds = users.map((entry) => entry.id);
+
+  const statusRows = userIds.length > 0
+    ? await query(
+      `
+        SELECT report_date, user_id, status
+        FROM daily_employee_reports
+        WHERE report_date BETWEEN ? AND ?
+          AND user_id IN (${userIds.map(() => "?").join(",")})
+      `,
+      [normalizedStartDate, normalizedEndDate, ...userIds]
+    )
+    : [];
+
+  const taskRows = userIds.length > 0
+    ? await query(
+      `
+        SELECT
+          assigned_to AS user_id,
+          COUNT(*) AS total_tasks,
+          SUM(CASE WHEN status = 'Completed' THEN 1 ELSE 0 END) AS completed_tasks,
+          SUM(CASE WHEN status <> 'Completed' THEN 1 ELSE 0 END) AS pending_tasks
+        FROM tasks
+        WHERE task_date BETWEEN ? AND ?
+          AND assigned_to IN (${userIds.map(() => "?").join(",")})
+        GROUP BY assigned_to
+      `,
+      [normalizedStartDate, normalizedEndDate, ...userIds]
+    )
+    : [];
+
+  const statusMap = new Map(
+    statusRows.map((entry) => [
+      `${normalizeSqlDate(entry.report_date)}-${entry.user_id}`,
+      entry.status
+    ])
+  );
+
+  const taskMap = new Map(
+    taskRows.map((entry) => [Number(entry.user_id), entry])
+  );
+
+  const employeeSummaries = users.map((user) => {
+    const summary = {
+      userId: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      team: user.team || "-",
+      submittedDays: 0,
+      notSubmittedDays: 0,
+      leaveDays: 0,
+      onSiteDays: 0,
+      weeklyOffDays: 0,
+      holidayDays: 0,
+      totalTasks: Number(taskMap.get(Number(user.id))?.total_tasks || 0),
+      completedTasks: Number(taskMap.get(Number(user.id))?.completed_tasks || 0),
+      pendingTasks: Number(taskMap.get(Number(user.id))?.pending_tasks || 0),
+      dailyStatus: "Not Received"
+    };
+
+    for (const day of dates) {
+      const dateText = formatDate(day);
+      const explicitStatus = statusMap.get(`${dateText}-${user.id}`) || "Not Received";
+      const isHoliday = holidayByDate.has(dateText);
+      const isWeeklyOff = isDefaultWeeklyOffDate(day);
+
+      if (isHoliday) {
+        if (explicitStatus === "Received") {
+          summary.submittedDays += 1;
+        } else if (explicitStatus === "Leave") {
+          summary.leaveDays += 1;
+        } else if (explicitStatus === "On Site") {
+          summary.onSiteDays += 1;
+        } else {
+          summary.holidayDays += 1;
+        }
+        continue;
+      }
+
+      if (isWeeklyOff) {
+        if (explicitStatus === "Received") {
+          summary.submittedDays += 1;
+        } else if (explicitStatus === "Leave") {
+          summary.leaveDays += 1;
+        } else if (explicitStatus === "On Site") {
+          summary.onSiteDays += 1;
+        } else {
+          summary.weeklyOffDays += 1;
+        }
+        continue;
+      }
+
+      if (explicitStatus === "Received") {
+        summary.submittedDays += 1;
+      } else if (explicitStatus === "Leave") {
+        summary.leaveDays += 1;
+      } else if (explicitStatus === "On Site") {
+        summary.onSiteDays += 1;
+      } else {
+        summary.notSubmittedDays += 1;
+      }
+    }
+
+    if (normalizedStartDate === normalizedEndDate) {
+      const status = statusMap.get(`${normalizedStartDate}-${user.id}`) || "Not Received";
+      const dayIsHoliday = holidayByDate.has(normalizedStartDate);
+      const dayIsWeeklyOff = isDefaultWeeklyOffDate(effectiveStartDate);
+
+      if ((dayIsHoliday || dayIsWeeklyOff) && status === "Not Received") {
+        summary.dailyStatus = dayIsHoliday ? "Holiday" : "Weekly Off";
+      } else {
+        summary.dailyStatus = status;
+      }
+    }
+
+    return summary;
+  });
+
+  const totals = employeeSummaries.reduce(
+    (acc, employee) => {
+      acc.submittedDays += employee.submittedDays;
+      acc.notSubmittedDays += employee.notSubmittedDays;
+      acc.leaveDays += employee.leaveDays;
+      acc.onSiteDays += employee.onSiteDays;
+      acc.weeklyOffDays += employee.weeklyOffDays;
+      acc.holidayDays += employee.holidayDays;
+      acc.totalTasks += employee.totalTasks;
+      acc.completedTasks += employee.completedTasks;
+      acc.pendingTasks += employee.pendingTasks;
+      return acc;
+    },
+    {
+      employees: employeeSummaries.length,
+      submittedDays: 0,
+      notSubmittedDays: 0,
+      leaveDays: 0,
+      onSiteDays: 0,
+      weeklyOffDays: 0,
+      holidayDays: 0,
+      totalTasks: 0,
+      completedTasks: 0,
+      pendingTasks: 0
+    }
+  );
+
+  return {
+    startDate: normalizedStartDate,
+    endDate: normalizedEndDate,
+    employees: employeeSummaries,
+    totals
+  };
 };

@@ -1,18 +1,22 @@
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
 import Charts from "../components/Charts";
 import ProfileMenu from "../components/ProfileMenu";
 import ProfileSection from "../components/ProfileSection";
-import ReportPage from "./ReportPage";
 import TaskTable from "../components/TaskTable";
 import logo from "../assets/logo.png";
 import { useAuth } from "../context/AuthContext";
+import useDocumentVisibility from "../hooks/useDocumentVisibility";
+import usePolling from "../hooks/usePolling";
 import useScrollHeader from "../hooks/useScrollHeader";
 import { authApi, reportApi, taskApi } from "../services/api";
+import { formatBackendDate } from "../utils/dateTime";
 import { collapseTaskLineages } from "../utils/taskLineage";
 import { getTaskDateText, getTodayText } from "../utils/taskMeta";
 import { toTeamLabel } from "../utils/teamLabel";
 
 const TABS = ["Overview", "Tasks", "Employees", "Reports"];
+const ReportPage = lazy(() => import("./ReportPage"));
+const DASHBOARD_POLL_INTERVAL = 45000;
 
 const getTabLabel = (tab) => (tab === "Employees" ? "Team" : tab);
 
@@ -38,6 +42,7 @@ const FALLBACK_DONUT_COLORS = [
 const SuperAdminDashboard = () => {
   const { user, logout } = useAuth();
   const isHeaderVisible = useScrollHeader();
+  const isDocumentVisible = useDocumentVisibility();
   const todayText = getTodayText();
   const [users, setUsers] = useState([]);
   const [tasks, setTasks] = useState([]);
@@ -67,13 +72,14 @@ const SuperAdminDashboard = () => {
   const [creatingUser, setCreatingUser] = useState(false);
   const [managedPasswordDrafts, setManagedPasswordDrafts] = useState({});
   const [managedPasswordBusyId, setManagedPasswordBusyId] = useState(null);
+  const [deletingUserId, setDeletingUserId] = useState(null);
   const [managedPasswordError, setManagedPasswordError] = useState("");
   const [managedPasswordToast, setManagedPasswordToast] = useState("");
   const [passwordMessage, setPasswordMessage] = useState("");
   const [passwordError, setPasswordError] = useState("");
   const [focusedTaskId, setFocusedTaskId] = useState(null);
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setBusy(true);
     try {
       const [usersRes, tasksRes, reportsRes, adminPerfRes, notificationRes] = await Promise.all([
@@ -92,27 +98,33 @@ const SuperAdminDashboard = () => {
     } finally {
       setBusy(false);
     }
-  };
+  }, []);
 
-  const loadAnalytics = async () => {
+  const loadAnalytics = useCallback(async () => {
     const analyticsRes = await reportApi.getAnalytics({
       team: filters.team,
       date: filters.date || undefined
     });
     setAnalytics(analyticsRes.data || defaultAnalytics);
-  };
+  }, [filters.date, filters.team]);
 
   useEffect(() => {
-    loadData();
-    const timer = setInterval(() => {
-      loadData();
-      loadAnalytics();
-    }, 15000);
-    return () => clearInterval(timer);
-  }, []);
+    void loadData();
+  }, [loadData]);
+
+  usePolling(
+    async () => {
+      await loadData();
+      if (activeTab === "Overview") {
+        await loadAnalytics();
+      }
+    },
+    DASHBOARD_POLL_INTERVAL,
+    isDocumentVisible && activeTab !== "Reports" && activeTab !== "Profile"
+  );
 
   useEffect(() => {
-    loadAnalytics();
+    void loadAnalytics();
   }, [filters.team, filters.date]);
 
   const visibleTasks = useMemo(() => collapseTaskLineages(tasks), [tasks]);
@@ -217,6 +229,21 @@ const SuperAdminDashboard = () => {
 
     return "Company Wide Access";
   }, [user?.team]);
+
+  const profileMenuLabel = useMemo(() => {
+    const normalizedName = String(user?.name || "").trim().toLowerCase();
+    const normalizedEmail = String(user?.email || "").trim().toLowerCase();
+
+    if (normalizedName === "vijay" || normalizedEmail === "vijay@cludobits.com") {
+      return "CEO";
+    }
+
+    if (normalizedName.includes("smaik") || normalizedEmail.includes("smaik")) {
+      return "HR";
+    }
+
+    return profileDepartmentLabel;
+  }, [profileDepartmentLabel, user?.email, user?.name]);
 
   const overviewScopedUsers = useMemo(() => {
     return users.filter((entry) => {
@@ -501,12 +528,14 @@ const SuperAdminDashboard = () => {
 
   const handleMarkRead = async (id) => {
     await taskApi.markNotificationRead(id);
-    await loadData();
+    setNotifications((prev) =>
+      prev.map((item) => (Number(item.id) === Number(id) ? { ...item, is_read: 1 } : item))
+    );
   };
 
   const handleMarkAllRead = async () => {
     await taskApi.markAllNotificationsRead();
-    await loadData();
+    setNotifications((prev) => prev.map((item) => ({ ...item, is_read: 1 })));
   };
 
   const handleOpenTaskFromNotification = async (notification) => {
@@ -519,10 +548,12 @@ const SuperAdminDashboard = () => {
     }
 
     await taskApi.markNotificationRead(notification.id);
+    setNotifications((prev) =>
+      prev.map((item) => (Number(item.id) === Number(notification.id) ? { ...item, is_read: 1 } : item))
+    );
     setActiveTab("Tasks");
     setFilters((prev) => ({ ...prev, status: "all", team: "all", employeeId: "all", date: todayText }));
     setFocusedTaskId(Number(notification.reference_id));
-    await loadData();
   };
 
   const handlePasswordChange = async (event) => {
@@ -576,8 +607,8 @@ const SuperAdminDashboard = () => {
 
     setCreatingUser(true);
     try {
-      await authApi.register(payload);
-      setNewUserMessage("Employee created successfully");
+      const response = await authApi.register(payload);
+      setNewUserMessage(response?.data?.message || "Employee created successfully");
       setNewUserForm((prev) => ({
         ...prev,
         name: "",
@@ -622,6 +653,35 @@ const SuperAdminDashboard = () => {
       setManagedPasswordError(error?.response?.data?.message || "Failed to update password");
     } finally {
       setManagedPasswordBusyId(null);
+    }
+  };
+
+  const handleDeleteUser = async (targetUser) => {
+    setManagedPasswordError("");
+    setManagedPasswordToast("");
+
+    const confirmed = window.confirm(
+      `Delete ${targetUser.name}? Their historical tasks and reports will stay in the database.`
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setDeletingUserId(targetUser.id);
+    try {
+      const response = await authApi.deleteUser(targetUser.id);
+      setManagedPasswordToast(response?.data?.message || "Employee deleted. Historical data is preserved.");
+      setManagedPasswordDrafts((prev) => {
+        const nextDrafts = { ...prev };
+        delete nextDrafts[targetUser.id];
+        return nextDrafts;
+      });
+      await loadData();
+    } catch (error) {
+      setManagedPasswordError(error?.response?.data?.message || "Failed to delete employee");
+    } finally {
+      setDeletingUserId(null);
     }
   };
 
@@ -675,7 +735,7 @@ const SuperAdminDashboard = () => {
               user={user}
               onOpenProfile={() => setActiveTab("Profile")}
               onLogout={logout}
-              label="HR"
+              label={profileMenuLabel}
             />
           </div>
         </div>
@@ -723,7 +783,7 @@ const SuperAdminDashboard = () => {
         )}
 
         {activeTab === "Overview" && (
-          <section className="card">
+          <section className="card shadow-[0_22px_50px_rgba(15,23,42,0.12)]">
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-2">
               <div>
                 <label className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-900">Department</label>
@@ -996,12 +1056,13 @@ const SuperAdminDashboard = () => {
                   <th className="p-3">Email</th>
                   <th className="p-3">Role</th>
                   <th className="p-3">Department</th>
-                  <th className="p-3">Reset Password</th>
+                  <th className="p-3">Reset Password / Delete</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredUsers.map((entry) => {
                   const canResetPassword = entry.role === "employee" || entry.role === "admin";
+                  const canDeleteUser = Number(entry.id) !== Number(user?.id);
                   return (
                     <tr key={entry.id} className="border-b border-dsr-border/70">
                       <td className="p-3 font-semibold">{entry.name}</td>
@@ -1027,14 +1088,29 @@ const SuperAdminDashboard = () => {
                             <button
                               type="button"
                               className="btn-primary whitespace-nowrap"
-                              disabled={managedPasswordBusyId === entry.id}
+                              disabled={managedPasswordBusyId === entry.id || deletingUserId === entry.id}
                               onClick={() => handleManagedPasswordReset(entry)}
                             >
                               {managedPasswordBusyId === entry.id ? "Saving..." : "Save"}
                             </button>
+                            <button
+                              type="button"
+                              className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-700 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
+                              disabled={!canDeleteUser || managedPasswordBusyId === entry.id || deletingUserId === entry.id}
+                              onClick={() => handleDeleteUser(entry)}
+                            >
+                              {deletingUserId === entry.id ? "Deleting..." : "Delete"}
+                            </button>
                           </div>
                         ) : (
-                          <span className="text-dsr-muted">-</span>
+                          <button
+                            type="button"
+                            className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-700 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
+                            disabled={!canDeleteUser || deletingUserId === entry.id}
+                            onClick={() => handleDeleteUser(entry)}
+                          >
+                            {canDeleteUser ? (deletingUserId === entry.id ? "Deleting..." : "Delete") : "Current User"}
+                          </button>
                         )}
                       </td>
                     </tr>
@@ -1061,11 +1137,13 @@ const SuperAdminDashboard = () => {
 
         {activeTab === "Reports" && (
           <section className="space-y-4">
-            <ReportPage
-              role="superadmin"
-              initialTeam={filters.team}
-              initialDate={reportDate}
-            />
+            <Suspense fallback={<div className="card text-sm text-dsr-muted">Loading reports...</div>}>
+              <ReportPage
+                role="superadmin"
+                initialTeam={filters.team}
+                initialDate={reportDate}
+              />
+            </Suspense>
           </section>
         )}
 
@@ -1088,9 +1166,11 @@ const SuperAdminDashboard = () => {
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <p className="font-medium">{item.message}</p>
                     <div className="flex items-center gap-2">
-                      <span className="rounded-full bg-white px-2 py-1 text-xs uppercase text-dsr-muted">
-                        {item.type || "update"}
-                      </span>
+                      {item.type !== "task_status_updated" ? (
+                        <span className="rounded-full bg-white px-2 py-1 text-xs uppercase text-dsr-muted">
+                          {item.type || "update"}
+                        </span>
+                      ) : null}
                       {item.type?.startsWith("task_") && item.reference_id && (
                         <button
                           className="btn-primary"
@@ -1107,9 +1187,7 @@ const SuperAdminDashboard = () => {
                       )}
                     </div>
                   </div>
-                  <p className="mt-1 text-xs text-dsr-muted">
-                    {item.created_at ? new Date(item.created_at).toLocaleString() : ""}
-                  </p>
+                  <p className="mt-1 text-xs text-dsr-muted">{formatBackendDate(item.created_at)}</p>
                 </div>
               ))}
               {notifications.length === 0 && <p className="text-sm text-dsr-muted">No notifications yet</p>}

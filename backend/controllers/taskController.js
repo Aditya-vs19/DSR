@@ -19,7 +19,6 @@ import {
   updateTaskStatus,
   updateTaskPriority
 } from "../models/taskModel.js";
-import { hasReceivedDailyReport } from "../models/reportModel.js";
 import { findUserById } from "../models/userModel.js";
 import { getManagedTeamsForAdmin, TASK_DEPARTMENTS } from "../utils/teamScope.js";
 
@@ -98,20 +97,6 @@ export const createTaskController = async (req, res) => {
 
     if (normalizedTaskDate < getCurrentDateText()) {
       return res.status(400).json({ message: "Task date cannot be in the past" });
-    }
-
-    if (["employee", "admin"].includes(req.user.role) && normalizedTaskDate === getCurrentDateText()) {
-      const today = getCurrentDateText();
-      const alreadySubmittedToday = await hasReceivedDailyReport({
-        userId: req.user.id,
-        date: today
-      });
-
-      if (alreadySubmittedToday) {
-        return res.status(400).json({
-          message: "You already submitted today's report. New tasks can be created tomorrow."
-        });
-      }
     }
 
     const assignee = await findUserById(assignedTo);

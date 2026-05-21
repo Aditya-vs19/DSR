@@ -8,6 +8,7 @@ CREATE TABLE users (
   password VARCHAR(255) NOT NULL,
   role ENUM('employee', 'admin', 'hr', 'superadmin') NOT NULL DEFAULT 'employee',
   team VARCHAR(80) DEFAULT NULL,
+  employment_end_date DATE NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -56,7 +57,7 @@ CREATE TABLE daily_employee_reports (
   id INT AUTO_INCREMENT PRIMARY KEY,
   report_date DATE NOT NULL,
   user_id INT NOT NULL,
-  status ENUM('Received', 'Not Received', 'Leave') NOT NULL DEFAULT 'Not Received',
+  status ENUM('Received', 'Not Received', 'Leave', 'On Site') NOT NULL DEFAULT 'Not Received',
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   UNIQUE KEY uk_daily_report_user_date (report_date, user_id),

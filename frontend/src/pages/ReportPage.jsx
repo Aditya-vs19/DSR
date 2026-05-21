@@ -1,5 +1,4 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import ExcelJS from "exceljs/dist/exceljs.min.js";
 import ReportHeader from "../components/ReportHeader";
 import ReportGrid from "../components/ReportGrid";
 import ReportTaskDetailTable from "../components/ReportTaskDetailTable";
@@ -20,12 +19,13 @@ const COLOR = {
   inProgressBlue: "FF3B82F6",
   pendingAmber: "FFF59E0B",
   leaveBlue: "FF4FC3F7",
+  onSiteBlue: "FF93C5FD",
   notReceivedRed: "FFFF0000",
   holidayPink: "FFE88CE8",
   weeklyOffGray: "FFE5E7EB"
 };
 
-const RECEIVED_STATUSES = new Set(["Received", "Not Received", "Leave"]);
+const RECEIVED_STATUSES = new Set(["Received", "Not Received", "Leave", "On Site"]);
 
 const applyCellStyle = (cell, {
   fillColor = null,
@@ -56,6 +56,7 @@ const normalizeStatus = (status) => {
   if (status === "Completed") return "Completed";
   if (status === "Pending") return "Pending";
   if (status === "Leave") return "No / On Leave";
+  if (status === "On Site") return "On Site";
   if (status === "Holiday") return "Holiday";
   if (status === "Weekly Off") return "Weekly Off";
   return "Not Received";
@@ -217,8 +218,12 @@ const shouldIncludeRowInExport = (row) => {
     return false;
   }
 
-  const isHolidayOrSunday = Boolean(row.holidayTitle) || String(row.day).toLowerCase() === "sunday";
-  if (!isHolidayOrSunday) {
+  const isOffDay =
+    Boolean(row.holidayTitle) ||
+    Boolean(row.isDefaultWeeklyOff) ||
+    (row.employees || []).every((entry) => OFF_DAY_STATUSES.has(normalizeStatus(entry.status)));
+
+  if (!isOffDay) {
     return true;
   }
 
@@ -249,7 +254,7 @@ const resolveTaskDepartment = (task, teamByUserId) => {
 
 function ReportPage({
   role = "admin",
-  initialDateRange = "week",
+  initialDateRange = "today",
   initialDate = "",
   initialTeam = "all",
   initialEmployeeId = "all",
@@ -270,7 +275,12 @@ function ReportPage({
 
     return [String(initialEmployeeId)];
   });
-  const [gridData, setGridData] = useState({ employees: [], rows: [], summary: { received: 0, notReceived: 0, leave: 0 } });
+  const [gridData, setGridData] = useState({
+    employees: [],
+    rows: [],
+    summary: { received: 0, notReceived: 0, leave: 0, onSite: 0 },
+    taskSummary: { total: 0, completed: 0, pending: 0 }
+  });
   const [detailedTasks, setDetailedTasks] = useState([]);
   const [detailedSummary, setDetailedSummary] = useState({ total: 0, completed: 0, inProgress: 0, pending: 0 });
   const [directoryUsers, setDirectoryUsers] = useState([]);
@@ -477,8 +487,8 @@ function ReportPage({
           return selectedEmployeeIds.includes(String(entry.assigned_to));
         })
         .sort((left, right) => {
-          const leftTime = new Date(left.created_at).getTime();
-          const rightTime = new Date(right.created_at).getTime();
+          const leftTime = new Date(left.assigned_at || left.created_at).getTime();
+          const rightTime = new Date(right.assigned_at || right.created_at).getTime();
 
           if (Number.isNaN(leftTime) || Number.isNaN(rightTime)) {
             return 0;
@@ -510,7 +520,7 @@ function ReportPage({
       );
 
       setDetailedSummary(taskSummary);
-      setTotalTasks(isEmployeeView ? scopedDetailedTasks.length : allTasks.length);
+      setTotalTasks(scopedDetailedTasks.length);
 
       if (reportType === "detailed" || isEmployeeView) {
         const startText = toDateText(startDate);
@@ -574,11 +584,12 @@ function ReportPage({
 
                 if (entry.status === "Received") acc.received += 1;
                 else if (entry.status === "Leave") acc.leave += 1;
+                else if (entry.status === "On Site") acc.onSite += 1;
                 else acc.notReceived += 1;
               });
               return acc;
             },
-            { received: 0, notReceived: 0, leave: 0 }
+            { received: 0, notReceived: 0, leave: 0, onSite: 0 }
           );
 
           return { ...prev, rows, summary };
@@ -592,7 +603,9 @@ function ReportPage({
     []
   );
 
-  const handleExportXlsx = useCallback(() => {
+  const handleExportXlsx = useCallback(async () => {
+    const { default: ExcelJS } = await import("exceljs/dist/exceljs.min.js");
+
     if (reportType === "detailed" || isEmployeeView) {
       if (!detailedTasks.length) {
         setMessage("Generate detailed report data before exporting.");
@@ -610,7 +623,7 @@ function ReportPage({
         "Status",
         "Dependency/Remark",
         "Assigned By",
-        "Created At",
+        "Assigned At",
         "Completed At"
       ];
       const groupedDetailedTasks = [];
@@ -638,7 +651,7 @@ function ReportPage({
         width:
           header === "Task" || header === "Action"
             ? 32
-            : header === "Created At" || header === "Completed At"
+            : header === "Assigned At" || header === "Completed At"
               ? 24
               : 20
       }));
@@ -668,7 +681,7 @@ function ReportPage({
             Status: entry.status || "-",
             "Dependency/Remark": entry.dependency || "-",
             "Assigned By": entry.assigned_by_name || "-",
-            "Created At": formatDateTimeText(entry.created_at),
+            "Assigned At": formatDateTimeText(entry.assigned_at || entry.created_at),
             "Completed At": formatUtcDateTimeText(entry.completed_at)
           });
 
@@ -689,25 +702,24 @@ function ReportPage({
         });
       });
 
-      workbook.xlsx.writeBuffer().then((buffer) => {
-        const blob = new Blob([
-          buffer
-        ], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
-        const url = window.URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.href = url;
-        const { startDate, endDate } = getDateBounds(dateRange, date, customStartDate, customEndDate);
-        const startText = toDateText(startDate);
-        const endText = toDateText(endDate);
-        const suffix = startText === endText ? startText : `${startText}-to-${endText}`;
-        link.download = isEmployeeView
-          ? `my-detailed-task-report-${suffix}.xlsx`
-          : `detailed-task-report-${suffix}.xlsx`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        window.URL.revokeObjectURL(url);
-      });
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([
+        buffer
+      ], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      const { startDate, endDate } = getDateBounds(dateRange, date, customStartDate, customEndDate);
+      const startText = toDateText(startDate);
+      const endText = toDateText(endDate);
+      const suffix = startText === endText ? startText : `${startText}-to-${endText}`;
+      link.download = isEmployeeView
+        ? `my-detailed-task-report-${suffix}.xlsx`
+        : `detailed-task-report-${suffix}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
 
       return;
     }
@@ -743,6 +755,8 @@ function ReportPage({
     rowCursor += 1;
     sheet.getCell(rowCursor, 1).value = "Not Received";
     applyCellStyle(sheet.getCell(rowCursor, 1), { fillColor: COLOR.notReceivedRed, bold: true });
+    sheet.getCell(rowCursor, 2).value = "On Site";
+    applyCellStyle(sheet.getCell(rowCursor, 2), { fillColor: COLOR.onSiteBlue, bold: true });
 
     sheet.mergeCells(rowCursor - 2, 4, rowCursor - 1, lastColumn);
     sheet.getCell(rowCursor - 2, 4).value = "Daily Employee Report Tracker";
@@ -812,6 +826,7 @@ function ReportPage({
           if (statusValue === "Completed") fillColor = COLOR.completedGreen;
           if (statusValue === "Pending") fillColor = COLOR.pendingAmber;
           if (statusValue === "No / On Leave") fillColor = COLOR.leaveBlue;
+          if (statusValue === "On Site") fillColor = COLOR.onSiteBlue;
           if (statusValue === "Not Received") fillColor = COLOR.notReceivedRed;
           if (statusValue === "Holiday") fillColor = COLOR.holidayPink;
           if (statusValue === "Weekly Off") fillColor = COLOR.weeklyOffGray;
@@ -835,7 +850,8 @@ function ReportPage({
       ["Received", gridData.summary?.received ?? 0, COLOR.receivedGreen],
       ["Not Received", gridData.summary?.notReceived ?? 0, COLOR.notReceivedRed],
       ["No / On Leave", gridData.summary?.leave ?? 0, COLOR.leaveBlue],
-      ["Tasks Tracked", totalTasks, COLOR.headerGray]
+      ["On Site", gridData.summary?.onSite ?? 0, COLOR.onSiteBlue],
+      ["Completed Tasks", gridData.taskSummary?.completed ?? 0, COLOR.headerGray]
     ];
 
     summaryItems.forEach(([label, value, color]) => {
@@ -846,20 +862,19 @@ function ReportPage({
       rowCursor += 1;
     });
 
-    workbook.xlsx.writeBuffer().then((buffer) => {
-      const blob = new Blob([
-        buffer
-      ], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `daily-report-${gridData.startDate || date}.xlsx`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
-    });
-  }, [customEndDate, customStartDate, date, dateRange, detailedTasks, gridData.employees, gridData.rows, gridData.startDate, gridData.summary, isEmployeeView, reportType, totalTasks]);
+    const buffer = await workbook.xlsx.writeBuffer();
+    const blob = new Blob([
+      buffer
+    ], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `daily-report-${gridData.startDate || date}.xlsx`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+  }, [customEndDate, customStartDate, date, dateRange, detailedTasks, gridData.employees, gridData.rows, gridData.startDate, gridData.summary, gridData.taskSummary, isEmployeeView, reportType, totalTasks]);
 
   const handleSaveHoliday = useCallback(async () => {
     const dateValue = String(holidayForm.date || "").slice(0, 10);
@@ -913,7 +928,7 @@ function ReportPage({
   );
 
   useEffect(() => {
-    setDateRange(initialDateRange || "week");
+    setDateRange(initialDateRange || "today");
   }, [initialDateRange]);
 
   useEffect(() => {
@@ -975,9 +990,10 @@ function ReportPage({
         onGenerate={handleGenerate}
         onExportXlsx={handleExportXlsx}
         loading={loading}
-        summary={gridData.summary || { received: 0, notReceived: 0, leave: 0 }}
+        summary={gridData.summary || { received: 0, notReceived: 0, leave: 0, onSite: 0 }}
         totalTasks={totalTasks}
         detailedSummary={detailedSummary}
+        taskSummary={gridData.taskSummary || { total: 0, completed: 0, pending: 0 }}
         showReportType={!isEmployeeView}
         showDateField
         showTeamFilter={!isEmployeeView}
@@ -1063,7 +1079,7 @@ function ReportPage({
         </section>
       ) : null}
 
-      {message ? <div className="rounded-lg bg-slate-100 px-3 py-2 text-sm text-slate-700">{message}</div> : null}
+      {message ? <div className="rounded-lg border border-slate-100 bg-slate-100 px-3 py-2 text-sm text-slate-700">{message}</div> : null}
 
       <div className="bg-white">
         {reportType === "received" && !isEmployeeView ? (

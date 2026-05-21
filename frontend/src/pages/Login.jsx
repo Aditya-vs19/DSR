@@ -17,7 +17,6 @@ const Login = () => {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const [rememberMe, setRememberMe] = useState(true);
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -36,6 +35,14 @@ const Login = () => {
 
   const fieldClassName =
     "w-full rounded-2xl border border-slate-200 bg-white px-4 py-4 text-sm text-slate-700 shadow-[inset_0_1px_2px_rgba(15,23,42,0.02)] outline-none transition placeholder:text-slate-400 focus:border-sky-400 focus:ring-4 focus:ring-sky-100";
+  const normalizedError = error.toLowerCase();
+  const showPasswordHelp =
+    normalizedError.includes("password") ||
+    normalizedError.includes("invalid credential") ||
+    normalizedError.includes("invalid login") ||
+    normalizedError.includes("invalid username") ||
+    normalizedError.includes("invalid email") ||
+    normalizedError.includes("unauthorized");
 
   return (
     <div className="min-h-screen bg-white text-slate-800">
@@ -123,19 +130,16 @@ const Login = () => {
                 </div>
               </div>
 
-              <div className="mt-6 flex flex-col gap-4 text-sm text-slate-500 sm:flex-row sm:items-center sm:justify-between">
-                <label className="inline-flex items-center gap-3">
-                  <input
-                    className="h-4 w-4 rounded border-slate-300 text-[#0f6171] focus:ring-[#0f6171]"
-                    type="checkbox"
-                    checked={rememberMe}
-                    onChange={(event) => setRememberMe(event.target.checked)}
-                  />
-                  <span>Remember me</span>
-                </label>
-              </div>
-
               {error && <p className="mt-5 text-sm font-medium text-rose-600">{error}</p>}
+
+              {showPasswordHelp && (
+                <div className="mt-5 rounded-2xl border border-amber-100 bg-amber-50/80 px-4 py-3 text-sm text-amber-900 shadow-[inset_0_1px_0_rgba(255,255,255,0.45)]">
+                  <p className="font-semibold text-amber-950">Forgot your password?</p>
+                  <p className="mt-1 leading-6 text-amber-900/90">
+                    If you forgot your password, please contact HR or the Superadmin for assistance.
+                  </p>
+                </div>
+              )}
 
               <button
                 className="mt-6 inline-flex w-full items-center justify-center rounded-2xl bg-[#2f2f2f] px-6 py-3.5 text-base font-semibold text-white shadow-[0_14px_24px_rgba(15,23,42,0.16)] transition hover:bg-[#232323] disabled:cursor-not-allowed disabled:opacity-70"

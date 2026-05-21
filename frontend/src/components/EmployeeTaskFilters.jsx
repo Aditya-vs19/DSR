@@ -1,3 +1,5 @@
+import FilterSelect from "./FilterSelect";
+
 const EmployeeTaskFilters = ({
   filters,
   onStatusChange,
@@ -11,16 +13,18 @@ const EmployeeTaskFilters = ({
   onCustomDateChange,
   formatDateOptionLabel
 }) => {
+  const statusOptions = [
+    { value: "all", label: "All" },
+    { value: "Pending", label: "Pending" },
+    { value: "In Progress", label: "In Progress" },
+    { value: "Completed", label: "Completed" }
+  ];
+
   return (
     <div className="grid gap-3 sm:grid-cols-2">
       <div>
         <label className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-900">Status</label>
-        <select className="input" value={filters.status} onChange={(event) => onStatusChange(event.target.value)}>
-          <option value="all">All</option>
-          <option value="Pending">Pending</option>
-          <option value="In Progress">In Progress</option>
-          <option value="Completed">Completed</option>
-        </select>
+        <FilterSelect value={filters.status} options={statusOptions} onChange={onStatusChange} />
       </div>
 
       <div className="relative" ref={periodMenuRef}>

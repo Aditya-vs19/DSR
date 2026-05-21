@@ -118,7 +118,7 @@ export const updateDailyReportCellController = async (req, res) => {
   try {
     const { id } = req.params;
     const { status } = req.body;
-    const allowedStatuses = ["Received", "Not Received", "Leave"];
+    const allowedStatuses = ["Received", "Not Received", "Leave", "On Site"];
 
     if (!allowedStatuses.includes(status)) {
       return res.status(400).json({ message: "Invalid status value" });
@@ -179,7 +179,14 @@ export const submitReportToHrController = async (req, res) => {
     }
 
     return res.status(200).json({
-      message: isAdminSubmission ? "Self-task report submitted to HR" : "Report submitted to HR",
+      message: result.resubmitted
+        ? isAdminSubmission
+          ? "Self-task report resubmitted to HR"
+          : "Report resubmitted to HR"
+        : isAdminSubmission
+          ? "Self-task report submitted to HR"
+          : "Report submitted to HR",
+      resubmitted: Boolean(result.resubmitted),
       date,
       totalTasks: Number(result.total_tasks || 0),
       completedTasks: Number(result.completed_tasks || 0),

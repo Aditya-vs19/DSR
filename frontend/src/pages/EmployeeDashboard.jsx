@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Charts from "../components/Charts";
 import ConfirmDialog from "../components/ConfirmDialog";
 import CreateTaskModal from "../components/CreateTaskModal";
@@ -6,12 +6,14 @@ import EmployeeTaskFilters from "../components/EmployeeTaskFilters";
 import PendingTasksSummary from "../components/PendingTasksSummary";
 import ProfileMenu from "../components/ProfileMenu";
 import ProfileSection from "../components/ProfileSection";
-import ReportPage from "./ReportPage";
 import TaskTable from "../components/TaskTable";
 import logo from "../assets/logo.png";
 import { useAuth } from "../context/AuthContext";
+import useDocumentVisibility from "../hooks/useDocumentVisibility";
+import usePolling from "../hooks/usePolling";
 import useScrollHeader from "../hooks/useScrollHeader";
 import { authApi, reportApi, taskApi } from "../services/api";
+import { formatBackendDate } from "../utils/dateTime";
 import { collapseTaskLineages } from "../utils/taskLineage";
 import { getTaskDateText, getTodayText, TASK_DEPARTMENTS } from "../utils/taskMeta";
 import { toTeamLabel } from "../utils/teamLabel";
@@ -24,6 +26,8 @@ const PERIOD_OPTIONS = [
   { value: "last7", label: "Last 7 Days" },
   { value: "custom", label: "Custom Date" }
 ];
+const ReportPage = lazy(() => import("./ReportPage"));
+const DASHBOARD_POLL_INTERVAL = 45000;
 
 const getLocalDateText = (date = new Date()) => getTodayText(date);
 
@@ -67,6 +71,7 @@ const normalizeTimelineDate = (value) => {
 const EmployeeDashboard = () => {
   const { user, logout } = useAuth();
   const isHeaderVisible = useScrollHeader();
+  const isDocumentVisible = useDocumentVisibility();
   const customDateInputRef = useRef(null);
   const periodMenuRef = useRef(null);
   const todayText = getLocalDateText();
@@ -103,7 +108,7 @@ const EmployeeDashboard = () => {
   const [passwordError, setPasswordError] = useState("");
   const [focusedTaskId, setFocusedTaskId] = useState(null);
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setLoading(true);
     try {
       const [tasksRes, reportsRes, summaryRes, timelineRes, notificationRes] = await Promise.all([
@@ -122,13 +127,13 @@ const EmployeeDashboard = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    loadData();
-    const timer = setInterval(loadData, 15000);
-    return () => clearInterval(timer);
-  }, []);
+    void loadData();
+  }, [loadData]);
+
+  usePolling(loadData, DASHBOARD_POLL_INTERVAL, isDocumentVisible && activeTab !== "Reports" && activeTab !== "Profile");
 
   useEffect(() => {
     if (!user?.team) {
@@ -354,7 +359,6 @@ const EmployeeDashboard = () => {
             : entry
         )
       );
-      void loadData().catch(() => {});
     } catch (apiError) {
       setError(apiError.response?.data?.message || "Failed to update task");
       throw apiError;
@@ -382,10 +386,10 @@ const EmployeeDashboard = () => {
     setError("");
 
     try {
-      await taskApi.deleteTask(task.id);
-      setTasks((prev) => prev.filter((entry) => Number(entry.id) !== Number(task.id)));
+      const response = await taskApi.deleteTask(task.id);
+      const deletedIds = Array.isArray(response.data?.deletedIds) ? response.data.deletedIds.map((entry) => Number(entry)) : [Number(task.id)];
+      setTasks((prev) => prev.filter((entry) => !deletedIds.includes(Number(entry.id))));
       setFocusedTaskId((current) => (Number(current) === Number(task.id) ? null : current));
-      await loadData();
     } catch (apiError) {
       setError(apiError.response?.data?.message || "Failed to delete task");
       throw apiError;
@@ -394,12 +398,14 @@ const EmployeeDashboard = () => {
 
   const handleMarkRead = async (id) => {
     await taskApi.markNotificationRead(id);
-    await loadData();
+    setNotifications((prev) =>
+      prev.map((item) => (Number(item.id) === Number(id) ? { ...item, is_read: 1 } : item))
+    );
   };
 
   const handleMarkAllRead = async () => {
     await taskApi.markAllNotificationsRead();
-    await loadData();
+    setNotifications((prev) => prev.map((item) => ({ ...item, is_read: 1 })));
   };
 
   const handleOpenTaskFromNotification = async (notification) => {
@@ -412,10 +418,12 @@ const EmployeeDashboard = () => {
     }
 
     await taskApi.markNotificationRead(notification.id);
+    setNotifications((prev) =>
+      prev.map((item) => (Number(item.id) === Number(notification.id) ? { ...item, is_read: 1 } : item))
+    );
     setActiveTab("Tasks");
     setFilters((prev) => ({ ...prev, status: "all", period: "all", date: todayText }));
     setFocusedTaskId(Number(notification.reference_id));
-    await loadData();
   };
 
   const selectedReportDate = useMemo(() => {
@@ -460,20 +468,6 @@ const EmployeeDashboard = () => {
     );
   }, [reports, selectedReportDate]);
 
-  const alreadySubmittedToday = useMemo(
-    () =>
-      reports.some(
-        (entry) =>
-          String(entry.date).slice(0, 10) === todayText &&
-          entry.received_status === "Received"
-      ),
-    [reports, todayText]
-  );
-
-  const createTaskLockedForSelectedDate = useMemo(
-    () => form.taskDate === todayText && alreadySubmittedToday,
-    [alreadySubmittedToday, form.taskDate, todayText]
-  );
   const taskDepartmentSelectOptions = useMemo(
     () => TASK_DEPARTMENTS.map((department) => ({ value: department, label: toTeamLabel(department) })),
     []
@@ -482,11 +476,6 @@ const EmployeeDashboard = () => {
   const handleSubmitReport = async () => {
     if (!canSubmitReport) {
       setSubmitMessage("Select a single day (Today, Yesterday, or Custom Date) to submit report.");
-      return;
-    }
-
-    if (alreadySubmittedForDate) {
-      setSubmitMessage("You can only submit the report once in a day.");
       return;
     }
 
@@ -500,7 +489,24 @@ const EmployeeDashboard = () => {
     try {
       const response = await reportApi.submitReportToHr(selectedReportDate);
       setSubmitMessage(response.data?.message || "Report submitted to HR.");
-      await loadData();
+      setReports((prev) => {
+        const nextEntry = {
+          employee_id: user?.id,
+          date: selectedReportDate,
+          received_status: "Received"
+        };
+        const existingIndex = prev.findIndex((entry) => String(entry.date).slice(0, 10) === selectedReportDate);
+
+        if (existingIndex === -1) {
+          return [nextEntry, ...prev];
+        }
+
+        return prev.map((entry, index) =>
+          index === existingIndex
+            ? { ...entry, ...nextEntry, received_status: "Received" }
+            : entry
+        );
+      });
     } catch (apiError) {
       setSubmitMessage(apiError.response?.data?.message || "Failed to submit report to HR");
     } finally {
@@ -580,12 +586,8 @@ const EmployeeDashboard = () => {
         onSubmit={handleCreateTask}
         onClose={() => setIsCreateTaskModalOpen(false)}
         error={error}
-        locked={createTaskLockedForSelectedDate}
-        lockedMessage={
-          createTaskLockedForSelectedDate
-            ? "You already submitted today's report. Choose tomorrow or a future date to create a task."
-            : ""
-        }
+        locked={false}
+        lockedMessage=""
         submitLabel="Add Task"
         todayText={todayText}
         departmentOptions={taskDepartmentSelectOptions}
@@ -593,8 +595,8 @@ const EmployeeDashboard = () => {
       <ConfirmDialog
         open={isSubmitConfirmOpen}
         title="Submit Report"
-        message={`Do you want to submit your report for ${selectedReportDate}?`}
-        confirmText="Submit"
+        message={`Do you want to ${alreadySubmittedForDate ? "resubmit" : "submit"} your report for ${selectedReportDate}?`}
+        confirmText={alreadySubmittedForDate ? "Resubmit" : "Submit"}
         cancelText="Cancel"
         loading={submittingReport}
         onCancel={() => setIsSubmitConfirmOpen(false)}
@@ -785,11 +787,11 @@ const EmployeeDashboard = () => {
                   </p>
                   <button
                     type="button"
-                    className={alreadySubmittedForDate ? "rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white" : "btn-primary"}
+                    className={alreadySubmittedForDate ? "rounded-xl bg-amber-600 px-4 py-2 text-sm font-semibold text-white" : "btn-primary"}
                     disabled={!canSubmitReport || submittingReport}
                     onClick={handleSubmitReport}
                   >
-                    {alreadySubmittedForDate ? "Submitted" : submittingReport ? "Submitting..." : "Submit Report"}
+                    {submittingReport ? (alreadySubmittedForDate ? "Resubmitting..." : "Submitting...") : alreadySubmittedForDate ? "Resubmit Report" : "Submit Report"}
                   </button>
                 </div>
                 {submitMessage && <p className="mt-2 text-sm text-dsr-brand">{submitMessage}</p>}
@@ -871,11 +873,11 @@ const EmployeeDashboard = () => {
                 </p>
                 <button
                   type="button"
-                  className={alreadySubmittedForDate ? "rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white" : "btn-primary"}
+                  className={alreadySubmittedForDate ? "rounded-xl bg-amber-600 px-4 py-2 text-sm font-semibold text-white" : "btn-primary"}
                   disabled={!canSubmitReport || submittingReport}
                   onClick={handleSubmitReport}
                 >
-                  {alreadySubmittedForDate ? "Submitted" : submittingReport ? "Submitting..." : "Submit Report"}
+                  {submittingReport ? (alreadySubmittedForDate ? "Resubmitting..." : "Submitting...") : alreadySubmittedForDate ? "Resubmit Report" : "Submit Report"}
                 </button>
               </div>
               {submitMessage && <p className="mt-2 text-sm text-dsr-brand">{submitMessage}</p>}
@@ -918,9 +920,7 @@ const EmployeeDashboard = () => {
                       )}
                     </div>
                   </div>
-                  <p className="mt-1 text-xs text-dsr-muted">
-                    {item.created_at ? new Date(item.created_at).toLocaleString() : ""}
-                  </p>
+                  <p className="mt-1 text-xs text-dsr-muted">{formatBackendDate(item.created_at)}</p>
                 </div>
               ))}
               {visibleNotifications.length === 0 && <p className="text-sm text-dsr-muted">No notifications</p>}
@@ -930,7 +930,9 @@ const EmployeeDashboard = () => {
 
         {activeTab === "Reports" && (
           <section className="space-y-4">
-            <ReportPage role="employee" initialDate={todayText} initialDateRange="week" />
+            <Suspense fallback={<div className="card text-sm text-dsr-muted">Loading reports...</div>}>
+              <ReportPage role="employee" initialDate={todayText} initialDateRange="week" />
+            </Suspense>
           </section>
         )}
 

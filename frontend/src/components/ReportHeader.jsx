@@ -24,6 +24,7 @@ function ReportHeader({
   summary,
   totalTasks,
   detailedSummary,
+  taskSummary,
   showReportType = true,
   showDateField = true,
   showTeamFilter = true,
@@ -100,7 +101,8 @@ function ReportHeader({
           { label: "Received", value: summary.received, className: "bg-emerald-50 text-emerald-800" },
           { label: "Not Received", value: summary.notReceived, className: "bg-rose-50 text-rose-800" },
           { label: "Leave", value: summary.leave, className: "bg-amber-50 text-amber-800" },
-          { label: "Tasks Tracked", value: totalTasks, className: "bg-slate-100 text-slate-700" }
+          { label: "On Site", value: summary.onSite ?? 0, className: "bg-sky-50 text-sky-800" },
+          { label: "Completed Tasks", value: taskSummary?.completed ?? 0, className: "bg-slate-100 text-slate-700" }
         ];
 
   const isEmployeeHeaderLayout =
@@ -259,14 +261,14 @@ function ReportHeader({
               type="button"
               onClick={onGenerate}
               disabled={loading}
-              className="rounded-lg bg-emerald-600 px-3.5 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-70"
+              className="w-full rounded-lg bg-emerald-600 px-3.5 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-70"
             >
               {loading ? "Loading..." : reportType === "detailed" ? "Generate Detailed Report" : "Generate Report"}
             </button>
             <button
               type="button"
               onClick={onExportXlsx}
-              className="rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              className="w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
             >
               {reportType === "detailed" ? "Download Task XLSX" : "Download XLSX"}
             </button>

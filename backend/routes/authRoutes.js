@@ -1,6 +1,7 @@
 import express from "express";
 import {
   changePassword,
+  deactivateManagedUser,
   getDepartmentEmployees,
   getEmployees,
   login,
@@ -17,6 +18,7 @@ router.post("/reset-managed-password", authenticate, authorizeRoles("superadmin"
 router.post("/register", authenticate, authorizeRoles("superadmin", "hr"), register);
 router.get("/employees", authenticate, authorizeRoles("superadmin", "hr"), getEmployees);
 router.get("/employees/team", authenticate, authorizeRoles("admin", "hr", "superadmin"), getDepartmentEmployees);
+router.delete("/users/:id", authenticate, authorizeRoles("superadmin"), deactivateManagedUser);
 
 // Backward-compatible aliases
 router.get("/users", authenticate, authorizeRoles("superadmin", "hr"), getEmployees);

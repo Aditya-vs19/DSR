@@ -1,13 +1,17 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Charts from "../components/Charts";
 import Navbar from "../components/Navbar";
 import ProfileSection from "../components/ProfileSection";
 import Sidebar from "../components/Sidebar";
 import { useAuth } from "../context/AuthContext";
+import useDocumentVisibility from "../hooks/useDocumentVisibility";
+import usePolling from "../hooks/usePolling";
 import { authApi, reportApi, taskApi } from "../services/api";
+const DASHBOARD_POLL_INTERVAL = 45000;
 
 const HRDashboard = () => {
   const { user } = useAuth();
+  const isDocumentVisible = useDocumentVisibility();
   const todayText = new Date().toISOString().slice(0, 10);
   const [reports, setReports] = useState([]);
   const [notifications, setNotifications] = useState([]);
@@ -31,7 +35,7 @@ const HRDashboard = () => {
   const [passwordError, setPasswordError] = useState("");
   const profileSectionRef = useRef(null);
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setLoading(true);
     try {
       const [reportsRes, notificationRes] = await Promise.all([reportApi.getReports(), taskApi.getNotifications()]);
@@ -40,13 +44,13 @@ const HRDashboard = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    loadData();
-    const timer = setInterval(loadData, 15000);
-    return () => clearInterval(timer);
-  }, []);
+    void loadData();
+  }, [loadData]);
+
+  usePolling(loadData, DASHBOARD_POLL_INTERVAL, isDocumentVisible);
 
   const teams = useMemo(
     () => [...new Set(reports.map((report) => report.employee_team).filter(Boolean))],
@@ -76,7 +80,13 @@ const HRDashboard = () => {
 
   const validate = async (id, status) => {
     await reportApi.validateReport(id, status);
-    await loadData();
+    setReports((prev) =>
+      prev.map((report) =>
+        Number(report.id) === Number(id)
+          ? { ...report, status }
+          : report
+      )
+    );
   };
 
   const openReceivedReport = async (reportId) => {
@@ -244,7 +254,7 @@ const HRDashboard = () => {
               </tbody>
             </table>
             <p className="mt-3 text-xs text-slate-500">
-              Live refresh is active every 15 seconds. {loading ? "Refreshing..." : "Up to date"}
+              Live refresh is active every 45 seconds. {loading ? "Refreshing..." : "Up to date"}
             </p>
           </div>
 

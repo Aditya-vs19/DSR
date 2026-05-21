@@ -180,13 +180,31 @@ const ensureDailyReportTable = async () => {
       id INT AUTO_INCREMENT PRIMARY KEY,
       report_date DATE NOT NULL,
       user_id INT NOT NULL,
-      status ENUM('Received', 'Not Received', 'Leave') NOT NULL DEFAULT 'Not Received',
+      status ENUM('Received', 'Not Received', 'Leave', 'On Site') NOT NULL DEFAULT 'Not Received',
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       UNIQUE KEY uk_daily_report_user_date (report_date, user_id),
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     )
   `);
+
+  const statusColumns = await query(
+    `
+      SELECT COLUMN_TYPE
+      FROM information_schema.COLUMNS
+      WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = 'daily_employee_reports'
+        AND COLUMN_NAME = 'status'
+      LIMIT 1
+    `
+  );
+
+  const statusColumnType = String(statusColumns[0]?.COLUMN_TYPE || "");
+  if (!statusColumnType.includes("'On Site'")) {
+    await query(
+      "ALTER TABLE daily_employee_reports MODIFY COLUMN status ENUM('Received', 'Not Received', 'Leave', 'On Site') NOT NULL DEFAULT 'Not Received'"
+    );
+  }
 
   dailyReportTableEnsured = true;
 };
