@@ -1,4 +1,4 @@
-export const TASK_DEPARTMENTS = ["Sales", "Logistics", "Operations", "Technical", "Finance"];
+export const TASK_DEPARTMENTS = ["Sales", "Logistics", "Operations", "Technical", "Finance", "Human Resources"];
 
 export const getTaskDateText = (task) => String(task?.task_date || task?.created_at || "").slice(0, 10);
 

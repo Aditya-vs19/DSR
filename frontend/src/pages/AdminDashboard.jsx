@@ -7,7 +7,7 @@ import PendingTasksSummary from "../components/PendingTasksSummary";
 import ProfileMenu from "../components/ProfileMenu";
 import ProfileSection from "../components/ProfileSection";
 import TaskTable from "../components/TaskTable";
-import logo from "../assets/logo.png";
+import BrandMark from "../components/BrandMark";
 import { useAuth } from "../context/AuthContext";
 import useDocumentVisibility from "../hooks/useDocumentVisibility";
 import usePolling from "../hooks/usePolling";
@@ -35,6 +35,20 @@ const getManagedDepartmentLabel = (currentUser) => {
   return toTeamLabel(team) || "-";
 };
 
+const getManagedDepartmentOptions = (currentUser) => {
+  const name = String(currentUser?.name || "").trim().toLowerCase();
+  const team = String(currentUser?.team || "").trim();
+
+  if (name === "snigdha" && team === "Sales") {
+    return ["Sales", "Logistics"];
+  }
+
+  return team ? [team] : [];
+};
+
+const getUserDisplayName = (entry) =>
+  String(entry?.full_name || entry?.fullName || [entry?.name, entry?.last_name || entry?.lastName].filter(Boolean).join(" ") || entry?.name || "").trim();
+
 const AdminDashboard = () => {
   const { user, logout } = useAuth();
   const isHeaderVisible = useScrollHeader();
@@ -42,6 +56,26 @@ const AdminDashboard = () => {
   const todayText = getTodayText();
   const [tasks, setTasks] = useState([]);
   const [employees, setEmployees] = useState([]);
+  const [employeeMessage, setEmployeeMessage] = useState("");
+  const [employeeError, setEmployeeError] = useState("");
+  const [creatingEmployee, setCreatingEmployee] = useState(false);
+  const [managedUserBusyId, setManagedUserBusyId] = useState(null);
+  const [deletingUserId, setDeletingUserId] = useState(null);
+  const [editingUser, setEditingUser] = useState(null);
+  const [newUserForm, setNewUserForm] = useState({
+    name: "",
+    lastName: "",
+    email: "",
+    password: "",
+    team: String(user?.team || "").trim()
+  });
+  const [editUserForm, setEditUserForm] = useState({
+    name: "",
+    lastName: "",
+    email: "",
+    team: "",
+    password: ""
+  });
   const [performance, setPerformance] = useState([]);
   const [reports, setReports] = useState([]);
   const [notifications, setNotifications] = useState([]);
@@ -76,6 +110,7 @@ const AdminDashboard = () => {
   const [focusedTaskId, setFocusedTaskId] = useState(null);
   const [comparisonFilter, setComparisonFilter] = useState({ mode: "overall", date: todayText });
   const managedDepartmentLabel = useMemo(() => getManagedDepartmentLabel(user), [user]);
+  const managedDepartmentOptions = useMemo(() => getManagedDepartmentOptions(user), [user]);
   const taskDepartmentOptions = useMemo(
     () =>
       TASK_DEPARTMENTS.filter(Boolean).sort((left, right) => {
@@ -144,7 +179,11 @@ const AdminDashboard = () => {
       taskDepartment: prev.taskDepartment || String(user.team).trim(),
       taskDate: prev.taskDate || todayText
     }));
-  }, [todayText, user?.team]);
+    setNewUserForm((prev) => ({
+      ...prev,
+      team: prev.team || managedDepartmentOptions[0] || String(user.team).trim()
+    }));
+  }, [managedDepartmentOptions, todayText, user?.team]);
 
   const visibleTasks = useMemo(() => collapseTaskLineages(tasks), [tasks]);
 
@@ -422,6 +461,160 @@ const AdminDashboard = () => {
     }
   };
 
+  const handleCreateEmployee = async (event) => {
+    event.preventDefault();
+    setEmployeeMessage("");
+    setEmployeeError("");
+
+    const payload = {
+      name: String(newUserForm.name || "").trim(),
+      lastName: String(newUserForm.lastName || "").trim(),
+      email: String(newUserForm.email || "").trim(),
+      password: String(newUserForm.password || ""),
+      role: "employee",
+      team: String(newUserForm.team || "").trim()
+    };
+
+    if (!payload.name || !payload.email || !payload.password) {
+      setEmployeeError("First name, email and password are required");
+      return;
+    }
+
+    if (!managedDepartmentOptions.includes(payload.team)) {
+      setEmployeeError("Select one of your managed departments");
+      return;
+    }
+
+    setCreatingEmployee(true);
+    try {
+      const response = await authApi.register(payload);
+      setEmployeeMessage(response?.data?.message || "Employee created successfully");
+      setNewUserForm({
+        name: "",
+        lastName: "",
+        email: "",
+        password: "",
+        team: managedDepartmentOptions[0] || String(user?.team || "").trim()
+      });
+      await loadData();
+    } catch (apiError) {
+      setEmployeeError(apiError.response?.data?.message || "Failed to create employee");
+    } finally {
+      setCreatingEmployee(false);
+    }
+  };
+
+  const openEditUserModal = (targetUser) => {
+    setEmployeeMessage("");
+    setEmployeeError("");
+    setEditingUser(targetUser);
+    setEditUserForm({
+      name: targetUser.name || "",
+      lastName: targetUser.lastName || targetUser.last_name || "",
+      email: targetUser.email || "",
+      team: targetUser.team || managedDepartmentOptions[0] || "",
+      password: ""
+    });
+  };
+
+  const closeEditUserModal = () => {
+    if (managedUserBusyId) {
+      return;
+    }
+
+    setEditingUser(null);
+    setEditUserForm({
+      name: "",
+      lastName: "",
+      email: "",
+      team: "",
+      password: ""
+    });
+  };
+
+  const handleUpdateEmployee = async (event) => {
+    event.preventDefault();
+
+    if (!editingUser) {
+      return;
+    }
+
+    setEmployeeMessage("");
+    setEmployeeError("");
+
+    const payload = {
+      name: String(editUserForm.name || "").trim(),
+      lastName: String(editUserForm.lastName || "").trim(),
+      email: String(editUserForm.email || "").trim(),
+      role: "employee",
+      team: String(editUserForm.team || "").trim()
+    };
+    const nextPassword = String(editUserForm.password || "");
+
+    if (!payload.name || !payload.email || !payload.team) {
+      setEmployeeError("First name, email and department are required");
+      return;
+    }
+
+    if (!managedDepartmentOptions.includes(payload.team)) {
+      setEmployeeError("Select one of your managed departments");
+      return;
+    }
+
+    if (nextPassword && nextPassword.length < 3) {
+      setEmployeeError("New password must be at least 3 characters");
+      return;
+    }
+
+    setManagedUserBusyId(editingUser.id);
+    try {
+      const response = await authApi.updateUser(editingUser.id, payload);
+
+      if (nextPassword) {
+        await authApi.resetManagedPassword({
+          targetUserId: editingUser.id,
+          newPassword: nextPassword
+        });
+      }
+
+      const updatedUser = response?.data?.user || { ...editingUser, ...payload };
+      setEmployees((prev) =>
+        prev.map((entry) =>
+          Number(entry.id) === Number(editingUser.id)
+            ? { ...entry, ...updatedUser }
+            : entry
+        )
+      );
+      setEmployeeMessage(nextPassword ? "Employee details and password updated" : response?.data?.message || "Employee details updated");
+      setEditingUser(null);
+      await loadData();
+    } catch (apiError) {
+      setEmployeeError(apiError.response?.data?.message || "Failed to update employee");
+    } finally {
+      setManagedUserBusyId(null);
+    }
+  };
+
+  const handleDeleteEmployee = async (targetUser) => {
+    if (!window.confirm(`Delete ${getUserDisplayName(targetUser)}? Historical tasks and reports will stay saved.`)) {
+      return;
+    }
+
+    setEmployeeMessage("");
+    setEmployeeError("");
+    setDeletingUserId(targetUser.id);
+    try {
+      await authApi.deleteUser(targetUser.id);
+      setEmployees((prev) => prev.filter((entry) => Number(entry.id) !== Number(targetUser.id)));
+      setEmployeeMessage(`${getUserDisplayName(targetUser)} deleted. Historical data is preserved.`);
+      await loadData();
+    } catch (apiError) {
+      setEmployeeError(apiError.response?.data?.message || "Failed to delete employee");
+    } finally {
+      setDeletingUserId(null);
+    }
+  };
+
   const handleDeleteTask = async (task) => {
     setError("");
 
@@ -567,6 +760,90 @@ const AdminDashboard = () => {
         onCancel={() => setIsOwnSubmitConfirmOpen(false)}
         onConfirm={() => void handleConfirmSubmitOwnReport()}
       />
+      {editingUser && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-900/45 p-4 backdrop-blur-[2px]">
+          <div className="w-full max-w-3xl rounded-[28px] border border-white/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(244,249,246,0.96))] p-4 shadow-[0_28px_60px_rgba(31,42,34,0.16)]">
+            <div className="flex items-start justify-between gap-4 rounded-[22px] border border-white/70 bg-[linear-gradient(180deg,#f7fbf8,#eef5f0)] px-5 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]">
+              <div>
+                <h2 className="text-xl font-bold text-dsr-ink">Edit Employee</h2>
+                <p className="mt-1 text-sm text-dsr-muted">Update employees in {managedDepartmentLabel}.</p>
+              </div>
+              <button
+                type="button"
+                className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-dsr-border bg-white text-slate-500 transition hover:text-slate-700"
+                onClick={closeEditUserModal}
+                aria-label="Close edit employee modal"
+              >
+                <span className="text-xl leading-none">x</span>
+              </button>
+            </div>
+
+            <form className="mt-4 grid gap-4 md:grid-cols-2" onSubmit={handleUpdateEmployee}>
+              <label>
+                <span className="mb-1 block text-sm font-semibold text-slate-900">First Name / Username</span>
+                <input
+                  className="input"
+                  value={editUserForm.name}
+                  onChange={(event) => setEditUserForm((prev) => ({ ...prev, name: event.target.value }))}
+                  required
+                />
+              </label>
+              <label>
+                <span className="mb-1 block text-sm font-semibold text-slate-900">Last Name</span>
+                <input
+                  className="input"
+                  value={editUserForm.lastName}
+                  onChange={(event) => setEditUserForm((prev) => ({ ...prev, lastName: event.target.value }))}
+                />
+              </label>
+              <label>
+                <span className="mb-1 block text-sm font-semibold text-slate-900">Email</span>
+                <input
+                  className="input"
+                  type="email"
+                  value={editUserForm.email}
+                  onChange={(event) => setEditUserForm((prev) => ({ ...prev, email: event.target.value }))}
+                  required
+                />
+              </label>
+              <label>
+                <span className="mb-1 block text-sm font-semibold text-slate-900">Department</span>
+                <select
+                  className="input"
+                  value={editUserForm.team}
+                  onChange={(event) => setEditUserForm((prev) => ({ ...prev, team: event.target.value }))}
+                  required
+                >
+                  {managedDepartmentOptions.map((team) => (
+                    <option key={team} value={team}>
+                      {toTeamLabel(team)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="md:col-span-2">
+                <span className="mb-1 block text-sm font-semibold text-slate-900">New Password</span>
+                <input
+                  className="input"
+                  type="password"
+                  placeholder="Leave blank to keep current password"
+                  value={editUserForm.password}
+                  onChange={(event) => setEditUserForm((prev) => ({ ...prev, password: event.target.value }))}
+                />
+              </label>
+              {employeeError ? <p className="md:col-span-2 text-sm text-rose-600">{employeeError}</p> : null}
+              <div className="md:col-span-2 flex flex-wrap items-center justify-end gap-2 pt-1">
+                <button type="button" className="btn-secondary" onClick={closeEditUserModal}>
+                  Cancel
+                </button>
+                <button className="btn-primary min-w-[150px]" type="submit" disabled={managedUserBusyId === editingUser.id}>
+                  {managedUserBusyId === editingUser.id ? "Saving..." : "Save Changes"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       <header
         className={`sticky top-0 z-30 border-b border-dsr-border bg-[#f3f3f3] transition-transform duration-300 ${
@@ -574,13 +851,7 @@ const AdminDashboard = () => {
         }`}
       >
         <div className="mx-auto flex max-w-[1400px] items-center justify-between gap-6 px-4 py-4 lg:px-8">
-          <div className="flex items-center gap-5">
-            <img
-              src={logo}
-              alt="DSR Management Logo"
-              className="h-14 w-[260px] shrink-0 object-contain object-left"
-            />
-          </div>
+          <BrandMark />
 
           <nav className="hidden items-center gap-2 rounded-full border border-dsr-border bg-dsr-soft px-3 py-2 lg:flex">
             {TABS.map((tab) => (
@@ -795,31 +1066,127 @@ const AdminDashboard = () => {
         )}
 
         {activeTab === "Employees" && (
-          <section>
-            <h2 className="mb-3 text-lg font-semibold">Department Employees</h2>
+          <section className="card overflow-x-auto">
+            <div className="mb-4">
+              <h2 className="text-lg font-semibold">Department Employees</h2>
+              <p className="text-sm text-dsr-muted">Add, edit and delete employees in {managedDepartmentLabel}.</p>
+            </div>
+
+            <form className="mb-4 grid gap-3 rounded-xl border border-dsr-border/70 bg-dsr-soft p-3 md:grid-cols-2 xl:grid-cols-6" onSubmit={handleCreateEmployee}>
+              <label>
+                <span className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-900">First Name / Username</span>
+                <input
+                  className="input"
+                  value={newUserForm.name}
+                  onChange={(event) => setNewUserForm((prev) => ({ ...prev, name: event.target.value }))}
+                  required
+                />
+              </label>
+              <label>
+                <span className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-900">Last Name</span>
+                <input
+                  className="input"
+                  value={newUserForm.lastName}
+                  onChange={(event) => setNewUserForm((prev) => ({ ...prev, lastName: event.target.value }))}
+                />
+              </label>
+              <label>
+                <span className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-900">Email</span>
+                <input
+                  className="input"
+                  type="email"
+                  value={newUserForm.email}
+                  onChange={(event) => setNewUserForm((prev) => ({ ...prev, email: event.target.value }))}
+                  required
+                />
+              </label>
+              <label>
+                <span className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-900">Password</span>
+                <input
+                  className="input"
+                  type="password"
+                  value={newUserForm.password}
+                  onChange={(event) => setNewUserForm((prev) => ({ ...prev, password: event.target.value }))}
+                  required
+                />
+              </label>
+              <label>
+                <span className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-900">Department</span>
+                <select
+                  className="input"
+                  value={newUserForm.team}
+                  onChange={(event) => setNewUserForm((prev) => ({ ...prev, team: event.target.value }))}
+                  required
+                >
+                  {managedDepartmentOptions.map((team) => (
+                    <option key={team} value={team}>
+                      {toTeamLabel(team)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button className="btn-primary self-end" type="submit" disabled={creatingEmployee}>
+                {creatingEmployee ? "Creating..." : "Add Employee"}
+              </button>
+
+              {(employeeMessage || employeeError) && (
+                <p className={`text-sm md:col-span-2 xl:col-span-6 ${employeeError ? "text-rose-600" : "text-emerald-700"}`}>
+                  {employeeError || employeeMessage}
+                </p>
+              )}
+            </form>
+
             <div className="overflow-hidden rounded-md border border-slate-200 bg-white shadow-sm">
               <div className="overflow-x-auto">
-                <table className="min-w-full text-sm">
+                <table className="min-w-full table-fixed text-sm">
+                  <colgroup>
+                    <col className="w-[20%]" />
+                    <col className="w-[32%]" />
+                    <col className="w-[14%]" />
+                    <col className="w-[20%]" />
+                    <col className="w-[14%]" />
+                  </colgroup>
                   <thead>
                     <tr className="border-b border-sky-200 bg-sky-100 text-left">
                       <th className="p-3">Name</th>
                       <th className="p-3">Email</th>
                       <th className="p-3">Role</th>
                       <th className="p-3">Department</th>
+                      <th className="p-3 text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {employees.map((entry) => (
                       <tr key={entry.id} className="border-b border-dsr-border/70">
-                        <td className="p-3 font-semibold">{entry.name}</td>
-                        <td className="p-3">{entry.email}</td>
+                        <td className="truncate p-3 font-semibold" title={getUserDisplayName(entry)}>{getUserDisplayName(entry)}</td>
+                        <td className="truncate p-3" title={entry.email}>{entry.email}</td>
                         <td className="p-3 uppercase">{entry.role}</td>
-                        <td className="p-3">{toTeamLabel(entry.team) || "-"}</td>
+                        <td className="truncate p-3" title={toTeamLabel(entry.team) || "-"}>{toTeamLabel(entry.team) || "-"}</td>
+                        <td className="p-3">
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              type="button"
+                              className="btn-primary whitespace-nowrap"
+                              disabled={managedUserBusyId === entry.id || deletingUserId === entry.id}
+                              onClick={() => openEditUserModal(entry)}
+                            >
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-700 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
+                              disabled={managedUserBusyId === entry.id || deletingUserId === entry.id}
+                              onClick={() => handleDeleteEmployee(entry)}
+                            >
+                              {deletingUserId === entry.id ? "Deleting..." : "Delete"}
+                            </button>
+                          </div>
+                        </td>
                       </tr>
                     ))}
                     {employees.length === 0 && (
                       <tr>
-                        <td colSpan={4} className="p-4 text-center text-dsr-muted">
+                        <td colSpan={5} className="p-4 text-center text-dsr-muted">
                           No employees found in this department
                         </td>
                       </tr>

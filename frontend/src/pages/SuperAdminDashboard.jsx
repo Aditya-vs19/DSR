@@ -1,9 +1,11 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
 import Charts from "../components/Charts";
+import ConfirmDialog from "../components/ConfirmDialog";
+import CreateTaskModal from "../components/CreateTaskModal";
 import ProfileMenu from "../components/ProfileMenu";
 import ProfileSection from "../components/ProfileSection";
 import TaskTable from "../components/TaskTable";
-import logo from "../assets/logo.png";
+import BrandMark from "../components/BrandMark";
 import { useAuth } from "../context/AuthContext";
 import useDocumentVisibility from "../hooks/useDocumentVisibility";
 import usePolling from "../hooks/usePolling";
@@ -11,7 +13,7 @@ import useScrollHeader from "../hooks/useScrollHeader";
 import { authApi, reportApi, taskApi } from "../services/api";
 import { formatBackendDate } from "../utils/dateTime";
 import { collapseTaskLineages } from "../utils/taskLineage";
-import { getTaskDateText, getTodayText } from "../utils/taskMeta";
+import { getTaskDateText, getTodayText, TASK_DEPARTMENTS } from "../utils/taskMeta";
 import { toTeamLabel } from "../utils/teamLabel";
 
 const TABS = ["Overview", "Tasks", "Employees", "Reports"];
@@ -21,6 +23,25 @@ const DASHBOARD_POLL_INTERVAL = 45000;
 const getTabLabel = (tab) => (tab === "Employees" ? "Team" : tab);
 
 const defaultAnalytics = { tasksPerTeam: [], completionRate: 0, topPerformers: [] };
+
+const isReportableSuperadmin = (entry) => {
+  const name = String(entry?.name || "").trim().toLowerCase();
+  const email = String(entry?.email || "").trim().toLowerCase();
+  const team = String(entry?.team || "").trim().toLowerCase();
+  return (
+    entry?.role === "superadmin" &&
+    (name === "hr" ||
+      email === "hr@cludobits.com" ||
+      team === "human resource" ||
+      team === "human resources")
+  );
+};
+
+const isReportableTaskUser = (entry) =>
+  ["employee", "admin", "hr"].includes(entry?.role) || isReportableSuperadmin(entry);
+
+const getUserDisplayName = (entry) =>
+  String(entry?.full_name || entry?.fullName || [entry?.name, entry?.last_name || entry?.lastName].filter(Boolean).join(" ") || entry?.name || "").trim();
 
 const TEAM_DONUT_COLORS = {
   Operations: "#E67E22",
@@ -62,6 +83,7 @@ const SuperAdminDashboard = () => {
   });
   const [newUserForm, setNewUserForm] = useState({
     name: "",
+    lastName: "",
     email: "",
     password: "",
     role: "employee",
@@ -70,14 +92,43 @@ const SuperAdminDashboard = () => {
   const [newUserMessage, setNewUserMessage] = useState("");
   const [newUserError, setNewUserError] = useState("");
   const [creatingUser, setCreatingUser] = useState(false);
-  const [managedPasswordDrafts, setManagedPasswordDrafts] = useState({});
-  const [managedPasswordBusyId, setManagedPasswordBusyId] = useState(null);
+  const [isCreateTaskModalOpen, setIsCreateTaskModalOpen] = useState(false);
+  const [ownTaskForm, setOwnTaskForm] = useState({
+    client: "",
+    task: "",
+    action: "",
+    dependency: "",
+    deadline: "",
+    priority: "Medium",
+    taskDepartment: "",
+    taskDate: todayText
+  });
+  const [ownTaskFilters, setOwnTaskFilters] = useState({ status: "all", date: todayText });
+  const [ownTaskError, setOwnTaskError] = useState("");
+  const [ownSubmitMessage, setOwnSubmitMessage] = useState("");
+  const [submittingOwnReport, setSubmittingOwnReport] = useState(false);
+  const [isOwnSubmitConfirmOpen, setIsOwnSubmitConfirmOpen] = useState(false);
+  const [managedUserBusyId, setManagedUserBusyId] = useState(null);
+  const [editingUser, setEditingUser] = useState(null);
+  const [editUserForm, setEditUserForm] = useState({
+    name: "",
+    lastName: "",
+    email: "",
+    role: "employee",
+    team: "",
+    password: ""
+  });
   const [deletingUserId, setDeletingUserId] = useState(null);
   const [managedPasswordError, setManagedPasswordError] = useState("");
   const [managedPasswordToast, setManagedPasswordToast] = useState("");
   const [passwordMessage, setPasswordMessage] = useState("");
   const [passwordError, setPasswordError] = useState("");
   const [focusedTaskId, setFocusedTaskId] = useState(null);
+  const canUseOwnTaskFlow = isReportableSuperadmin(user);
+  const visibleTabs = useMemo(
+    () => (canUseOwnTaskFlow ? ["Overview", "Tasks", "My Tasks", "Employees", "Reports"] : TABS),
+    [canUseOwnTaskFlow]
+  );
 
   const loadData = useCallback(async () => {
     setBusy(true);
@@ -142,6 +193,14 @@ const SuperAdminDashboard = () => {
   }, [activeTab]);
 
   useEffect(() => {
+    if (canUseOwnTaskFlow || activeTab !== "My Tasks") {
+      return;
+    }
+
+    setActiveTab("Overview");
+  }, [activeTab, canUseOwnTaskFlow]);
+
+  useEffect(() => {
     if (!managedPasswordToast) {
       return undefined;
     }
@@ -177,7 +236,7 @@ const SuperAdminDashboard = () => {
 
   const taskEmployeeOptions = useMemo(() => {
     const scopedUsers = users.filter((entry) => {
-      if (!["employee", "admin"].includes(entry.role)) {
+      if (!isReportableTaskUser(entry)) {
         return false;
       }
 
@@ -207,6 +266,46 @@ const SuperAdminDashboard = () => {
 
   const teams = useMemo(() => [...new Set(users.map((item) => item.team).filter(Boolean))], [users]);
 
+  const allDepartmentOptions = useMemo(() => {
+    const optionSet = new Set([
+      ...TASK_DEPARTMENTS,
+      ...users.map((entry) => entry.team).filter(Boolean)
+    ]);
+
+    return Array.from(optionSet).sort((left, right) => toTeamLabel(left).localeCompare(toTeamLabel(right)));
+  }, [users]);
+
+  const taskDepartmentSelectOptions = useMemo(
+    () => TASK_DEPARTMENTS.map((department) => ({ value: department, label: toTeamLabel(department) })),
+    []
+  );
+
+  const ownTasks = useMemo(
+    () => visibleTasks.filter((item) => Number(item.assigned_to) === Number(user?.id)),
+    [user?.id, visibleTasks]
+  );
+
+  const filteredOwnTasks = useMemo(() => {
+    return ownTasks.filter((item) => {
+      const statusMatch = ownTaskFilters.status === "all" || item.status === ownTaskFilters.status;
+      const dateMatch = !ownTaskFilters.date || getTaskDateText(item) === ownTaskFilters.date;
+      return statusMatch && dateMatch;
+    });
+  }, [ownTaskFilters, ownTasks]);
+
+  const alreadySubmittedOwnReport = useMemo(() => {
+    if (!ownTaskFilters.date) {
+      return false;
+    }
+
+    return reports.some(
+      (entry) =>
+        String(entry.date).slice(0, 10) === ownTaskFilters.date &&
+        Number(entry.employee_id) === Number(user?.id) &&
+        entry.received_status === "Received"
+    );
+  }, [ownTaskFilters.date, reports, user?.id]);
+
   const filteredUsers = useMemo(() => {
     return users.filter((entry) => {
       const roleMatch = usersFilter.role === "all" || entry.role === usersFilter.role;
@@ -214,7 +313,7 @@ const SuperAdminDashboard = () => {
       const teamMatch = effectiveTeamFilter === "all" || entry.team === effectiveTeamFilter;
       const searchMatch =
         !usersFilter.search ||
-        entry.name.toLowerCase().includes(usersFilter.search.toLowerCase()) ||
+        getUserDisplayName(entry).toLowerCase().includes(usersFilter.search.toLowerCase()) ||
         entry.email.toLowerCase().includes(usersFilter.search.toLowerCase());
       return roleMatch && teamMatch && searchMatch;
     });
@@ -224,7 +323,7 @@ const SuperAdminDashboard = () => {
     const normalizedTeam = String(user?.team || "").trim().toLowerCase();
 
     if (["hr", "human resource", "human resources"].includes(normalizedTeam)) {
-      return "Human Resource";
+      return "Human Resources";
     }
 
     return "Company Wide Access";
@@ -238,7 +337,7 @@ const SuperAdminDashboard = () => {
       return "CEO";
     }
 
-    if (normalizedName.includes("smaik") || normalizedEmail.includes("smaik")) {
+    if (isReportableSuperadmin(user)) {
       return "HR";
     }
 
@@ -247,7 +346,7 @@ const SuperAdminDashboard = () => {
 
   const overviewScopedUsers = useMemo(() => {
     return users.filter((entry) => {
-      if (!["employee", "admin"].includes(entry.role)) {
+      if (!isReportableTaskUser(entry)) {
         return false;
       }
 
@@ -309,7 +408,7 @@ const SuperAdminDashboard = () => {
       const employeeTotals = new Map();
 
       users
-        .filter((item) => ["employee", "admin"].includes(item.role) && item.team === filters.team)
+        .filter((item) => isReportableTaskUser(item) && item.team === filters.team)
         .forEach((item) => {
           employeeTotals.set(item.name, 0);
         });
@@ -317,7 +416,7 @@ const SuperAdminDashboard = () => {
       filteredCompletedTasks.forEach((task) => {
         const employee = users.find((item) => Number(item.id) === Number(task.assigned_to));
         const taskDepartment = resolveTaskDepartment(task);
-        if (!employee || taskDepartment !== filters.team || !["employee", "admin"].includes(employee.role)) {
+        if (!employee || taskDepartment !== filters.team || !isReportableTaskUser(employee)) {
           return;
         }
 
@@ -337,7 +436,7 @@ const SuperAdminDashboard = () => {
 
     filteredCompletedTasks.forEach((task) => {
       const employee = users.find((item) => Number(item.id) === Number(task.assigned_to));
-      if (!employee || !["employee", "admin"].includes(employee.role)) {
+      if (!employee || !isReportableTaskUser(employee)) {
         return;
       }
 
@@ -360,7 +459,7 @@ const SuperAdminDashboard = () => {
     const performerMap = new Map();
 
     users
-      .filter((item) => item.role === "employee" && (filters.team === "all" || item.team === filters.team))
+      .filter((item) => isReportableTaskUser(item) && (filters.team === "all" || item.team === filters.team))
       .forEach((item) => {
         performerMap.set(Number(item.id), {
           id: item.id,
@@ -432,7 +531,7 @@ const SuperAdminDashboard = () => {
       const teamMap = new Map();
 
       users
-        .filter((entry) => ["employee", "admin"].includes(entry.role))
+        .filter((entry) => isReportableTaskUser(entry))
         .forEach((entry) => {
           const teamName = entry.team || "Unknown";
           if (!teamMap.has(teamName)) {
@@ -442,7 +541,7 @@ const SuperAdminDashboard = () => {
 
       scopeTasks.forEach((task) => {
         const employee = users.find((entry) => Number(entry.id) === Number(task.assigned_to));
-        if (!employee || !["employee", "admin"].includes(employee.role)) {
+        if (!employee || !isReportableTaskUser(employee)) {
           return;
         }
 
@@ -482,7 +581,7 @@ const SuperAdminDashboard = () => {
     const employeeMap = new Map();
 
     users
-      .filter((entry) => ["employee", "admin"].includes(entry.role) && entry.team === filters.team)
+      .filter((entry) => isReportableTaskUser(entry) && entry.team === filters.team)
       .forEach((entry) => {
         employeeMap.set(entry.name, { pending: 0, inProgress: 0, completed: 0 });
       });
@@ -490,7 +589,7 @@ const SuperAdminDashboard = () => {
     scopeTasks.forEach((task) => {
       const employee = users.find((entry) => Number(entry.id) === Number(task.assigned_to));
       const taskDepartment = resolveTaskDepartment(task);
-      if (!employee || !["employee", "admin"].includes(employee.role) || taskDepartment !== filters.team) {
+      if (!employee || !isReportableTaskUser(employee) || taskDepartment !== filters.team) {
         return;
       }
 
@@ -579,6 +678,139 @@ const SuperAdminDashboard = () => {
     }
   };
 
+  const handleCreateOwnTask = async (event) => {
+    event.preventDefault();
+    setOwnTaskError("");
+
+    const selectedTaskDepartment = String(ownTaskForm.taskDepartment || "").trim();
+    if (!selectedTaskDepartment) {
+      setOwnTaskError("Select task department");
+      return;
+    }
+
+    try {
+      await taskApi.createTask({
+        ...ownTaskForm,
+        taskDepartment: selectedTaskDepartment,
+        taskDate: ownTaskForm.taskDate,
+        assignedTo: user.id,
+        type: "self"
+      });
+
+      setOwnTaskForm({
+        client: "",
+        task: "",
+        action: "",
+        dependency: "",
+        deadline: "",
+        priority: "Medium",
+        taskDepartment: "",
+        taskDate: todayText
+      });
+      setIsCreateTaskModalOpen(false);
+      await loadData();
+      setActiveTab("My Tasks");
+    } catch (apiError) {
+      setOwnTaskError(apiError.response?.data?.message || "Failed to create task");
+    }
+  };
+
+  const handleOwnStatusChange = async (
+    task,
+    status,
+    dependency = task.dependency,
+    action = task.action,
+    taskTitle = task.task,
+    client = task.client
+  ) => {
+    setOwnTaskError("");
+
+    try {
+      await taskApi.updateTask(task.id, { status, dependency, action, taskTitle, client });
+      setTasks((prev) =>
+        prev.map((entry) =>
+          entry.id === task.id
+            ? {
+                ...entry,
+                client,
+                task: taskTitle,
+                status,
+                dependency,
+                action
+              }
+            : entry
+        )
+      );
+    } catch (apiError) {
+      setOwnTaskError(apiError.response?.data?.message || "Failed to update task");
+      throw apiError;
+    }
+  };
+
+  const handleOwnPriorityChange = async (task, priority) => {
+    setOwnTaskError("");
+
+    try {
+      await taskApi.updateTaskPriority(task.id, { priority });
+      setTasks((prev) =>
+        prev.map((entry) => (entry.id === task.id ? { ...entry, priority } : entry))
+      );
+    } catch (apiError) {
+      setOwnTaskError(apiError.response?.data?.message || "Failed to update priority");
+    }
+  };
+
+  const handleOwnDeleteTask = async (task) => {
+    setOwnTaskError("");
+
+    try {
+      const response = await taskApi.deleteTask(task.id);
+      const deletedIds = Array.isArray(response.data?.deletedIds)
+        ? response.data.deletedIds.map((entry) => Number(entry))
+        : [Number(task.id)];
+      setTasks((prev) => prev.filter((entry) => !deletedIds.includes(Number(entry.id))));
+      setFocusedTaskId((current) => (Number(current) === Number(task.id) ? null : current));
+    } catch (apiError) {
+      setOwnTaskError(apiError.response?.data?.message || "Failed to delete task");
+      throw apiError;
+    }
+  };
+
+  const handleConfirmSubmitOwnReport = async () => {
+    setIsOwnSubmitConfirmOpen(false);
+    setSubmittingOwnReport(true);
+    setOwnSubmitMessage("");
+
+    try {
+      const response = await reportApi.submitReportToHr(ownTaskFilters.date);
+      setOwnSubmitMessage(response.data?.message || "Self-task report submitted to HR.");
+      setReports((prev) => {
+        const nextEntry = {
+          employee_id: user?.id,
+          date: ownTaskFilters.date,
+          received_status: "Received"
+        };
+        const existingIndex = prev.findIndex(
+          (entry) =>
+            String(entry.date).slice(0, 10) === ownTaskFilters.date &&
+            Number(entry.employee_id) === Number(user?.id)
+        );
+
+        if (existingIndex === -1) {
+          return [nextEntry, ...prev];
+        }
+
+        return prev.map((entry, index) =>
+          index === existingIndex ? { ...entry, ...nextEntry } : entry
+        );
+      });
+    } catch (apiError) {
+      setOwnSubmitMessage(apiError.response?.data?.message || "Failed to submit self-task report to HR");
+    } finally {
+      setSubmittingOwnReport(false);
+    }
+  };
+
   const handleCreateUser = async (event) => {
     event.preventDefault();
     setNewUserMessage("");
@@ -586,6 +818,7 @@ const SuperAdminDashboard = () => {
 
     const payload = {
       name: String(newUserForm.name || "").trim(),
+      lastName: String(newUserForm.lastName || "").trim(),
       email: String(newUserForm.email || "").trim(),
       password: String(newUserForm.password || ""),
       role: newUserForm.role,
@@ -612,6 +845,7 @@ const SuperAdminDashboard = () => {
       setNewUserForm((prev) => ({
         ...prev,
         name: "",
+        lastName: "",
         email: "",
         password: ""
       }));
@@ -623,36 +857,105 @@ const SuperAdminDashboard = () => {
     }
   };
 
-  const handleManagedPasswordReset = async (targetUser) => {
+  const openEditUserModal = (targetUser) => {
     setManagedPasswordError("");
     setManagedPasswordToast("");
+    setEditingUser(targetUser);
+    setEditUserForm({
+      name: targetUser.name || "",
+      lastName: targetUser.lastName || targetUser.last_name || "",
+      email: targetUser.email || "",
+      role: targetUser.role || "employee",
+      team: targetUser.team || "",
+      password: ""
+    });
+  };
 
-    const nextPassword = String(managedPasswordDrafts[targetUser.id] || "");
-    if (!nextPassword) {
-      setManagedPasswordError("Please enter a new password before updating");
+  const closeEditUserModal = () => {
+    if (managedUserBusyId) {
       return;
     }
 
-    if (nextPassword.length < 3) {
+    setEditingUser(null);
+    setEditUserForm({
+      name: "",
+      lastName: "",
+      email: "",
+      role: "employee",
+      team: "",
+      password: ""
+    });
+  };
+
+  const handleEditUserFormChange = (field, value) => {
+    setEditUserForm((prev) => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
+  const handleUpdateManagedUser = async (event) => {
+    event.preventDefault();
+
+    if (!editingUser) {
+      return;
+    }
+
+    setManagedPasswordError("");
+    setManagedPasswordToast("");
+
+    const payload = {
+      name: String(editUserForm.name || "").trim(),
+      lastName: String(editUserForm.lastName || "").trim(),
+      email: String(editUserForm.email || "").trim(),
+      role: String(editUserForm.role || "").trim(),
+      team: String(editUserForm.team || "").trim()
+    };
+    const nextPassword = String(editUserForm.password || "");
+
+    if (!payload.name || !payload.email || !payload.role) {
+      setManagedPasswordError("Name, email and role are required");
+      return;
+    }
+
+    if ((payload.role === "employee" || payload.role === "admin") && !payload.team) {
+      setManagedPasswordError("Department is required for employee/admin");
+      return;
+    }
+
+    if (nextPassword && nextPassword.length < 3) {
       setManagedPasswordError("New password must be at least 3 characters");
       return;
     }
 
-    setManagedPasswordBusyId(targetUser.id);
+    setManagedUserBusyId(editingUser.id);
     try {
-      await authApi.resetManagedPassword({
-        targetUserId: targetUser.id,
-        newPassword: nextPassword
+      const response = await authApi.updateUser(editingUser.id, {
+        ...payload,
+        team: payload.team || null
       });
-      setManagedPasswordToast("Password saved");
-      setManagedPasswordDrafts((prev) => ({
-        ...prev,
-        [targetUser.id]: ""
-      }));
+
+      if (nextPassword) {
+        await authApi.resetManagedPassword({
+          targetUserId: editingUser.id,
+          newPassword: nextPassword
+        });
+      }
+
+      const updatedUser = response?.data?.user || { ...editingUser, ...payload };
+      setUsers((prev) =>
+        prev.map((entry) =>
+          Number(entry.id) === Number(editingUser.id)
+            ? { ...entry, ...updatedUser }
+            : entry
+        )
+      );
+      setManagedPasswordToast(nextPassword ? "Employee details and password updated" : response?.data?.message || "Employee details updated");
+      setEditingUser(null);
     } catch (error) {
-      setManagedPasswordError(error?.response?.data?.message || "Failed to update password");
+      setManagedPasswordError(error?.response?.data?.message || "Failed to update employee details");
     } finally {
-      setManagedPasswordBusyId(null);
+      setManagedUserBusyId(null);
     }
   };
 
@@ -687,22 +990,147 @@ const SuperAdminDashboard = () => {
 
   return (
     <div className="min-h-screen bg-dsr-page text-dsr-ink">
+      <CreateTaskModal
+        open={canUseOwnTaskFlow && isCreateTaskModalOpen}
+        title="Create My Task"
+        form={ownTaskForm}
+        onFieldChange={(field, value) => setOwnTaskForm((prev) => ({ ...prev, [field]: value }))}
+        onSubmit={handleCreateOwnTask}
+        onClose={() => setIsCreateTaskModalOpen(false)}
+        error={ownTaskError}
+        locked={false}
+        lockedMessage=""
+        submitLabel="Add Task"
+        todayText={todayText}
+        departmentOptions={taskDepartmentSelectOptions}
+      />
+      <ConfirmDialog
+        open={canUseOwnTaskFlow && isOwnSubmitConfirmOpen}
+        title="Submit Self-Task Report"
+        message={`Do you want to ${alreadySubmittedOwnReport ? "resubmit" : "submit"} your self-task report for ${ownTaskFilters.date}?`}
+        confirmText={alreadySubmittedOwnReport ? "Resubmit" : "Submit"}
+        cancelText="Cancel"
+        loading={submittingOwnReport}
+        onCancel={() => setIsOwnSubmitConfirmOpen(false)}
+        onConfirm={() => void handleConfirmSubmitOwnReport()}
+      />
+      {editingUser && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-900/45 p-4 backdrop-blur-[2px]">
+          <div className="w-full max-w-3xl rounded-[28px] border border-white/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(244,249,246,0.96))] p-4 shadow-[0_28px_60px_rgba(31,42,34,0.16)]">
+            <div className="flex items-start justify-between gap-4 rounded-[22px] border border-white/70 bg-[linear-gradient(180deg,#f7fbf8,#eef5f0)] px-5 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]">
+              <div>
+                <h2 className="text-xl font-bold text-dsr-ink">Edit Employee</h2>
+                <p className="mt-1 text-sm text-dsr-muted">Update profile fields and set a new password when needed.</p>
+              </div>
+              <button
+                type="button"
+                className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-dsr-border bg-white text-slate-500 transition hover:text-slate-700"
+                onClick={closeEditUserModal}
+                aria-label="Close edit employee modal"
+              >
+                <span className="text-xl leading-none">x</span>
+              </button>
+            </div>
+
+            <form className="mt-4 grid gap-4 md:grid-cols-2" onSubmit={handleUpdateManagedUser}>
+              <label>
+                <span className="mb-1 block text-sm font-semibold text-slate-900">First Name / Username</span>
+                <input
+                  className="input"
+                  value={editUserForm.name}
+                  onChange={(event) => handleEditUserFormChange("name", event.target.value)}
+                  required
+                />
+              </label>
+
+              <label>
+                <span className="mb-1 block text-sm font-semibold text-slate-900">Last Name</span>
+                <input
+                  className="input"
+                  value={editUserForm.lastName}
+                  onChange={(event) => handleEditUserFormChange("lastName", event.target.value)}
+                />
+              </label>
+
+              <label>
+                <span className="mb-1 block text-sm font-semibold text-slate-900">Email</span>
+                <input
+                  className="input"
+                  type="email"
+                  value={editUserForm.email}
+                  onChange={(event) => handleEditUserFormChange("email", event.target.value)}
+                  required
+                />
+              </label>
+
+              <label>
+                <span className="mb-1 block text-sm font-semibold text-slate-900">Role</span>
+                <select
+                  className="input"
+                  value={editUserForm.role}
+                  onChange={(event) => handleEditUserFormChange("role", event.target.value)}
+                >
+                  <option value="employee">Employee</option>
+                  <option value="admin">Admin</option>
+                  <option value="hr">HR</option>
+                  <option value="superadmin">Superadmin</option>
+                </select>
+              </label>
+
+              <label>
+                <span className="mb-1 block text-sm font-semibold text-slate-900">Department</span>
+                <select
+                  className="input"
+                  value={editUserForm.team}
+                  onChange={(event) => handleEditUserFormChange("team", event.target.value)}
+                  required={editUserForm.role === "employee" || editUserForm.role === "admin"}
+                >
+                  <option value="">No Department</option>
+                  {allDepartmentOptions.map((team) => (
+                    <option key={team} value={team}>
+                      {toTeamLabel(team)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="md:col-span-2">
+                <span className="mb-1 block text-sm font-semibold text-slate-900">New Password</span>
+                <input
+                  className="input"
+                  type="password"
+                  placeholder="Leave blank to keep current password"
+                  value={editUserForm.password}
+                  onChange={(event) => handleEditUserFormChange("password", event.target.value)}
+                />
+              </label>
+
+              {managedPasswordError ? (
+                <p className="md:col-span-2 text-sm text-rose-600">{managedPasswordError}</p>
+              ) : null}
+
+              <div className="md:col-span-2 flex flex-wrap items-center justify-end gap-2 pt-1">
+                <button type="button" className="btn-secondary" onClick={closeEditUserModal}>
+                  Cancel
+                </button>
+                <button className="btn-primary min-w-[150px]" type="submit" disabled={managedUserBusyId === editingUser.id}>
+                  {managedUserBusyId === editingUser.id ? "Saving..." : "Save Changes"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
       <header
         className={`sticky top-0 z-30 border-b border-dsr-border bg-[#f3f3f3] transition-transform duration-300 ${
           isHeaderVisible ? "translate-y-0" : "-translate-y-full"
         }`}
       >
         <div className="mx-auto flex max-w-[1400px] items-center justify-between gap-6 px-4 py-4 lg:px-8">
-          <div className="flex items-center gap-5">
-            <img
-              src={logo}
-              alt="DSR Management Logo"
-              className="h-14 w-[260px] shrink-0 object-contain object-left"
-            />
-          </div>
+          <BrandMark />
 
           <nav className="hidden items-center gap-2 rounded-full border border-dsr-border bg-dsr-soft px-3 py-2 lg:flex">
-            {TABS.map((tab) => (
+            {visibleTabs.map((tab) => (
               <button
                 key={tab}
                 type="button"
@@ -745,10 +1173,10 @@ const SuperAdminDashboard = () => {
         <div className="grid gap-3 lg:hidden">
           <select
             className="input"
-            value={TABS.includes(activeTab) || activeTab === "Profile" ? activeTab : "Overview"}
+            value={visibleTabs.includes(activeTab) || activeTab === "Profile" ? activeTab : "Overview"}
             onChange={(event) => setActiveTab(event.target.value)}
           >
-            {TABS.map((tab) => (
+            {visibleTabs.map((tab) => (
               <option key={tab} value={tab}>
                 {getTabLabel(tab)}
               </option>
@@ -935,16 +1363,106 @@ const SuperAdminDashboard = () => {
           />
         )}
 
+        {canUseOwnTaskFlow && activeTab === "My Tasks" && (
+          <div className="space-y-4">
+            <section className="card">
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-lg font-semibold text-dsr-ink">My Tasks</h2>
+                  <p className="text-sm text-dsr-muted">Create and submit only your own self-assigned tasks.</p>
+                </div>
+                <button type="button" className="btn-primary" onClick={() => setIsCreateTaskModalOpen(true)}>
+                  Create Task
+                </button>
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-2">
+                <label>
+                  <span className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-900">Status</span>
+                  <select
+                    className="input"
+                    value={ownTaskFilters.status}
+                    onChange={(event) => setOwnTaskFilters((prev) => ({ ...prev, status: event.target.value }))}
+                  >
+                    <option value="all">All</option>
+                    <option value="Pending">Pending</option>
+                    <option value="In Progress">In Progress</option>
+                    <option value="Completed">Completed</option>
+                  </select>
+                </label>
+                <label>
+                  <span className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-900">Task Date</span>
+                  <input
+                    className="input"
+                    type="date"
+                    value={ownTaskFilters.date}
+                    onChange={(event) => setOwnTaskFilters((prev) => ({ ...prev, date: event.target.value }))}
+                  />
+                </label>
+              </div>
+            </section>
+
+            <section>
+              <h2 className="mb-2 text-lg font-semibold">My Task List</h2>
+              <TaskTable
+                tasks={filteredOwnTasks}
+                onStatusChange={handleOwnStatusChange}
+                onPriorityChange={handleOwnPriorityChange}
+                onDeleteTask={handleOwnDeleteTask}
+                canDeleteTask={(task) => Number(task.assigned_by) === Number(user?.id)}
+                editableStatus
+                showAssigner
+                focusedTaskId={focusedTaskId}
+                setFocusedTaskId={setFocusedTaskId}
+              />
+              {ownTasks.length > 0 && filteredOwnTasks.length === 0 && (
+                <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                  No tasks in the current filters.
+                </div>
+              )}
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-dsr-border bg-dsr-soft p-3">
+                <p className="text-sm text-dsr-muted">
+                  Submit report for: <span className="font-semibold text-dsr-ink">{ownTaskFilters.date || "Select a date"}</span>
+                </p>
+                <button
+                  type="button"
+                  className={alreadySubmittedOwnReport ? "rounded-xl bg-amber-600 px-4 py-2 text-sm font-semibold text-white" : "btn-primary"}
+                  disabled={!ownTaskFilters.date || submittingOwnReport}
+                  onClick={() => setIsOwnSubmitConfirmOpen(true)}
+                >
+                  {submittingOwnReport
+                    ? alreadySubmittedOwnReport
+                      ? "Resubmitting..."
+                      : "Submitting..."
+                    : alreadySubmittedOwnReport
+                      ? "Resubmit Report"
+                      : "Submit Report"}
+                </button>
+              </div>
+              {ownTaskError && <p className="mt-2 text-sm text-rose-600">{ownTaskError}</p>}
+              {ownSubmitMessage && <p className="mt-2 text-sm text-dsr-brand">{ownSubmitMessage}</p>}
+            </section>
+          </div>
+        )}
+
         {activeTab === "Employees" && (
           <section className="card overflow-x-auto">
-            <form className="mb-4 grid gap-3 rounded-xl border border-dsr-border/70 bg-dsr-soft p-3 md:grid-cols-2 xl:grid-cols-6" onSubmit={handleCreateUser}>
+            <form className="mb-4 grid gap-3 rounded-xl border border-dsr-border/70 bg-dsr-soft p-3 md:grid-cols-2 xl:grid-cols-7" onSubmit={handleCreateUser}>
               <label>
-                <span className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-900">Name</span>
+                <span className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-900">First Name / Username</span>
                 <input
                   className="input"
                   value={newUserForm.name}
                   onChange={(event) => setNewUserForm((prev) => ({ ...prev, name: event.target.value }))}
                   required
+                />
+              </label>
+              <label>
+                <span className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-900">Last Name</span>
+                <input
+                  className="input"
+                  value={newUserForm.lastName}
+                  onChange={(event) => setNewUserForm((prev) => ({ ...prev, lastName: event.target.value }))}
                 />
               </label>
               <label>
@@ -1003,7 +1521,7 @@ const SuperAdminDashboard = () => {
               </button>
 
               {(newUserMessage || newUserError) && (
-                <p className={`text-sm md:col-span-2 xl:col-span-6 ${newUserError ? "text-rose-600" : "text-emerald-700"}`}>
+                <p className={`text-sm md:col-span-2 xl:col-span-7 ${newUserError ? "text-rose-600" : "text-emerald-700"}`}>
                   {newUserError || newUserMessage}
                 </p>
               )}
@@ -1049,69 +1567,51 @@ const SuperAdminDashboard = () => {
               />
             </div>
 
-            <table className="min-w-full text-sm">
+            <table className="min-w-full table-fixed text-sm">
+              <colgroup>
+                <col className="w-[18%]" />
+                <col className="w-[33%]" />
+                <col className="w-[14%]" />
+                <col className="w-[20%]" />
+                <col className="w-[15%]" />
+              </colgroup>
               <thead>
                 <tr className="border-b bg-dsr-soft text-left">
                   <th className="p-3">Name</th>
                   <th className="p-3">Email</th>
                   <th className="p-3">Role</th>
                   <th className="p-3">Department</th>
-                  <th className="p-3">Reset Password / Delete</th>
+                  <th className="p-3 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredUsers.map((entry) => {
-                  const canResetPassword = entry.role === "employee" || entry.role === "admin";
                   const canDeleteUser = Number(entry.id) !== Number(user?.id);
                   return (
                     <tr key={entry.id} className="border-b border-dsr-border/70">
-                      <td className="p-3 font-semibold">{entry.name}</td>
-                      <td className="p-3">{entry.email}</td>
-                      
+                      <td className="truncate p-3 font-semibold" title={getUserDisplayName(entry)}>{getUserDisplayName(entry)}</td>
+                      <td className="truncate p-3" title={entry.email}>{entry.email}</td>
                       <td className="p-3 uppercase">{entry.role}</td>
-                      <td className="p-3">{toTeamLabel(entry.team) || "-"}</td>
+                      <td className="truncate p-3" title={toTeamLabel(entry.team) || "-"}>{toTeamLabel(entry.team) || "-"}</td>
                       <td className="p-3">
-                        {canResetPassword ? (
-                          <div className="flex min-w-[260px] items-center gap-2">
-                            <input
-                              type="password"
-                              className="input"
-                              placeholder="New password"
-                              value={managedPasswordDrafts[entry.id] || ""}
-                              onChange={(event) =>
-                                setManagedPasswordDrafts((prev) => ({
-                                  ...prev,
-                                  [entry.id]: event.target.value
-                                }))
-                              }
-                            />
-                            <button
-                              type="button"
-                              className="btn-primary whitespace-nowrap"
-                              disabled={managedPasswordBusyId === entry.id || deletingUserId === entry.id}
-                              onClick={() => handleManagedPasswordReset(entry)}
-                            >
-                              {managedPasswordBusyId === entry.id ? "Saving..." : "Save"}
-                            </button>
-                            <button
-                              type="button"
-                              className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-700 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
-                              disabled={!canDeleteUser || managedPasswordBusyId === entry.id || deletingUserId === entry.id}
-                              onClick={() => handleDeleteUser(entry)}
-                            >
-                              {deletingUserId === entry.id ? "Deleting..." : "Delete"}
-                            </button>
-                          </div>
-                        ) : (
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            type="button"
+                            className="btn-primary whitespace-nowrap"
+                            disabled={managedUserBusyId === entry.id || deletingUserId === entry.id}
+                            onClick={() => openEditUserModal(entry)}
+                          >
+                            Edit
+                          </button>
                           <button
                             type="button"
                             className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-700 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
-                            disabled={!canDeleteUser || deletingUserId === entry.id}
+                            disabled={!canDeleteUser || managedUserBusyId === entry.id || deletingUserId === entry.id}
                             onClick={() => handleDeleteUser(entry)}
                           >
                             {canDeleteUser ? (deletingUserId === entry.id ? "Deleting..." : "Delete") : "Current User"}
                           </button>
-                        )}
+                        </div>
                       </td>
                     </tr>
                   );

@@ -7,7 +7,7 @@ import PendingTasksSummary from "../components/PendingTasksSummary";
 import ProfileMenu from "../components/ProfileMenu";
 import ProfileSection from "../components/ProfileSection";
 import TaskTable from "../components/TaskTable";
-import logo from "../assets/logo.png";
+import BrandMark from "../components/BrandMark";
 import { useAuth } from "../context/AuthContext";
 import useDocumentVisibility from "../hooks/useDocumentVisibility";
 import usePolling from "../hooks/usePolling";
@@ -307,12 +307,21 @@ const EmployeeDashboard = () => {
     setError("");
 
     try {
-      await taskApi.createTask({
-        ...form,
-        taskDepartment: String(form.taskDepartment || "").trim() || undefined,
-        taskDate: form.taskDate,
-        assignedTo: user.id,
+      const payload = {
+        client: String(form.client || "").trim(),
+        task: String(form.task || "").trim(),
+        action: String(form.action || "").trim(),
+        dependency: String(form.dependency || "").trim(),
+        deadline: form.deadline || "",
+        priority: form.priority || "Medium",
+        taskDepartment: String(form.taskDepartment || user?.team || "").trim() || undefined,
+        taskDate: form.taskDate || todayText,
+        assignedTo: user?.id,
         type: "self"
+      };
+
+      await taskApi.createTask({
+        ...payload
       });
 
       setForm({
@@ -609,13 +618,7 @@ const EmployeeDashboard = () => {
         }`}
       >
         <div className="mx-auto flex max-w-[1400px] items-center justify-between gap-6 px-4 py-4 lg:px-8">
-          <div className="flex items-center gap-5">
-            <img
-              src={logo}
-              alt="DSR Management Logo"
-              className="h-14 w-[260px] shrink-0 object-contain object-left"
-            />
-          </div>
+          <BrandMark />
 
           <nav className="hidden items-center gap-4 rounded-full border border-dsr-border bg-dsr-soft px-4 py-2 lg:flex">
             {TABS.map((tab) => (

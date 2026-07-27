@@ -10,12 +10,27 @@ import {
   listEmployees,
   listTeamEmployees,
   reactivateUserById,
+  updateUserById,
   updateUserPasswordById
 } from "../models/userModel.js";
 import { getManagedTeamsForAdmin } from "../utils/teamScope.js";
 
 const allowedRoles = ["employee", "admin", "hr", "superadmin"];
 const BCRYPT_HASH_PATTERN = /^\$2[aby]\$\d{2}\$/;
+
+const isAdminScopedEmployee = (adminUser, targetUser) => {
+  if (adminUser?.role !== "admin") {
+    return false;
+  }
+
+  return (
+    targetUser?.role === "employee" &&
+    getManagedTeamsForAdmin(adminUser).includes(String(targetUser?.team || "").trim())
+  );
+};
+
+const canAdminUseTeam = (adminUser, team) =>
+  adminUser?.role === "admin" && getManagedTeamsForAdmin(adminUser).includes(String(team || "").trim());
 
 const verifyCurrentPassword = async (inputPassword, storedPassword) => {
   if (!inputPassword || !storedPassword) {
@@ -35,6 +50,8 @@ const signToken = (user) =>
     {
       id: user.id,
       name: user.name,
+      lastName: user.last_name || "",
+      fullName: user.full_name || [user.name, user.last_name].filter(Boolean).join(" "),
       email: user.email,
       role: user.role,
       team: user.team
@@ -64,6 +81,7 @@ const isEmploymentActive = (user) => {
 export const register = async (req, res) => {
   try {
     const { name, email, password, role = "employee", team = null } = req.body;
+    const lastName = String(req.body.lastName || req.body.last_name || "").trim();
 
     if (!name || !email || !password) {
       return res.status(400).json({ message: "name, email, password are required" });
@@ -71,6 +89,17 @@ export const register = async (req, res) => {
 
     if (!allowedRoles.includes(role)) {
       return res.status(400).json({ message: "Invalid role" });
+    }
+
+    if (req.user?.role === "admin") {
+      const normalizedTeam = String(team || "").trim();
+      if (role !== "employee") {
+        return res.status(403).json({ message: "Department admins can create only employee accounts" });
+      }
+
+      if (!canAdminUseTeam(req.user, normalizedTeam)) {
+        return res.status(403).json({ message: "You can create employees only in your managed department" });
+      }
     }
 
     if (req.user?.role !== "superadmin" && ["superadmin", "hr"].includes(role)) {
@@ -86,6 +115,7 @@ export const register = async (req, res) => {
       const hashedPassword = await bcrypt.hash(password, 10);
       const user = await reactivateUserById(existingUser.id, {
         name,
+        lastName,
         email,
         password: hashedPassword,
         role,
@@ -98,6 +128,7 @@ export const register = async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
     const user = await createUser({
       name,
+      lastName,
       email,
       password: hashedPassword,
       role,
@@ -152,6 +183,8 @@ export const login = async (req, res) => {
       user: {
         id: user.id,
         name: user.name,
+        lastName: user.last_name || "",
+        fullName: user.full_name || [user.name, user.last_name].filter(Boolean).join(" "),
         email: user.email,
         role: user.role,
         team: user.team
@@ -257,11 +290,12 @@ export const resetManagedUserPassword = async (req, res) => {
       return res.status(404).json({ message: "Target employee not found" });
     }
 
-    if (![
-      "employee",
-      "admin"
-    ].includes(String(targetUser.role || "").toLowerCase())) {
-      return res.status(403).json({ message: "You can only reset passwords for employee/admin accounts" });
+    if (!allowedRoles.includes(String(targetUser.role || "").toLowerCase())) {
+      return res.status(403).json({ message: "You can reset passwords only for valid user accounts" });
+    }
+
+    if (req.user.role === "admin" && !isAdminScopedEmployee(req.user, targetUser)) {
+      return res.status(403).json({ message: "You can reset passwords only for employees in your managed department" });
     }
 
     const nextHash = await bcrypt.hash(normalizedNewPassword, 10);
@@ -274,6 +308,82 @@ export const resetManagedUserPassword = async (req, res) => {
     return res.status(200).json({ message: `Password updated for ${targetUser.name}` });
   } catch (error) {
     return res.status(500).json({ message: "Failed to reset password", error: error.message });
+  }
+};
+
+export const updateManagedUser = async (req, res) => {
+  try {
+    const targetUserId = Number(req.params.id);
+
+    if (!Number.isInteger(targetUserId) || targetUserId <= 0) {
+      return res.status(400).json({ message: "User id must be a valid positive integer" });
+    }
+
+    const targetUser = await findUserById(targetUserId);
+    if (!targetUser) {
+      return res.status(404).json({ message: "Target employee not found" });
+    }
+
+    if (!isEmploymentActive(targetUser)) {
+      return res.status(400).json({ message: "Deleted users cannot be edited" });
+    }
+
+    if (req.user.role === "admin" && !isAdminScopedEmployee(req.user, targetUser)) {
+      return res.status(403).json({ message: "You can edit only employees in your managed department" });
+    }
+
+    const name = String(req.body.name || "").trim();
+    const lastName = String(req.body.lastName || req.body.last_name || "").trim();
+    const email = String(req.body.email || "").trim().toLowerCase();
+    const role = String(req.body.role || "").trim().toLowerCase();
+    const team = String(req.body.team || "").trim() || null;
+
+    if (!name || !email || !role) {
+      return res.status(400).json({ message: "name, email and role are required" });
+    }
+
+    if (!allowedRoles.includes(role)) {
+      return res.status(400).json({ message: "Invalid role" });
+    }
+
+    if ((role === "employee" || role === "admin") && !team) {
+      return res.status(400).json({ message: "Department is required for employee/admin" });
+    }
+
+    if (req.user.role === "admin") {
+      if (role !== "employee") {
+        return res.status(403).json({ message: "Department admins can keep users only as employees" });
+      }
+
+      if (!canAdminUseTeam(req.user, team)) {
+        return res.status(403).json({ message: "You can assign employees only to your managed department" });
+      }
+    }
+
+    if (targetUserId === Number(req.user.id) && role !== "superadmin") {
+      return res.status(400).json({ message: "You cannot remove your own superadmin role" });
+    }
+
+    const existingEmailUser = await findUserByEmail(email);
+    if (existingEmailUser && Number(existingEmailUser.id) !== targetUserId) {
+      return res.status(409).json({ message: "Email already exists" });
+    }
+
+    const updatedUser = await updateUserById(targetUserId, {
+      name,
+      lastName,
+      email,
+      role,
+      team
+    });
+
+    return res.status(200).json({ message: "Employee details updated", user: updatedUser });
+  } catch (error) {
+    if (error?.code === "ER_DUP_ENTRY") {
+      return res.status(409).json({ message: "Email already exists" });
+    }
+
+    return res.status(500).json({ message: "Failed to update employee", error: error.message });
   }
 };
 
@@ -296,6 +406,10 @@ export const deactivateManagedUser = async (req, res) => {
 
     if (!isEmploymentActive(targetUser)) {
       return res.status(400).json({ message: "Employee is already deleted" });
+    }
+
+    if (req.user.role === "admin" && !isAdminScopedEmployee(req.user, targetUser)) {
+      return res.status(403).json({ message: "You can delete only employees in your managed department" });
     }
 
     const result = await deactivateUserById(targetUserId);

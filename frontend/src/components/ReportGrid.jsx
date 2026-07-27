@@ -10,6 +10,26 @@ const STATUS_BADGES = {
   Pending: "border-amber-200 bg-amber-100 text-amber-700"
 };
 
+const EmployeeHeaderRow = ({ employees = [], sticky = false }) => (
+  <tr className="bg-slate-100">
+    <th
+      className={`${sticky ? "sticky left-0 z-20" : "sticky left-0 z-10"} border-b border-r border-slate-200 bg-slate-100 px-3 py-3 text-left font-semibold text-slate-700`}
+    >
+      Date
+    </th>
+    {employees.map((employee) => (
+      <th
+        key={employee.id}
+        className="border-b border-slate-200 px-3 py-3 text-left font-semibold text-slate-700"
+        title={toTeamLabel(employee.team)}
+      >
+        <span className="block leading-tight">{employee.name}</span>
+        <span className="text-xs font-normal text-slate-500">{toTeamLabel(employee.team)}</span>
+      </th>
+    ))}
+  </tr>
+);
+
 function ReportGrid({ rows = [], employees = [], onCellChange, loadingCellId = null }) {
   if (!rows.length || !employees.length) {
     return (
@@ -23,21 +43,7 @@ function ReportGrid({ rows = [], employees = [], onCellChange, loadingCellId = n
     <div className="overflow-x-auto rounded-md border border-slate-200 bg-white shadow-sm">
       <table className="min-w-full border-collapse text-sm">
         <thead>
-          <tr className="bg-slate-100">
-            <th className="sticky left-0 z-20 border-b border-r border-slate-200 bg-slate-100 px-3 py-3 text-left font-semibold text-slate-700">
-              Date
-            </th>
-            {employees.map((employee) => (
-              <th
-                key={employee.id}
-                className="border-b border-slate-200 px-3 py-3 text-left font-semibold text-slate-700"
-                  title={toTeamLabel(employee.team)}
-              >
-                <span className="block leading-tight">{employee.name}</span>
-                  <span className="text-xs font-normal text-slate-500">{toTeamLabel(employee.team)}</span>
-              </th>
-            ))}
-          </tr>
+          <EmployeeHeaderRow employees={employees} sticky />
         </thead>
         <tbody>
           {rows.map((row, index) => {
@@ -55,6 +61,8 @@ function ReportGrid({ rows = [], employees = [], onCellChange, loadingCellId = n
                     </td>
                   </tr>
                 )}
+
+                {showWeekHeader && index > 0 && <EmployeeHeaderRow employees={employees} />}
 
                 <tr className={row.isWeekend ? "bg-sky-50/70" : "bg-white"}>
                   <td className="sticky left-0 z-10 border-r border-t border-slate-200 bg-inherit px-3 py-2 align-top">

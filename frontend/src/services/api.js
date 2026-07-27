@@ -27,6 +27,7 @@ export const authApi = {
   changePassword: (payload) => api.post("/auth/change-password", payload),
   resetManagedPassword: (payload) => api.post("/auth/reset-managed-password", payload),
   register: (payload) => api.post("/auth/register", payload),
+  updateUser: (id, payload) => api.put(`/auth/users/${id}`, payload),
   deleteUser: (id) => api.delete(`/auth/users/${id}`),
   getEmployees: () => api.get("/auth/employees"),
   getDepartmentEmployees: (team) => api.get("/auth/employees/team", { params: { team } }),

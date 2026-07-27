@@ -6,7 +6,8 @@ import {
   getEmployees,
   login,
   resetManagedUserPassword,
-  register
+  register,
+  updateManagedUser
 } from "../controllers/authController.js";
 import { authenticate, authorizeRoles } from "../middleware/authMiddleware.js";
 
@@ -14,11 +15,12 @@ const router = express.Router();
 
 router.post("/login", login);
 router.post("/change-password", authenticate, changePassword);
-router.post("/reset-managed-password", authenticate, authorizeRoles("superadmin"), resetManagedUserPassword);
-router.post("/register", authenticate, authorizeRoles("superadmin", "hr"), register);
+router.post("/reset-managed-password", authenticate, authorizeRoles("admin", "superadmin"), resetManagedUserPassword);
+router.post("/register", authenticate, authorizeRoles("admin", "superadmin", "hr"), register);
 router.get("/employees", authenticate, authorizeRoles("superadmin", "hr"), getEmployees);
 router.get("/employees/team", authenticate, authorizeRoles("admin", "hr", "superadmin"), getDepartmentEmployees);
-router.delete("/users/:id", authenticate, authorizeRoles("superadmin"), deactivateManagedUser);
+router.put("/users/:id", authenticate, authorizeRoles("admin", "superadmin"), updateManagedUser);
+router.delete("/users/:id", authenticate, authorizeRoles("admin", "superadmin"), deactivateManagedUser);
 
 // Backward-compatible aliases
 router.get("/users", authenticate, authorizeRoles("superadmin", "hr"), getEmployees);

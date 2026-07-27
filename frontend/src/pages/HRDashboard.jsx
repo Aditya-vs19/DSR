@@ -8,12 +8,26 @@ import useDocumentVisibility from "../hooks/useDocumentVisibility";
 import usePolling from "../hooks/usePolling";
 import { authApi, reportApi, taskApi } from "../services/api";
 const DASHBOARD_POLL_INTERVAL = 45000;
+const defaultAnalytics = { tasksPerTeam: [], completionRate: 0, topPerformers: [] };
+
+const TEAM_DONUT_COLORS = {
+  Operations: "#E67E22",
+  Technical: "#3A6FF7",
+  Sales: "#8B5CF6",
+  Finance: "#E57399",
+  Logistics: "#F4C542",
+  "Human Resources": "#0F766E"
+};
+
+const FALLBACK_DONUT_COLORS = ["#2A7A46", "#5F9D72", "#1F5432", "#398859", "#7AAE89", "#166534"];
 
 const HRDashboard = () => {
   const { user } = useAuth();
   const isDocumentVisible = useDocumentVisibility();
   const todayText = new Date().toISOString().slice(0, 10);
   const [reports, setReports] = useState([]);
+  const [analytics, setAnalytics] = useState(defaultAnalytics);
+  const [adminPerformance, setAdminPerformance] = useState([]);
   const [notifications, setNotifications] = useState([]);
   const [selectedReportDetails, setSelectedReportDetails] = useState(null);
   const [detailsLoading, setDetailsLoading] = useState(false);
@@ -38,13 +52,23 @@ const HRDashboard = () => {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [reportsRes, notificationRes] = await Promise.all([reportApi.getReports(), taskApi.getNotifications()]);
+      const [reportsRes, analyticsRes, adminPerfRes, notificationRes] = await Promise.all([
+        reportApi.getReports(),
+        reportApi.getAnalytics({
+          team: filters.team,
+          date: filters.day || undefined
+        }),
+        taskApi.getAdminPerformance(filters.team === "all" ? undefined : filters.team),
+        taskApi.getNotifications()
+      ]);
       setReports(reportsRes.data || []);
+      setAnalytics(analyticsRes.data || defaultAnalytics);
+      setAdminPerformance(Array.isArray(adminPerfRes.data) ? adminPerfRes.data : []);
       setNotifications(notificationRes.data || []);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [filters.day, filters.team]);
 
   useEffect(() => {
     void loadData();
@@ -127,6 +151,55 @@ const HRDashboard = () => {
     return acc;
   }, {});
 
+  const completedTasksPieData = useMemo(() => {
+    const teamTotals = filteredReports.reduce((acc, report) => {
+      const teamName = report.employee_team || "Unknown";
+      acc.set(teamName, (acc.get(teamName) || 0) + Number(report.completed_tasks || 0));
+      return acc;
+    }, new Map());
+
+    const labels = Array.from(teamTotals.keys());
+
+    return {
+      labels,
+      values: Array.from(teamTotals.values()),
+      chartValues: Array.from(teamTotals.values()),
+      colors: labels.map((label, index) => TEAM_DONUT_COLORS[label] || FALLBACK_DONUT_COLORS[index % FALLBACK_DONUT_COLORS.length])
+    };
+  }, [filteredReports]);
+
+  const topPerformers = useMemo(
+    () => (Array.isArray(analytics.topPerformers) ? analytics.topPerformers : []),
+    [analytics.topPerformers]
+  );
+
+  const statusComparisonChartData = useMemo(() => {
+    const statusMap = new Map();
+
+    filteredReports.forEach((report) => {
+      const teamName = report.employee_team || "Unknown";
+      if (!statusMap.has(teamName)) {
+        statusMap.set(teamName, { pending: 0, inProgress: 0, completed: 0 });
+      }
+
+      const totals = statusMap.get(teamName);
+      totals.completed += Number(report.completed_tasks || 0);
+      totals.pending += Number(report.pending_tasks || 0);
+    });
+
+    const labels = Array.from(statusMap.keys());
+    const values = Array.from(statusMap.values());
+
+    return {
+      labels,
+      datasets: [
+        { label: "Pending Tasks", data: values.map((entry) => entry.pending), backgroundColor: "#f1dc21" },
+        { label: "In Progress Tasks", data: values.map((entry) => entry.inProgress), backgroundColor: "#33a8d6" },
+        { label: "Completed Tasks", data: values.map((entry) => entry.completed), backgroundColor: "#51bb2a" }
+      ]
+    };
+  }, [filteredReports]);
+
   const handleOpenProfile = () => {
     profileSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
@@ -149,6 +222,41 @@ const HRDashboard = () => {
             <div className="card"><p className="text-xs text-slate-500">Approved</p><h3 className="text-2xl font-bold text-green-600">{stats.approved}</h3></div>
             <div className="card"><p className="text-xs text-slate-500">Rejected</p><h3 className="text-2xl font-bold text-rose-600">{stats.rejected}</h3></div>
             <div className="card"><p className="text-xs text-slate-500">Pending</p><h3 className="text-2xl font-bold text-yellow-600">{stats.pending}</h3></div>
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-2">
+            <Charts
+              type="donut"
+              title="Completed Tasks by Department"
+              labels={completedTasksPieData.labels}
+              values={completedTasksPieData.values}
+              chartValues={completedTasksPieData.chartValues}
+              color={completedTasksPieData.colors}
+            />
+            <Charts
+              type="bar"
+              title="Top Performers (Productivity Score)"
+              labels={topPerformers.map((item) => item.name)}
+              values={topPerformers.map((item) => Number(item.productivity_score || 0))}
+              color="rgba(95, 157, 114, 0.85)"
+              yAxisTitle="Productivity Score"
+              yTickStep={5}
+            />
+            <Charts
+              type="bar"
+              title="Department Admin / HR Performance (%)"
+              labels={adminPerformance.map((item) => item.name)}
+              values={adminPerformance.map((item) => Number(item.completion_rate || 0))}
+              color="rgba(31, 84, 50, 0.85)"
+            />
+            <Charts
+              type="bar"
+              title="Task Status Comparison by Department"
+              labels={statusComparisonChartData.labels}
+              datasets={statusComparisonChartData.datasets}
+              xAxisTitle="Department"
+              yAxisTitle="Task Count"
+            />
           </div>
 
           <div className="card overflow-x-auto">
@@ -324,7 +432,7 @@ const HRDashboard = () => {
           <div ref={profileSectionRef}>
             <ProfileSection
               user={user}
-              departmentLabel="Human Resource"
+              departmentLabel="Human Resources"
               passwordForm={passwordForm}
               onPasswordFormChange={(field, value) => setPasswordForm((prev) => ({ ...prev, [field]: value }))}
               onSubmit={handlePasswordChange}

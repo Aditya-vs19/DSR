@@ -4,6 +4,7 @@ use dsr_db;
 CREATE TABLE users (
   id INT AUTO_INCREMENT PRIMARY KEY,
   name VARCHAR(120) NOT NULL,
+  last_name VARCHAR(120) DEFAULT NULL,
   email VARCHAR(180) NOT NULL UNIQUE,
   password VARCHAR(255) NOT NULL,
   role ENUM('employee', 'admin', 'hr', 'superadmin') NOT NULL DEFAULT 'employee',
@@ -93,7 +94,7 @@ INSERT INTO users (name, email, password, role, team) VALUES
 
 -- SUPER ADMINS
 ('Vijay', 'vijay@cludobits.com', '$2a$10$9uM6P6pMpT2FQm40XW5GFutxuxMxDPZWS9Vyuk3F7S3w7Dnk3a1lW', 'superadmin', 'Management'),
-('Samiksha', 'samiksha@cludobits.com', '$2a$10$9uM6P6pMpT2FQm40XW5GFutxuxMxDPZWS9Vyuk3F7S3w7Dnk3a1lW', 'superadmin', 'Management'),
+('HR', 'hr@cludobits.com', '$2a$10$9uM6P6pMpT2FQm40XW5GFutxuxMxDPZWS9Vyuk3F7S3w7Dnk3a1lW', 'superadmin', 'Human Resources'),
 
 -- ADMINS
 ('Snigdha', 'snigdha@cludobits.com', '$2a$10$9uM6P6pMpT2FQm40XW5GFutxuxMxDPZWS9Vyuk3F7S3w7Dnk3a1lW', 'admin', 'Sales'),

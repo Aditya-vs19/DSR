@@ -190,6 +190,36 @@ const getWeekLabelForDate = (value, rangeStart) => {
   return `Week ${weekNumber}`;
 };
 
+const getMonthWeekGroups = (rangeStart, rangeEnd) => {
+  if (!rangeStart || !rangeEnd) {
+    return [];
+  }
+
+  const startDate = new Date(rangeStart);
+  const endDate = new Date(rangeEnd);
+  if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
+    return [];
+  }
+
+  startDate.setHours(0, 0, 0, 0);
+  endDate.setHours(0, 0, 0, 0);
+
+  const groups = [];
+  let currentLabel = "Week 1";
+  groups.push({ key: currentLabel, label: currentLabel, tasks: [] });
+
+  const cursor = new Date(startDate);
+  while (cursor < endDate) {
+    cursor.setDate(cursor.getDate() + 1);
+    if (cursor.getDay() === 1) {
+      currentLabel = `Week ${groups.length + 1}`;
+      groups.push({ key: currentLabel, label: currentLabel, tasks: [] });
+    }
+  }
+
+  return groups;
+};
+
 const getDetailedGroupKey = (task, dateRange) => {
   if (dateRange === "month") {
     return task.groupLabel || `week-unknown-${task.id}`;
@@ -252,6 +282,22 @@ const resolveTaskDepartment = (task, teamByUserId) => {
   return String(teamByUserId.get(String(task?.assigned_to)) || "").trim();
 };
 
+const isReportableSuperadmin = (entry) => {
+  const name = String(entry?.name || "").trim().toLowerCase();
+  const email = String(entry?.email || "").trim().toLowerCase();
+  const team = String(entry?.team || "").trim().toLowerCase();
+  return (
+    entry?.role === "superadmin" &&
+    (name === "hr" ||
+      email === "hr@cludobits.com" ||
+      team === "human resource" ||
+      team === "human resources")
+  );
+};
+
+const getUserDisplayName = (entry) =>
+  String(entry?.full_name || entry?.fullName || [entry?.name, entry?.last_name || entry?.lastName].filter(Boolean).join(" ") || entry?.name || "").trim();
+
 function ReportPage({
   role = "admin",
   initialDateRange = "today",
@@ -282,6 +328,7 @@ function ReportPage({
     taskSummary: { total: 0, completed: 0, pending: 0 }
   });
   const [detailedTasks, setDetailedTasks] = useState([]);
+  const [detailedTaskGroups, setDetailedTaskGroups] = useState([]);
   const [detailedSummary, setDetailedSummary] = useState({ total: 0, completed: 0, inProgress: 0, pending: 0 });
   const [directoryUsers, setDirectoryUsers] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -308,7 +355,7 @@ function ReportPage({
 
     return scoped.map((entry) => ({
       id: entry.id,
-      name: entry.name,
+      name: getUserDisplayName(entry),
       team: toTeamLabel(entry.team)
     }));
   }, [directoryUsers, isEmployeeView, role, team]);
@@ -325,7 +372,7 @@ function ReportPage({
           setDirectoryUsers([
             {
               id: user.id,
-              name: user.name,
+              name: getUserDisplayName(user),
               email: user.email,
               role: user.role,
               team: user.team
@@ -345,7 +392,7 @@ function ReportPage({
             ? [
                 {
                   id: user.id,
-                  name: user.name,
+                  name: getUserDisplayName(user),
                   email: user.email,
                   role: user.role,
                   team: user.team
@@ -360,7 +407,7 @@ function ReportPage({
         setDirectoryUsers(
           combinedUsers.filter((entry) => {
             if (role === "superadmin") {
-              return ["employee", "admin"].includes(entry.role);
+              return ["employee", "admin"].includes(entry.role) || isReportableSuperadmin(entry);
             }
 
             if (role === "admin") {
@@ -441,7 +488,7 @@ function ReportPage({
           ? [
               {
                 id: user.id,
-                name: user.name,
+                name: getUserDisplayName(user),
                 email: user.email,
                 role: user.role,
                 team: user.team
@@ -456,7 +503,7 @@ function ReportPage({
           ? [
               {
                 id: user.id,
-                name: user.name,
+                name: getUserDisplayName(user),
                 email: user.email,
                 role: user.role,
                 team: user.team
@@ -472,7 +519,7 @@ function ReportPage({
 
       const { startDate, endDate } = getDateBounds(dateRange, date, customStartDate, customEndDate);
 
-      const scopedDetailedTasks = allTasks
+      const scopedDetailedTasksWithCalendarGroups = allTasks
         .filter((entry) => taskFallsWithinRange(entry, startDate, endDate))
         .filter((entry) => {
           if (isEmployeeView) {
@@ -506,7 +553,10 @@ function ReportPage({
               : formatDayText(getTaskDateText(entry))
         }));
 
+      const scopedDetailedTasks = scopedDetailedTasksWithCalendarGroups;
+
       setDetailedTasks(scopedDetailedTasks);
+      setDetailedTaskGroups(dateRange === "month" ? getMonthWeekGroups(startDate, endDate) : []);
 
       const taskSummary = scopedDetailedTasks.reduce(
         (acc, entry) => {
@@ -626,8 +676,10 @@ function ReportPage({
         "Assigned At",
         "Completed At"
       ];
-      const groupedDetailedTasks = [];
-      const groupIndexByKey = new Map();
+      const groupedDetailedTasks = dateRange === "month"
+        ? detailedTaskGroups.map((group) => ({ ...group, tasks: [] }))
+        : [];
+      const groupIndexByKey = new Map(groupedDetailedTasks.map((group, index) => [group.key, index]));
 
       detailedTasks.forEach((entry) => {
         const groupKey = getDetailedGroupKey(entry, dateRange);
@@ -670,6 +722,13 @@ function ReportPage({
         const groupRow = sheet.addRow([group.label]);
         sheet.mergeCells(groupRow.number, 1, groupRow.number, headers.length);
         applyCellStyle(groupRow.getCell(1), { fillColor: COLOR.weekYellow, bold: true, align: "left" });
+
+        if (group.tasks.length === 0) {
+          const emptyRow = sheet.addRow(["No tasks in this week"]);
+          sheet.mergeCells(emptyRow.number, 1, emptyRow.number, headers.length);
+          applyCellStyle(emptyRow.getCell(1), { fillColor: COLOR.white, align: "left" });
+          return;
+        }
 
         group.tasks.forEach((entry) => {
           const row = sheet.addRow({
@@ -796,9 +855,10 @@ function ReportPage({
 
       gridData.employees.forEach((employee, employeeIndex) => {
         const cell = sheet.getCell(rowCursor, employeeIndex + 3);
-        cell.value = employee.name;
+        cell.value = `${employee.name || "-"}\n${toTeamLabel(employee.team) || "-"}`;
         applyCellStyle(cell, { fillColor: COLOR.headerGray, bold: true });
       });
+      sheet.getRow(rowCursor).height = 32;
 
       rowCursor += 1;
 
@@ -874,7 +934,7 @@ function ReportPage({
     link.click();
     document.body.removeChild(link);
     window.URL.revokeObjectURL(url);
-  }, [customEndDate, customStartDate, date, dateRange, detailedTasks, gridData.employees, gridData.rows, gridData.startDate, gridData.summary, gridData.taskSummary, isEmployeeView, reportType, totalTasks]);
+  }, [customEndDate, customStartDate, date, dateRange, detailedTaskGroups, detailedTasks, gridData.employees, gridData.rows, gridData.startDate, gridData.summary, gridData.taskSummary, isEmployeeView, reportType, totalTasks]);
 
   const handleSaveHoliday = useCallback(async () => {
     const dateValue = String(holidayForm.date || "").slice(0, 10);
@@ -1090,7 +1150,7 @@ function ReportPage({
             loadingCellId={loadingCellId}
           />
         ) : (
-          <ReportTaskDetailTable tasks={detailedTasks} dateRange={dateRange} />
+          <ReportTaskDetailTable tasks={detailedTasks} dateRange={dateRange} groups={detailedTaskGroups} />
         )}
       </div>
     </div>

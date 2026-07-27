@@ -1,8 +1,22 @@
 import nodemailer from "nodemailer";
+import path from "path";
+import { fileURLToPath } from "url";
 import { generateDailyReports, getAutomatedReportEmailSummary } from "../models/reportModel.js";
 
 const REPORT_TIMEZONE = process.env.REPORT_TIMEZONE || "Asia/Kolkata";
 const REPORT_DETAILS_URL = "http://192.168.1.14:5173/login";
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const EMAIL_FONT_STACK = "Arial, Helvetica, sans-serif";
+const REPORT_BRAND_NAME = "CludoSI 360";
+const REPORT_LOGO_PATH = path.resolve(__dirname, "../../frontend/src/assets/logo.png");
+const REPORT_WORDMARK_PATH = path.resolve(__dirname, "../assets/cludosi360-wordmark.png");
+const REPORT_LOGO_CID = "cludosi360-report-logo";
+const REPORT_WORDMARK_CID = "cludosi360-report-wordmark";
+const REPORT_LOGO_WIDTH = 168;
+const REPORT_WORDMARK_WIDTH = 286;
+const TABLE_BORDER_COLOR = "#d7e8e4";
+const HEADER_CELL_STYLE = `font-family: ${EMAIL_FONT_STACK}; font-size: 11px; line-height: 14px; font-weight: 700; color: #0f172a; text-transform: uppercase; text-align: left; padding: 11px 10px; border: 1px solid #9fcfc8; background-color: #c6e4df;`;
+const BODY_CELL_BASE_STYLE = `font-family: ${EMAIL_FONT_STACK}; font-size: 12px; line-height: 17px; color: #0f172a; padding: 10px 10px; border: 1px solid ${TABLE_BORDER_COLOR}; mso-line-height-rule: exactly;`;
 
 let transporter;
 
@@ -88,11 +102,16 @@ const isDailyReport = ({ reportType, summary }) =>
 
 const formatDailyYesNo = (value) => (Number(value || 0) > 0 ? "Yes" : "No");
 
+const getReportTitle = (reportType) => `DSR ${reportType} Summary`;
+
+const getReportSubtitle = ({ rangeLabel }) => `Report window: ${rangeLabel}`;
+
 const buildSummaryText = ({ reportType, summary }) => {
   const rangeLabel = getRangeLabel(summary.startDate, summary.endDate);
   const useDailyYesNo = isDailyReport({ reportType, summary });
   const lines = [
-    `DSR ${reportType} summary for ${rangeLabel}`,
+    getReportTitle(reportType),
+    getReportSubtitle({ reportType, rangeLabel }),
     `Employees: ${summary.totals.employees}`,
     `Submitted days: ${summary.totals.submittedDays}`,
     `Not submitted days: ${summary.totals.notSubmittedDays}`,
@@ -124,7 +143,10 @@ const buildSummaryText = ({ reportType, summary }) => {
 };
 
 const buildSummaryHtml = ({ reportType, summary }) => {
-  const rangeLabel = escapeHtml(getRangeLabel(summary.startDate, summary.endDate));
+  const rangeLabelText = getRangeLabel(summary.startDate, summary.endDate);
+  const rangeLabel = escapeHtml(rangeLabelText);
+  const title = escapeHtml(getReportTitle(reportType));
+  const subtitle = escapeHtml(getReportSubtitle({ reportType, rangeLabel: rangeLabelText }));
   const useDailyYesNo = isDailyReport({ reportType, summary });
 
   const overviewRowsHtml = [
@@ -139,8 +161,8 @@ const buildSummaryHtml = ({ reportType, summary }) => {
     .map(
       (item) => `
         <tr>
-          <td style="border:1px solid #d6e1d8;background:#edf4ee;padding:10px 12px;font-size:12px;font-weight:700;color:#63756a;text-transform:uppercase;">${escapeHtml(item.label)}</td>
-          <td style="border:1px solid #d6e1d8;padding:10px 12px;font-size:14px;font-weight:700;color:#1f2a22;">${item.value}</td>
+          <td style="${HEADER_CELL_STYLE}">${escapeHtml(item.label)}</td>
+          <td style="${BODY_CELL_BASE_STYLE}font-size:14px;font-weight:700;">${item.value}</td>
         </tr>
       `
     )
@@ -149,24 +171,24 @@ const buildSummaryHtml = ({ reportType, summary }) => {
   const employeeHeaderHtml = useDailyYesNo
     ? `
       <tr>
-        <th style="border:1px solid #d6e1d8;background:#2f7f4f;color:#ffffff;padding:10px 8px;font-size:12px;text-align:left;">Name</th>
-        <th style="border:1px solid #d6e1d8;background:#2f7f4f;color:#ffffff;padding:10px 8px;font-size:12px;text-align:left;">Department</th>
-        <th style="border:1px solid #d6e1d8;background:#2f7f4f;color:#ffffff;padding:10px 8px;font-size:12px;text-align:left;">Role</th>
-        <th style="border:1px solid #d6e1d8;background:#2f7f4f;color:#ffffff;padding:10px 8px;font-size:12px;text-align:left;">Status</th>
-        <th style="border:1px solid #d6e1d8;background:#2f7f4f;color:#ffffff;padding:10px 8px;font-size:12px;text-align:left;">Report Submitted</th>
-        <th style="border:1px solid #d6e1d8;background:#2f7f4f;color:#ffffff;padding:10px 8px;font-size:12px;text-align:left;">Leave</th>
-        <th style="border:1px solid #d6e1d8;background:#2f7f4f;color:#ffffff;padding:10px 8px;font-size:12px;text-align:left;">On Site</th>
+        <th style="${HEADER_CELL_STYLE}">Name</th>
+        <th style="${HEADER_CELL_STYLE}">Department</th>
+        <th style="${HEADER_CELL_STYLE}">Role</th>
+        <th style="${HEADER_CELL_STYLE}">Status</th>
+        <th style="${HEADER_CELL_STYLE}">Report Submitted</th>
+        <th style="${HEADER_CELL_STYLE}">Leave</th>
+        <th style="${HEADER_CELL_STYLE}">On Site</th>
       </tr>
     `
     : `
       <tr>
-        <th style="border:1px solid #d6e1d8;background:#2f7f4f;color:#ffffff;padding:10px 8px;font-size:12px;text-align:left;">Name</th>
-        <th style="border:1px solid #d6e1d8;background:#2f7f4f;color:#ffffff;padding:10px 8px;font-size:12px;text-align:left;">Department</th>
-        <th style="border:1px solid #d6e1d8;background:#2f7f4f;color:#ffffff;padding:10px 8px;font-size:12px;text-align:left;">Role</th>
-        <th style="border:1px solid #d6e1d8;background:#2f7f4f;color:#ffffff;padding:10px 8px;font-size:12px;text-align:left;">Submitted</th>
-        <th style="border:1px solid #d6e1d8;background:#2f7f4f;color:#ffffff;padding:10px 8px;font-size:12px;text-align:left;">Not Submitted</th>
-        <th style="border:1px solid #d6e1d8;background:#2f7f4f;color:#ffffff;padding:10px 8px;font-size:12px;text-align:left;">Leave</th>
-        <th style="border:1px solid #d6e1d8;background:#2f7f4f;color:#ffffff;padding:10px 8px;font-size:12px;text-align:left;">On Site</th>
+        <th style="${HEADER_CELL_STYLE}">Name</th>
+        <th style="${HEADER_CELL_STYLE}">Department</th>
+        <th style="${HEADER_CELL_STYLE}">Role</th>
+        <th style="${HEADER_CELL_STYLE}">Submitted</th>
+        <th style="${HEADER_CELL_STYLE}">Not Submitted</th>
+        <th style="${HEADER_CELL_STYLE}">Leave</th>
+        <th style="${HEADER_CELL_STYLE}">On Site</th>
       </tr>
     `;
 
@@ -179,53 +201,75 @@ const buildSummaryHtml = ({ reportType, summary }) => {
       if (useDailyYesNo) {
         return `
           <tr>
-            <td style="border:1px solid #d6e1d8;padding:9px 8px;font-size:12px;color:#1f2a22;font-weight:700;">${escapeHtml(employee.name)}</td>
-            <td style="border:1px solid #d6e1d8;padding:9px 8px;font-size:12px;color:#1f2a22;">${escapeHtml(employee.team)}</td>
-            <td style="border:1px solid #d6e1d8;padding:9px 8px;font-size:12px;color:#1f2a22;text-transform:capitalize;">${escapeHtml(employee.role)}</td>
-            <td style="border:1px solid #d6e1d8;padding:9px 8px;font-size:12px;color:#1f2a22;"><span style="${getStatusBadgeStyles(employee.dailyStatus)}padding:4px 7px;font-weight:700;">${escapeHtml(employee.dailyStatus)}</span></td>
-            <td style="border:1px solid #d6e1d8;padding:9px 8px;font-size:12px;color:#1f2a22;font-weight:700;">${submittedValue}</td>
-            <td style="border:1px solid #d6e1d8;padding:9px 8px;font-size:12px;color:#1f2a22;font-weight:700;">${leaveValue}</td>
-            <td style="border:1px solid #d6e1d8;padding:9px 8px;font-size:12px;color:#1f2a22;">${employee.onSiteDays}</td>
+            <td style="${BODY_CELL_BASE_STYLE}font-weight:700;">${escapeHtml(employee.name)}</td>
+            <td style="${BODY_CELL_BASE_STYLE}">${escapeHtml(employee.team)}</td>
+            <td style="${BODY_CELL_BASE_STYLE}text-transform:capitalize;">${escapeHtml(employee.role)}</td>
+            <td style="${BODY_CELL_BASE_STYLE}"><span style="${getStatusBadgeStyles(employee.dailyStatus)}padding:4px 7px;font-weight:700;">${escapeHtml(employee.dailyStatus)}</span></td>
+            <td style="${BODY_CELL_BASE_STYLE}font-weight:700;">${submittedValue}</td>
+            <td style="${BODY_CELL_BASE_STYLE}font-weight:700;">${leaveValue}</td>
+            <td style="${BODY_CELL_BASE_STYLE}">${employee.onSiteDays}</td>
           </tr>
         `;
       }
 
       return `
         <tr>
-          <td style="border:1px solid #d6e1d8;padding:9px 8px;font-size:12px;color:#1f2a22;font-weight:700;">${escapeHtml(employee.name)}</td>
-          <td style="border:1px solid #d6e1d8;padding:9px 8px;font-size:12px;color:#1f2a22;">${escapeHtml(employee.team)}</td>
-          <td style="border:1px solid #d6e1d8;padding:9px 8px;font-size:12px;color:#1f2a22;text-transform:capitalize;">${escapeHtml(employee.role)}</td>
-          <td style="border:1px solid #d6e1d8;padding:9px 8px;font-size:12px;color:#1f2a22;">${submittedValue}</td>
-          <td style="border:1px solid #d6e1d8;padding:9px 8px;font-size:12px;color:#1f2a22;">${notSubmittedValue}</td>
-          <td style="border:1px solid #d6e1d8;padding:9px 8px;font-size:12px;color:#1f2a22;">${leaveValue}</td>
-          <td style="border:1px solid #d6e1d8;padding:9px 8px;font-size:12px;color:#1f2a22;">${employee.onSiteDays}</td>
+          <td style="${BODY_CELL_BASE_STYLE}font-weight:700;">${escapeHtml(employee.name)}</td>
+          <td style="${BODY_CELL_BASE_STYLE}">${escapeHtml(employee.team)}</td>
+          <td style="${BODY_CELL_BASE_STYLE}text-transform:capitalize;">${escapeHtml(employee.role)}</td>
+          <td style="${BODY_CELL_BASE_STYLE}">${submittedValue}</td>
+          <td style="${BODY_CELL_BASE_STYLE}">${notSubmittedValue}</td>
+          <td style="${BODY_CELL_BASE_STYLE}">${leaveValue}</td>
+          <td style="${BODY_CELL_BASE_STYLE}">${employee.onSiteDays}</td>
         </tr>
       `;
     })
     .join("");
 
   return `
-    <div style="font-family:Arial,Helvetica,sans-serif;background:#f4f7f4;padding:24px;color:#1f2a22;">
-      <div style="max-width:680px;margin:0 auto;background:#ffffff;border:1px solid #d6e1d8;border-radius:16px;overflow:hidden;">
-        <div style="background:#2f7f4f;color:#ffffff;padding:20px 24px;">
-          <h2 style="margin:0 0 8px;font-size:24px;">DSR ${escapeHtml(reportType)} Summary</h2>
-          <p style="margin:0;font-size:14px;">Report window: ${rangeLabel}</p>
-        </div>
-        <div style="padding:20px 24px;">
-          <p style="margin:0 0 18px;font-size:14px;line-height:1.5;color:#1f2a22;">
-            For more precise details visit
-            <a href="${REPORT_DETAILS_URL}" style="color:#2f7f4f;font-weight:700;text-decoration:none;">${REPORT_DETAILS_URL}</a>
-          </p>
-          <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse;margin:0 0 22px;width:100%;">
-            <tbody>${overviewRowsHtml}</tbody>
-          </table>
-          <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse;width:100%;">
-            <thead>${employeeHeaderHtml}</thead>
-            <tbody>${employeeRowsHtml}</tbody>
-          </table>
-        </div>
-      </div>
-    </div>
+    <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse;background:#ffffff;font-family:${EMAIL_FONT_STACK};color:#1f2a22;">
+      <tbody>
+        <tr>
+          <td style="background:#ffffff;color:#1f2a22;padding:20px 24px 18px;border:1px solid ${TABLE_BORDER_COLOR};">
+            <table role="presentation" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:0 0 18px;">
+              <tbody>
+                <tr>
+                  <td style="padding:0 18px 0 0;vertical-align:middle;">
+                    <img src="cid:${REPORT_LOGO_CID}" alt="CludoBits" width="${REPORT_LOGO_WIDTH}" style="display:block;width:${REPORT_LOGO_WIDTH}px;max-width:${REPORT_LOGO_WIDTH}px;height:auto;border:0;outline:none;text-decoration:none;" />
+                  </td>
+                  <td width="1" style="width:1px;padding:0;background:#3f4a54;font-size:1px;line-height:1px;">&nbsp;</td>
+                  <td style="padding:0 0 0 24px;vertical-align:middle;">
+                    <img src="cid:${REPORT_WORDMARK_CID}" alt="${REPORT_BRAND_NAME}" width="${REPORT_WORDMARK_WIDTH}" style="display:block;width:${REPORT_WORDMARK_WIDTH}px;max-width:${REPORT_WORDMARK_WIDTH}px;height:auto;border:0;outline:none;text-decoration:none;" />
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+            <h2 style="margin:0 0 6px;font-size:24px;line-height:1.15;color:#1f2a22;">${title}</h2>
+            <p style="margin:0;font-size:14px;line-height:1.4;color:#4b5c52;font-weight:700;">${subtitle}</p>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:0 24px;background:#ffffff;">
+            <div style="height:1px;line-height:1px;font-size:1px;background:${TABLE_BORDER_COLOR};">&nbsp;</div>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:20px 24px;">
+            <p style="margin:0 0 18px;font-size:14px;line-height:1.5;color:#1f2a22;">
+              For more precise details visit
+              <a href="${REPORT_DETAILS_URL}" style="color:#2f7f4f;font-weight:700;text-decoration:none;">${REPORT_DETAILS_URL}</a>
+            </p>
+            <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse;margin:0 0 22px;width:100%;">
+              <tbody>${overviewRowsHtml}</tbody>
+            </table>
+            <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse;width:100%;">
+              <thead>${employeeHeaderHtml}</thead>
+              <tbody>${employeeRowsHtml}</tbody>
+            </table>
+          </td>
+        </tr>
+      </tbody>
+    </table>
   `;
 };
 
@@ -252,7 +296,7 @@ export const sendAutomatedReportEmail = async ({ reportType, startDate, endDate,
   }
 
   const summary = await getAutomatedReportEmailSummary({ startDate, endDate });
-  const subject = `DSR ${reportType} Summary - ${getRangeLabel(summary.startDate, summary.endDate)}`;
+  const subject = `${getReportTitle(reportType)} - ${getRangeLabel(summary.startDate, summary.endDate)}`;
   const fromEmail = String(process.env.REPORT_EMAIL_USER || "").trim();
   const fromName = String(process.env.REPORT_EMAIL_FROM_NAME || "DSR Reports").trim();
 
@@ -261,7 +305,19 @@ export const sendAutomatedReportEmail = async ({ reportType, startDate, endDate,
     to: recipients.join(", "),
     subject,
     text: buildSummaryText({ reportType, summary }),
-    html: buildSummaryHtml({ reportType, summary })
+    html: buildSummaryHtml({ reportType, summary }),
+    attachments: [
+      {
+        filename: "logo.png",
+        path: REPORT_LOGO_PATH,
+        cid: REPORT_LOGO_CID
+      },
+      {
+        filename: "cludosi360-wordmark.png",
+        path: REPORT_WORDMARK_PATH,
+        cid: REPORT_WORDMARK_CID
+      }
+    ]
   });
 
   return {

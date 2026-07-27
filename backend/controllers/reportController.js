@@ -33,6 +33,20 @@ const normalizeEmployeeIds = (value) => {
     .filter((entry) => Number.isInteger(entry) && entry > 0);
 };
 
+const canUseSuperadminSelfReports = (user) => {
+  const name = String(user?.name || "").trim().toLowerCase();
+  const email = String(user?.email || "").trim().toLowerCase();
+  const team = String(user?.team || "").trim().toLowerCase();
+
+  return (
+    user?.role === "superadmin" &&
+    (name === "hr" ||
+      email === "hr@cludobits.com" ||
+      team === "human resource" ||
+      team === "human resources")
+  );
+};
+
 export const getReportsController = async (req, res) => {
   try {
     const { role, id: userId, team } = req.user;
@@ -144,21 +158,25 @@ export const updateDailyReportCellController = async (req, res) => {
 
 export const submitReportToHrController = async (req, res) => {
   try {
-    if (!["employee", "admin"].includes(req.user.role)) {
-      return res.status(403).json({ message: "Only employees/admins can submit reports" });
+    if (!["employee", "admin", "superadmin"].includes(req.user.role)) {
+      return res.status(403).json({ message: "Only employees/admins/superadmins can submit reports" });
+    }
+
+    if (req.user.role === "superadmin" && !canUseSuperadminSelfReports(req.user)) {
+      return res.status(403).json({ message: "Self-task reports are available only for HR superadmin" });
     }
 
     const date = req.body.date || new Date().toISOString().slice(0, 10);
-    const isAdminSubmission = req.user.role === "admin";
+    const isSelfTaskOnlySubmission = ["admin", "superadmin"].includes(req.user.role);
     const result = await submitEmployeeDailyReport({
       employeeId: req.user.id,
       date,
-      onlySelfAssigned: isAdminSubmission
+      onlySelfAssigned: isSelfTaskOnlySubmission
     });
 
     if (!result.submitted) {
       return res.status(400).json({
-        message: isAdminSubmission
+        message: isSelfTaskOnlySubmission
           ? "No self-assigned tasks found for selected day"
           : "No tasks found for selected day"
       });
@@ -180,10 +198,10 @@ export const submitReportToHrController = async (req, res) => {
 
     return res.status(200).json({
       message: result.resubmitted
-        ? isAdminSubmission
+        ? isSelfTaskOnlySubmission
           ? "Self-task report resubmitted to HR"
           : "Report resubmitted to HR"
-        : isAdminSubmission
+        : isSelfTaskOnlySubmission
           ? "Self-task report submitted to HR"
           : "Report submitted to HR",
       resubmitted: Boolean(result.resubmitted),

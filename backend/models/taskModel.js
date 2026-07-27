@@ -7,6 +7,7 @@ let taskReassignmentColumnsEnsured = false;
 let taskPriorityColumnEnsured = false;
 let taskDepartmentColumnEnsured = false;
 let taskDateColumnEnsured = false;
+let userProfileColumnsEnsured = false;
 
 const businessDateFormatter = new Intl.DateTimeFormat("en-CA", {
   timeZone: "Asia/Kolkata",
@@ -172,6 +173,32 @@ const ensureTaskDateColumn = async () => {
   taskDateColumnEnsured = true;
 };
 
+const ensureUserProfileColumns = async () => {
+  if (userProfileColumnsEnsured) return;
+
+  const existingColumns = await query(
+    `
+      SELECT COLUMN_NAME
+      FROM information_schema.COLUMNS
+      WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = 'users'
+        AND COLUMN_NAME IN ('last_name', 'employment_end_date')
+    `
+  );
+
+  const columnSet = new Set(existingColumns.map((entry) => entry.COLUMN_NAME));
+
+  if (!columnSet.has("last_name")) {
+    await query("ALTER TABLE users ADD COLUMN last_name VARCHAR(120) NULL AFTER name");
+  }
+
+  if (!columnSet.has("employment_end_date")) {
+    await query("ALTER TABLE users ADD COLUMN employment_end_date DATE NULL");
+  }
+
+  userProfileColumnsEnsured = true;
+};
+
 const ensureDailyReportTable = async () => {
   if (dailyReportTableEnsured) return;
 
@@ -230,6 +257,7 @@ export const createTask = async ({
   await ensureTaskPriorityColumn();
   await ensureTaskDepartmentColumn();
   await ensureTaskDateColumn();
+  await ensureUserProfileColumns();
 
   const sql = `
     INSERT INTO tasks (
@@ -307,8 +335,8 @@ export const getTasksByRole = async ({ role, userId, team, managedTeams = [] }) 
       DATE_FORMAT(t.created_at, '%Y-%m-%d %H:%i:%s') AS created_at,
       DATE_FORMAT(t.completed_at, '%Y-%m-%d %H:%i:%s') AS completed_at,
       t.deadline,
-      assignTo.name AS assigned_to_name,
-      assignBy.name AS assigned_by_name
+      TRIM(CONCAT_WS(' ', assignTo.name, NULLIF(assignTo.last_name, ''))) AS assigned_to_name,
+      TRIM(CONCAT_WS(' ', assignBy.name, NULLIF(assignBy.last_name, ''))) AS assigned_by_name
     FROM tasks t
     LEFT JOIN users assignTo ON assignTo.id = t.assigned_to
     LEFT JOIN users assignBy ON assignBy.id = t.assigned_by
@@ -537,6 +565,7 @@ export const getEmployeeTimeline = async (employeeId, days = 7) => {
 export const getTeamPerformance = async (team) => {
   await ensureTaskSubmissionColumns();
   await ensureTaskDateColumn();
+  await ensureUserProfileColumns();
 
   const teamList = Array.isArray(team) ? team.filter(Boolean) : team ? [team] : [];
 
@@ -549,7 +578,7 @@ export const getTeamPerformance = async (team) => {
   const sql = `
     SELECT
       u.id,
-      u.name,
+      TRIM(CONCAT_WS(' ', u.name, NULLIF(u.last_name, ''))) AS name,
       u.role,
       COUNT(t.id) AS total_tasks,
       SUM(CASE WHEN t.status = 'Completed' THEN 1 ELSE 0 END) AS completed_tasks,
@@ -561,7 +590,7 @@ export const getTeamPerformance = async (team) => {
     FROM users u
     LEFT JOIN tasks t ON t.assigned_to = u.id
     WHERE u.team IN (${placeholders}) AND u.role IN ('employee', 'admin')
-    GROUP BY u.id, u.name, u.role
+    GROUP BY u.id, u.name, u.last_name, u.role
     ORDER BY completion_rate DESC
   `;
 
@@ -571,11 +600,12 @@ export const getTeamPerformance = async (team) => {
 export const getDepartmentAdminPerformance = async (team = null) => {
   await ensureTaskSubmissionColumns();
   await ensureTaskDateColumn();
+  await ensureUserProfileColumns();
 
   const sql = `
     SELECT
       u.id,
-      u.name,
+      TRIM(CONCAT_WS(' ', u.name, NULLIF(u.last_name, ''))) AS name,
       u.team,
       COUNT(t.id) AS total_tasks,
       SUM(CASE WHEN t.status = 'Completed' THEN 1 ELSE 0 END) AS completed_tasks,
@@ -586,9 +616,9 @@ export const getDepartmentAdminPerformance = async (team = null) => {
       ) AS completion_rate
     FROM users u
     LEFT JOIN tasks t ON t.assigned_to = u.id
-    WHERE u.role = 'admin'
+    WHERE u.role IN ('admin', 'hr')
       AND (? IS NULL OR u.team = ?)
-    GROUP BY u.id, u.name, u.team
+    GROUP BY u.id, u.name, u.last_name, u.team
     ORDER BY completion_rate DESC
   `;
 
@@ -641,7 +671,26 @@ export const getTaskUpdateNotificationRecipients = async ({ assignedBy, actorId 
 };
 
 export const getHrUserIds = async () => {
-  const rows = await query("SELECT id FROM users WHERE role = 'hr'");
+  await ensureUserProfileColumns();
+
+  const rows = await query(
+    `
+      SELECT id
+      FROM users
+      WHERE (
+          role = 'hr'
+          OR (
+            role = 'superadmin'
+            AND (
+              LOWER(name) = 'hr'
+              OR LOWER(email) = 'hr@cludobits.com'
+              OR LOWER(team) IN ('human resource', 'human resources')
+            )
+          )
+        )
+        AND (employment_end_date IS NULL OR employment_end_date > DATE(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+05:30')))
+    `
+  );
   return rows.map((row) => row.id);
 };
 

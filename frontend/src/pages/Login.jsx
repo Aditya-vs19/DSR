@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import logo from "../assets/logo.png";
+import BrandMark from "../components/BrandMark";
 
 const rolePath = {
   employee: "/employee",
@@ -52,10 +52,7 @@ const Login = () => {
           <div className="absolute inset-0 opacity-50 [background-image:linear-gradient(to_right,rgba(148,163,184,0.08)_1px,transparent_1px),linear-gradient(to_bottom,rgba(148,163,184,0.08)_1px,transparent_1px)] [background-size:80px_80px]" />
 
           <div className="relative z-10 flex max-w-xl flex-col items-center px-12 text-center">
-            <div className="mb-10 flex items-center gap-5">
-              <img src={logo} alt="DSR Management Logo" className="h-24 w-auto object-contain" />
-              
-            </div>
+            <BrandMark className="mb-10" logoClassName="h-24 w-auto" wordmarkClassName="h-20 w-auto" />
 
             <h2 className="max-w-lg text-4xl font-semibold tracking-tight text-slate-700">
               Building The Future With Tech

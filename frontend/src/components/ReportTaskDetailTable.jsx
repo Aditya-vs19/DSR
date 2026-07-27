@@ -50,8 +50,8 @@ const formatDaySectionLabel = (task, dateRange) => {
   return `${dayLabel} - ${dateLabel}`;
 };
 
-function ReportTaskDetailTable({ tasks = [], dateRange = "week" }) {
-  if (!tasks.length) {
+function ReportTaskDetailTable({ tasks = [], dateRange = "week", groups = [] }) {
+  if (!tasks.length && !groups.length) {
     return (
       <div className="rounded-md border border-slate-200 bg-white p-8 text-center text-sm text-slate-500">
         Generate detailed report to view task list.
@@ -59,8 +59,10 @@ function ReportTaskDetailTable({ tasks = [], dateRange = "week" }) {
     );
   }
 
-  const groupedTasks = [];
-  const groupIndexByDate = new Map();
+  const groupedTasks = dateRange === "month"
+    ? groups.map((group) => ({ ...group, tasks: [] }))
+    : [];
+  const groupIndexByDate = new Map(groupedTasks.map((group, index) => [group.key, index]));
 
   tasks.forEach((task) => {
     const dateKey =
@@ -106,6 +108,13 @@ function ReportTaskDetailTable({ tasks = [], dateRange = "week" }) {
                   {group.label}
                 </td>
               </tr>
+              {group.tasks.length === 0 && (
+                <tr className="border-b border-slate-200/80 bg-white">
+                  <td colSpan={10} className="px-3 py-3 text-left text-sm font-medium text-slate-500">
+                    No tasks in this week
+                  </td>
+                </tr>
+              )}
               {group.tasks.map((task) => (
                 <tr
                   key={task.id}

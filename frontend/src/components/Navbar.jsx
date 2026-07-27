@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import logo from "../assets/logo.png";
+import BrandMark from "./BrandMark";
 import ProfileMenu from "./ProfileMenu";
 import { useAuth } from "../context/AuthContext";
 import useScrollHeader from "../hooks/useScrollHeader";
@@ -28,11 +28,7 @@ const Navbar = ({ notifications = [], onToggleSidebar, onOpenProfile, profileLab
           >
             Menu
           </button>
-          <img
-            src={logo}
-            alt="DSR Management Logo"
-            className="h-14 w-[260px] shrink-0 object-contain object-left"
-          />
+          <BrandMark />
         </div>
 
         <div className="flex items-center gap-4">

@@ -51,6 +51,20 @@ const normalizeTaskPriority = (value) => {
   return priorityMap[key] || null;
 };
 
+const canUseSuperadminSelfTasks = (user) => {
+  const name = String(user?.name || "").trim().toLowerCase();
+  const email = String(user?.email || "").trim().toLowerCase();
+  const team = String(user?.team || "").trim().toLowerCase();
+
+  return (
+    user?.role === "superadmin" &&
+    (name === "hr" ||
+      email === "hr@cludobits.com" ||
+      team === "human resource" ||
+      team === "human resources")
+  );
+};
+
 const businessDateFormatter = new Intl.DateTimeFormat("en-CA", {
   timeZone: "Asia/Kolkata",
   year: "numeric",
@@ -74,19 +88,34 @@ const toDateText = (value) => {
 
 export const createTaskController = async (req, res) => {
   try {
-    const { client, task, action, status, dependency, assignedTo, type, deadline, priority, taskDepartment, taskDate } = req.body;
+    const { client, task, taskTitle, title, action, description, notes, status, dependency, assignedTo, type, deadline, priority, taskDepartment, taskDate } = req.body;
     const assignedBy = req.user.id;
     const normalizedClient = String(client || "").trim();
+    const normalizedTask = String(task ?? taskTitle ?? title ?? "").trim();
+    const normalizedAction = String(action ?? description ?? notes ?? "").trim();
+    const normalizedType = String(type || (req.user.role === "employee" ? "self" : "")).trim();
+    const normalizedAssignedTo =
+      normalizedType === "self" || req.user.role === "employee"
+        ? assignedBy
+        : Number(assignedTo);
 
-    if (!task || !action || !assignedTo || !type) {
+    if (!normalizedTask || !normalizedAction || !normalizedAssignedTo || !normalizedType) {
+      console.warn("[tasks] Create task rejected: missing required fields", {
+        userId: req.user.id,
+        role: req.user.role,
+        hasTask: Boolean(normalizedTask),
+        hasAction: Boolean(normalizedAction),
+        hasAssignedTo: Boolean(normalizedAssignedTo),
+        type: normalizedType || null
+      });
       return res.status(400).json({ message: "Missing required task fields" });
     }
 
-    if (!["self", "assigned"].includes(type)) {
+    if (!["self", "assigned"].includes(normalizedType)) {
       return res.status(400).json({ message: "Task type must be self or assigned" });
     }
 
-    if (req.user.role === "employee" && (type !== "self" || Number(assignedTo) !== Number(req.user.id))) {
+    if (req.user.role === "employee" && (normalizedType !== "self" || Number(normalizedAssignedTo) !== Number(req.user.id))) {
       return res.status(403).json({ message: "Employees can create only self tasks" });
     }
 
@@ -99,13 +128,17 @@ export const createTaskController = async (req, res) => {
       return res.status(400).json({ message: "Task date cannot be in the past" });
     }
 
-    const assignee = await findUserById(assignedTo);
+    const assignee = await findUserById(normalizedAssignedTo);
     if (!assignee) {
       return res.status(404).json({ message: "Assignee not found" });
     }
 
-    const isSelfTask = Number(assignedTo) === Number(req.user.id) && type === "self";
+    const isSelfTask = Number(normalizedAssignedTo) === Number(req.user.id) && normalizedType === "self";
     const isAssignableEmployee = assignee.role === "employee";
+
+    if (req.user.role === "superadmin" && isSelfTask && !canUseSuperadminSelfTasks(req.user)) {
+      return res.status(403).json({ message: "Self tasks are available only for HR superadmin" });
+    }
 
     if (!isSelfTask && !isAssignableEmployee) {
       return res.status(400).json({ message: "Tasks can be assigned only to employees" });
@@ -131,23 +164,23 @@ export const createTaskController = async (req, res) => {
 
     const taskId = await createTask({
       client: normalizedClient,
-      task,
-      action,
+      task: normalizedTask,
+      action: normalizedAction,
       status: normalizedStatus,
       dependency,
-      assignedTo,
+      assignedTo: normalizedAssignedTo,
       assignedBy,
-      type,
+      type: normalizedType,
       deadline,
       priority: normalizedPriority,
       taskDepartment: resolvedTaskDepartment,
       taskDate: normalizedTaskDate
     });
 
-    if (Number(assignedTo) !== Number(assignedBy)) {
+    if (Number(normalizedAssignedTo) !== Number(assignedBy)) {
       await createNotification({
-        userId: assignedTo,
-        message: `New task assigned: ${task}`,
+        userId: normalizedAssignedTo,
+        message: `New task assigned: ${normalizedTask}`,
         type: "task_assigned",
         refId: taskId
       });
@@ -438,6 +471,10 @@ export const updateTaskPriorityController = async (req, res) => {
 
 export const getEmployeeSummaryController = async (req, res) => {
   try {
+    if (req.user.role === "superadmin" && !canUseSuperadminSelfTasks(req.user)) {
+      return res.status(403).json({ message: "Self task summary is available only for HR superadmin" });
+    }
+
     const date = req.query.date || getCurrentDateText();
     const employeeId = req.user.id;
     const summary = await getEmployeeDailySummary(employeeId, date);
@@ -449,6 +486,10 @@ export const getEmployeeSummaryController = async (req, res) => {
 
 export const getEmployeeTimelineController = async (req, res) => {
   try {
+    if (req.user.role === "superadmin" && !canUseSuperadminSelfTasks(req.user)) {
+      return res.status(403).json({ message: "Self task timeline is available only for HR superadmin" });
+    }
+
     const days = Number(req.query.days || 7);
     const timeline = await getEmployeeTimeline(req.user.id, days);
     return res.status(200).json(timeline);
@@ -511,8 +552,12 @@ export const markAllNotificationsReadController = async (req, res) => {
 
 export const submitTaskToHrController = async (req, res) => {
   try {
-    if (req.user.role !== "employee") {
-      return res.status(403).json({ message: "Only employees can submit tasks to HR" });
+    if (!["employee", "superadmin"].includes(req.user.role)) {
+      return res.status(403).json({ message: "Only employees/superadmins can submit tasks to HR" });
+    }
+
+    if (req.user.role === "superadmin" && !canUseSuperadminSelfTasks(req.user)) {
+      return res.status(403).json({ message: "Self task submission is available only for HR superadmin" });
     }
 
     const { id } = req.params;

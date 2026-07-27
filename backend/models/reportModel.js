@@ -6,6 +6,32 @@ let dailyReportTableEnsured = false;
 let taskSubmissionColumnsEnsured = false;
 let holidaysTableEnsured = false;
 let taskDateColumnEnsured = false;
+
+const reportableSuperadminClause = `
+  role = 'superadmin'
+  AND (
+    LOWER(name) = 'hr'
+    OR LOWER(email) = 'hr@cludobits.com'
+    OR LOWER(team) = 'human resource'
+    OR LOWER(team) = 'human resources'
+  )
+`;
+
+const reportableSuperadminClauseForUserAlias = `
+  u.role = 'superadmin'
+  AND (
+    LOWER(u.name) = 'hr'
+    OR LOWER(u.email) = 'hr@cludobits.com'
+    OR LOWER(u.team) = 'human resource'
+    OR LOWER(u.team) = 'human resources'
+  )
+`;
+
+const reportableEmployeeRoleClause = `(role IN ('employee', 'admin', 'hr') OR (${reportableSuperadminClause}))`;
+const reportableEmployeeRoleClauseForUserAlias = `(u.role IN ('employee', 'admin', 'hr') OR (${reportableSuperadminClauseForUserAlias}))`;
+const bareUserFullNameSql = "TRIM(CONCAT_WS(' ', name, NULLIF(last_name, '')))";
+const userFullNameSql = "TRIM(CONCAT_WS(' ', u.name, NULLIF(u.last_name, '')))";
+const validatorFullNameSql = "TRIM(CONCAT_WS(' ', validator.name, NULLIF(validator.last_name, '')))";
 let userLifecycleColumnsEnsured = false;
 
 const ensureUserLifecycleColumns = async () => {
@@ -17,7 +43,7 @@ const ensureUserLifecycleColumns = async () => {
       FROM information_schema.COLUMNS
       WHERE TABLE_SCHEMA = DATABASE()
         AND TABLE_NAME = 'users'
-        AND COLUMN_NAME = 'employment_end_date'
+        AND COLUMN_NAME IN ('employment_end_date', 'last_name')
     `
   );
 
@@ -25,6 +51,10 @@ const ensureUserLifecycleColumns = async () => {
 
   if (!columnSet.has("employment_end_date")) {
     await query("ALTER TABLE users ADD COLUMN employment_end_date DATE NULL");
+  }
+
+  if (!columnSet.has("last_name")) {
+    await query("ALTER TABLE users ADD COLUMN last_name VARCHAR(120) NULL AFTER name");
   }
 
   userLifecycleColumnsEnsured = true;
@@ -319,6 +349,7 @@ export const deleteHolidayById = async (id) => {
 
 export const generateDailyReports = async (reportDate) => {
   await ensureTaskDateColumn();
+  await ensureUserLifecycleColumns();
 
   const sql = `
     INSERT INTO reports (employee_id, date, total_tasks, completed_tasks, pending_tasks, status)
@@ -330,7 +361,13 @@ export const generateDailyReports = async (reportDate) => {
       SUM(CASE WHEN t.status <> 'Completed' THEN 1 ELSE 0 END) AS pending_tasks,
       'pending' AS status
     FROM tasks t
+    JOIN users u ON u.id = t.assigned_to
     WHERE t.task_date = ?
+      AND (
+        u.role IN ('employee', 'admin')
+        OR (${reportableSuperadminClauseForUserAlias})
+      )
+      AND (u.employment_end_date IS NULL OR u.employment_end_date > ?)
     GROUP BY t.assigned_to
     ON DUPLICATE KEY UPDATE
       total_tasks = VALUES(total_tasks),
@@ -339,11 +376,12 @@ export const generateDailyReports = async (reportDate) => {
       status = 'pending'
   `;
 
-  await query(sql, [reportDate, reportDate]);
+  await query(sql, [reportDate, reportDate, reportDate]);
 };
 
 export const getReportsByRole = async ({ role, userId, team, managedTeams = [] }) => {
   await ensureDailyReportTable();
+  await ensureUserLifecycleColumns();
 
   const baseSql = `
     SELECT
@@ -356,9 +394,9 @@ export const getReportsByRole = async ({ role, userId, team, managedTeams = [] }
       r.status,
       r.validated_by,
       COALESCE(der.status, 'Not Received') AS received_status,
-      u.name AS employee_name,
+      ${userFullNameSql} AS employee_name,
       u.team AS employee_team,
-      validator.name AS validated_by_name
+      ${validatorFullNameSql} AS validated_by_name
     FROM reports r
     JOIN users u ON u.id = r.employee_id
     LEFT JOIN daily_employee_reports der ON der.user_id = r.employee_id AND der.report_date = r.date
@@ -390,6 +428,7 @@ export const validateReport = async ({ reportId, status, validatedBy }) => {
 
 export const getSuperAdminAnalytics = async ({ team = "all", date = "" } = {}) => {
   await ensureTaskDateColumn();
+  await ensureUserLifecycleColumns();
 
   const taskFilters = [];
   const taskParams = [];
@@ -435,7 +474,7 @@ export const getSuperAdminAnalytics = async ({ team = "all", date = "" } = {}) =
       `
       SELECT
         u.id,
-        u.name,
+        ${userFullNameSql} AS name,
         u.team,
         SUM(CASE WHEN t.status = 'Completed' THEN 1 ELSE 0 END) AS completed_tasks,
         COUNT(t.id) AS total_tasks,
@@ -445,10 +484,10 @@ export const getSuperAdminAnalytics = async ({ team = "all", date = "" } = {}) =
         ) AS productivity_score
       FROM users u
       LEFT JOIN tasks t ON t.assigned_to = u.id
-      WHERE u.role = 'employee'
+      WHERE ${reportableEmployeeRoleClauseForUserAlias}
         ${team && team !== "all" ? "AND u.team = ?" : ""}
         ${date ? "AND t.task_date = ?" : ""}
-      GROUP BY u.id, u.name, u.team
+      GROUP BY u.id, u.name, u.last_name, u.team
       ORDER BY productivity_score DESC
       LIMIT 10
     `,
@@ -490,7 +529,7 @@ export const getDailyReportGridByRole = async ({
     customStartDate,
     customEndDate
   );
-  const superadminRoleFilter = role === "superadmin" ? "('employee', 'admin')" : "('employee')";
+  const superadminUserFilter = role === "superadmin" ? reportableEmployeeRoleClause : "role = 'employee'";
 
   let usersSql = "";
   let usersParams = [];
@@ -515,23 +554,23 @@ export const getDailyReportGridByRole = async ({
 
     const placeholders = scopedTeams.map(() => "?").join(",");
     usersSql = `
-      SELECT id, name, email, role, team, employment_end_date
+      SELECT id, ${bareUserFullNameSql} AS name, name AS username, last_name, email, role, team, employment_end_date
       FROM users
       WHERE ((team IN (${placeholders}) AND role = 'employee')
          OR id = ?
       )
         AND (employment_end_date IS NULL OR employment_end_date > ?)
-      ORDER BY role DESC, name
+      ORDER BY role DESC, name, last_name
     `;
     usersParams = [...scopedTeams, userId, formatDate(startDate)];
   } else {
     usersSql = `
-      SELECT id, name, email, role, team, employment_end_date
+      SELECT id, ${bareUserFullNameSql} AS name, name AS username, last_name, email, role, team, employment_end_date
       FROM users
-      WHERE role IN ${superadminRoleFilter}
+      WHERE ${superadminUserFilter}
         ${teamFilter && teamFilter !== "all" ? "AND team = ?" : ""}
         AND (employment_end_date IS NULL OR employment_end_date > ?)
-      ORDER BY team, role DESC, name
+      ORDER BY team, role DESC, name, last_name
     `;
     usersParams = [
       ...(teamFilter && teamFilter !== "all" ? [teamFilter] : []),
@@ -619,13 +658,13 @@ export const getDailyReportGridByRole = async ({
         der.report_date,
         der.user_id,
         der.status,
-        u.name,
+        ${userFullNameSql} AS name,
         u.team
       FROM daily_employee_reports der
       JOIN users u ON u.id = der.user_id
       WHERE der.report_date BETWEEN ? AND ?
         AND der.user_id IN (${idPlaceholders})
-      ORDER BY der.report_date, u.name
+      ORDER BY der.report_date, u.name, u.last_name
     `,
     [formatDate(startDate), formatDate(endDate), ...users.map((entry) => entry.id)]
   );
@@ -886,6 +925,7 @@ export const getReportDetailsById = async (reportId) => {
   await ensureTaskSubmissionColumns();
   await ensureDailyReportTable();
   await ensureTaskDateColumn();
+  await ensureUserLifecycleColumns();
 
   const reportRows = await query(
     `
@@ -898,7 +938,7 @@ export const getReportDetailsById = async (reportId) => {
         r.pending_tasks,
         r.status,
         COALESCE(der.status, 'Not Received') AS received_status,
-        u.name AS employee_name,
+        ${userFullNameSql} AS employee_name,
         u.team AS employee_team
       FROM reports r
       JOIN users u ON u.id = r.employee_id
@@ -976,11 +1016,11 @@ export const getAutomatedReportEmailSummary = async ({ startDate, endDate }) => 
 
   const users = await query(
     `
-      SELECT id, name, email, role, team, employment_end_date
+      SELECT id, ${bareUserFullNameSql} AS name, name AS username, last_name, email, role, team, employment_end_date
       FROM users
-      WHERE role IN ('employee', 'admin')
+      WHERE ${reportableEmployeeRoleClause}
         AND (employment_end_date IS NULL OR employment_end_date > ?)
-      ORDER BY team ASC, role DESC, name ASC
+      ORDER BY team ASC, role DESC, name ASC, last_name ASC
     `,
     [normalizedStartDate]
   );
